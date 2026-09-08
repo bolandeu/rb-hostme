@@ -32,10 +32,12 @@
 
 ### 1.2 SSH/rsync-слой (раздел 8 PRD)
 
-- [ ] `run_remote(server, command: str) -> RemoteResult(stdout, stderr, returncode)` — обёртка над `subprocess` + системный `ssh` (используя `-i ssh_key`, уважая `~/.ssh/config`)
-- [ ] `rsync_to(local_path, server, remote_path)` — обёртка над системным `rsync -az --delete` (уточнить, нужен ли `--delete`, см. 1.6)
-- [ ] Обработка ошибок соединения (недоступен хост, неверный ключ, permission denied) — понятные сообщения, ненулевой exit code
-- [ ] Таймауты на SSH-команды (install/site create могут быть долгими — установить разумный, например 300с для `server init`, короче для остальных)
+- [x] `run_remote(server, command: str) -> RemoteResult(stdout, stderr, returncode)` — `src/hostme/ssh.py`, обёртка над `subprocess` + системный `ssh` (`-i ssh_key`, `BatchMode=yes`)
+- [x] `rsync_to(local_path, server, remote_path, delete=True)` — обёртка над системным `rsync -az [--delete]`
+- [x] Обработка ошибок соединения: код `255` → `SshError` с понятным сообщением (недоступен хост/неверный ключ/permission denied — SSH сам возвращает 255 на все эти случаи); прочие ненулевые коды возврата команды — не ошибка, а обычный `RemoteResult(ok=False)` (агент/CLI сам решает, что с этим делать)
+- [x] Таймауты: `DEFAULT_TIMEOUT=30`с на обычные команды, `LONG_TIMEOUT=300`с для `rsync_to`/долгих операций типа `server init`
+- [x] Юнит-тесты (`tests/unit/test_ssh.py`, subprocess замокан) + e2e (`tests/e2e/test_ssh_layer.py`, реальный SSH/rsync на `sites-first-beget`) — 96% покрытие `ssh.py`
+- [ ] **Обнаружено при e2e-прогоне 2026-09-09**: много коротких SSH-подключений подряд (характерно для `deploy`, который дёргает несколько Webinoly-команд по очереди) поймали rate-limit/fail2ban на сервере — `Connection closed by <ip> port 22` перестало пускать даже валидный ключ. Нужно **переиспользовать соединение** через SSH `ControlMaster`/`ControlPersist` (один мультиплексированный сокет на сервер вместо новой TCP+auth сессии на каждую команду) — и быстрее, и не будет самостоятельно банить себя при обычной работе `deploy`. Сделать в `_ssh_base_args`/новой обёртке до того, как `deploy` начнёт дёргать много команд подряд.
 
 ### 1.3 Webinoly-адаптер (docs/webinoly.md)
 

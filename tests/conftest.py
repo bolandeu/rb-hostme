@@ -19,3 +19,12 @@ def e2e_host() -> str:
     host = os.environ.get("HOSTME_E2E_HOST")
     assert host, "HOSTME_E2E_HOST не задан"
     return host
+
+
+@pytest.fixture
+def real_server(e2e_host: str):
+    from hostme.config import Server
+
+    user = os.environ.get("HOSTME_E2E_USER", "root")
+    key = os.environ.get("HOSTME_E2E_KEY", "~/.ssh/bolandau")
+    return Server(name="e2e", host=e2e_host, user=user, ssh_key=key)

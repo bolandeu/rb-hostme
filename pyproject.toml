@@ -1,0 +1,44 @@
+[project]
+name = "hostme"
+version = "0.1.0"
+description = "Личный аналог surge.sh — CLI-деплой статических сайтов и PHP на свои VPS через Webinoly"
+authors = [
+    { name = "Roman Bolandau", email = "r.bolandau@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "rich>=15.0.0",
+    "ruamel-yaml>=0.19.1",
+    "typer>=0.27.2",
+]
+
+[project.scripts]
+hostme = "hostme.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.10.2,<0.11.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.16.6",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "e2e: реальный сервер по SSH (HOSTME_E2E_HOST), по умолчанию пропускается",
+]
+addopts = "--cov=hostme --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["src/hostme"]
+
+[tool.coverage.report]
+fail_under = 80
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+]

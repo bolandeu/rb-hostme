@@ -6,13 +6,13 @@
 
 ## Phase 0 — подготовка репозитория
 
-- [ ] `git init` в корне проекта (сейчас репозиторий не инициализирован), `.gitignore` (как минимум `.venv/`, `__pycache__/`, `*.pyc`, `.DS_Store`)
-- [ ] `uv init` — `pyproject.toml`, layout `src/hostme/`
-- [ ] `uv python pin <версия>` → `.python-version` (раздел 8 PRD)
-- [ ] Зависимости: `uv add typer rich ruamel.yaml`; dev: `uv add --dev pytest pytest-cov ruff`
-- [ ] Entry point в `pyproject.toml`: `[project.scripts] hostme = "hostme.cli:app"`
-- [ ] Проверка глобальной установки: `uv tool install --editable .` → `hostme --help` работает из любой директории
-- [ ] Базовый `README.md` (что это, как поставить, ссылка на PRD.md)
+- [x] `git init` в корне проекта, `.gitignore`
+- [x] `uv init` — `pyproject.toml`, layout `src/hostme/`
+- [x] `uv python pin` → `.python-version` (3.14, раздел 8 PRD)
+- [x] Зависимости: `uv add typer rich ruamel.yaml`; dev: `uv add --dev pytest pytest-cov ruff`
+- [x] Entry point в `pyproject.toml`: `[project.scripts] hostme = "hostme.cli:app"`
+- [x] Проверка глобальной установки: `uv tool install --editable .` → `hostme --help` работает из любой директории (проверено из `/tmp`)
+- [x] Базовый `README.md` (что это, как поставить, ссылка на PRD.md)
 
 ---
 
@@ -69,7 +69,7 @@
   2. проверка коллизии (1.1)
   3. автоопределение типа сайта: рекурсивный поиск `*.php` в `path` → `php`/`html`
   4. если сайта с этим доменом ещё нет на сервере (1.3 `site_exists`) → `site_create` + `site_ssl_on`
-  5. `rsync_to` — залить файлы в webroot Webinoly-сайта (`/var/www/<domain>/htdocs`, уточнить точный путь по факту первого теста)
+  5. `rsync_to` — залить файлы в webroot Webinoly-сайта (**подтверждено**: `/var/www/<domain>/htdocs`, см. AGENTS.md) **и сразу `chown -R www-data:www-data`** на этот путь — подтверждено на практике (2026-09-08, `tests/e2e/test_webinoly_smoke.py`): SSH-пользователь `root`, поэтому rsync/tee пишет файлы от root, а `htdocs` после `webinoly -sftp=on` создаётся с правами `750` без доступа «остальным» — без chown nginx (работает от `www-data`) отдаёт **403** на реально загруженный контент. Либо `rsync --chown=www-data:www-data`, либо отдельный `chown -R` после заливки — обязательный шаг, не опция
   6. обновить/добавить запись в `sites.yaml` (`deployed_at` = текущее время)
   7. вывести URL (`https://<domain>`)
 - [ ] Решить и задокументировать поведение `rsync --delete` (удалять на сервере файлы, которых нет локально) — вероятно, да для идемпотентности деплоя, но явно прописать в PRD/README
@@ -83,14 +83,14 @@
 
 ### 1.8 Тестирование Phase 1
 
+Политика тестирования (обязательная, не опциональная) описана в `AGENTS.md`: юнит-покрытие ≥80% (порог зафиксирован в `pyproject.toml`, проверяется автоматически) + e2e-тесты на реальном сервере для всего, что трогает SSH/Webinoly.
+
+- [x] Каркас тестов: `tests/unit/`, `tests/e2e/`, `tests/conftest.py` (skip e2e без `HOSTME_E2E_HOST`), `pytest-cov` с `fail_under=80` в `pyproject.toml`
+- [x] `tests/e2e/test_webinoly_smoke.py` — e2e полного цикла статического сайта (create → ssl → upload → curl → delete) напрямую через SSH; прогнан на `sites-first-beget`, поймал реальный баг с правами `www-data` (см. AGENTS.md)
 - [ ] Unit-тесты: конфиг (1.1), парсинг вывода Webinoly-команд (моки), резолвинг домена/сервера
-- [ ] Интеграционный чек-лист на реальном тестовом VPS (Ubuntu, чистый):
-  - [ ] `server add` + `server init` — Webinoly встал, `sudo webinoly -version` отвечает
-  - [ ] `domain add` с реальным доменом (A-запись заранее направлена на сервер)
-  - [ ] `hostme ./test-site` (статика) → сайт открывается по HTTPS
-  - [ ] `hostme ./test-php-site` (с `.php`-файлом) → PHP реально выполняется, не отдаётся как текст
-  - [ ] повторный `hostme ./test-site` (тот же путь) → обновление без ошибок
-  - [ ] `hostme list`, `hostme open`, `hostme <domain> teardown` — весь цикл
+- [ ] Переписать `tests/e2e/test_webinoly_smoke.py` на вызов самого `hostme` CLI (subprocess), когда появятся `deploy`/`teardown` — сырой SSH был временной мерой
+- [ ] E2E на PHP-сайт (`hostme ./test-php-site` с `.php`-файлом) → PHP реально выполняется, не отдаётся как текст — по образцу `test_webinoly_smoke.py`
+- [ ] E2E на `server add` + `server init` с нуля (на ещё одном чистом сервере, если/когда он появится) — текущий e2e предполагает Webinoly уже установлен
 - [ ] Ручная проверка агентского сценария: вызов `hostme` из Claude Code (или скрипта) без интерактивного шелла — убедиться, что не виснет и возвращает вменяемый JSON/exit code
 
 ---

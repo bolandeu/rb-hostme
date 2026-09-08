@@ -20,14 +20,15 @@
 
 ### 1.1 Модели данных и конфиг (раздел 7 PRD)
 
-- [ ] Модели `Server` (`name, host, user, ssh_key, default, base_domains`) и `Site` (`domain, server, local_path, php, ssl, force_https, cors, redirects, password_protect, deployed_at`) — dataclass или pydantic
-- [ ] Загрузка/сохранение `~/.config/hostme/servers.yaml` через `ruamel.yaml` (сохраняя форматирование при перезаписи)
-- [ ] Загрузка/сохранение `~/.config/hostme/sites.yaml`, включая обработку `include:` (относительные пути от `~/.config/hostme/`) — **можно сразу**, даже если реально используется в Phase 2, т.к. схема нужна с первого дня
-- [ ] Создание `~/.config/hostme/` при первом запуске, если не существует (без интерактивных вопросов)
-- [ ] Функция резолва `domain → server`: точное совпадение в `sites.yaml`, иначе — по `base_domains` серверов (суффикс-мэтч), иначе — требуется `--server`
-- [ ] Функция определения дефолтного домена: `<slug(имя-папки)>.<base_domain дефолтного сервера>` (раздел 2 PRD) — учесть сервер по умолчанию (`default: true` в `servers.yaml`)
-- [ ] Валидация коллизий: домен занят другим `local_path` → ошибка; тот же `local_path` → апдейт (раздел 4 PRD)
-- [ ] Unit-тесты на резолвинг домена/сервера и коллизии (без сети)
+- [x] Модели `Server` (`name, host, user, ssh_key, default, base_domains`), `BaseDomain` (`name, default`) и `Site` (`domain, server, local_path, php, ssl, force_https, cors, redirects, password_protect, deployed_at`) — dataclass (`src/hostme/config.py`)
+- [x] Загрузка/сохранение `~/.config/hostme/servers.yaml` через `ruamel.yaml`
+- [x] Загрузка/сохранение `~/.config/hostme/sites.yaml`, включая обработку `include:` (относительные пути от `~/.config/hostme/`)
+- [x] Создание `~/.config/hostme/` при первом запуске (`_ensure_config_dir`, права `700`, вызывается автоматически из `save_servers`/`save_sites`, без вопросов)
+- [x] `resolve_server()`: `--server` явно > уже известный домен в `sites.yaml` > `base_domains` серверов (суффикс-мэтч) > `None`
+- [x] `default_domain()`: `<slug(имя-папки)>.<первый зарегистрированный служебный домен>` (раздел 2 и 4 PRD — не "дефолтный сервер", а именно первый зарегистрированный base-домен, см. `default_base_domain`)
+- [x] `check_collision()`: домен занят другим `local_path` → `ConfigError`; тот же `local_path` → не ошибка (апдейт)
+- [x] Unit-тесты (`tests/unit/test_config.py`, 27 тестов, 95% покрытие `config.py`) — резолвинг домена/сервера, коллизии, roundtrip YAML, права доступа на файлы, `include`
+- [ ] **[Известное ограничение, не блокирует MVP]** `slugify()` пропускает не-ASCII буквы как есть (`под-проект` вместо punycode) — для реального DNS-имени с кириллицей в имени папки нужен IDN/punycode; отметить в PRD, если станет актуально
 
 ### 1.2 SSH/rsync-слой (раздел 8 PRD)
 

@@ -51,7 +51,7 @@ hostme <domain> config --nginx-snippet docs/nginx-snippets/<файл>.conf
      **директорию раньше файла** — `/page` без слэша получает от Webinoly
      редирект на `/page/`, а `/page/` через `index.php`-заглушку редиректит
      на `/`, а не показывает `page.html`. Решается проактивной проверкой
-     `-f $document_root$path.html` на rewrite-фазе (см. `clean-urls.conf`) —
+     `-f $document_root$path.html` на rewrite-фазе (см. `static-site-generator.conf`) —
      она перехватывает запрос ДО того, как Webinoly вообще пробует директорию.
 - **`if` вместе с `try_files` в одном `location` не работает** — классическая
   "if is evil" ловушка nginx: `try_files` молча проваливается в fallback,
@@ -76,10 +76,12 @@ hostme <domain> config --nginx-snippet docs/nginx-snippets/<файл>.conf
 Все пункты выше стоили нескольких часов живой отладки на `test.bolandau.ru`
 2026-09-09 — не наступать снова.
 
-## `clean-urls.conf`
+## `static-site-generator.conf`
 
-Полностью проверено вживую на `test.bolandau.ru` (2026-09-09, реальный
-PHP+HTML проект с формами на `form.php`/`subscribe.php`, и с коллизиями
+Профиль под «Static Landing Generator» (`~/Projects/sitegenerator`, PHP-генератор
+статических лендингов — см. его README.md). Полностью проверено вживую на
+`test.bolandau.ru` (2026-09-09, реальный проект `mwlogistics` из этого
+генератора: PHP+HTML, формы `form.php`/`subscribe.php`, коллизии
 `catalog.html`+`catalog/`, `blog.html`+`blog/`). Делает:
 
 - `/page.html` → редирект 301 на `/page`

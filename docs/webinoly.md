@@ -199,7 +199,7 @@ sudo site -list [=<фильтр>]
 
 Сайт, помеченный как `default-site` или `tools-site`, нельзя удалить обычным способом (только через `force`/`-delete-all`).
 
-**[TBD/уточнить]** Точный флаг единичного удаления в публичной документации подтверждён как `-delete` (см. выше) — это снимает открытый вопрос из PRD.
+Флаг удаления сайта, который использует Hostme, — `-delete=force` (см. выше), подтверждён вживую (`tests/e2e/test_webinoly_smoke.py`, `webinoly.delete_site`). Вопрос из PRD закрыт.
 
 ### www / non-www
 
@@ -504,18 +504,20 @@ sudo webinoly -uninstall [-no-recovery]   # сайты и пакеты НЕ уд
 
 ---
 
-## Итог для Hostme (см. также PRD.md)
+## Итог для Hostme (см. также PRD.md/AGENTS.md)
 
-- Установка на новый сервер: `wget -qO weby qrok.es/wy && sudo bash weby -php`.
-- Создание сайта: `sudo site <domain> -html` или `-php` (автоопределение по наличию `*.php`).
-- SSL всегда: `sudo site <domain> -ssl=on` (в т.ч. `-wildcard` для base-доменов).
-- Удаление: `sudo site <domain> -delete=force [-revoke=on]`.
-- Password protection: `sudo httpauth <domain> -add=[user,pass]` / `-path=/` / `-path=all -purge` для снятия.
-- Редиректы: `sudo site <domain> -redirection -from=... -to=... -http-code=...`.
+Всё ниже реализовано в `src/hostme/webinoly.py` и подтверждено вживую на `sites-first-beget` (Ubuntu 24.04.4, Webinoly 1.21.2, стек 1.13), не только по документации:
+
+- Установка на новый сервер: `wget -qO weby qrok.es/wy && sudo bash weby -php` — подтверждено полностью неинтерактивным (никаких вопросов про email/DB на этом шаге).
+- Создание сайта: `sudo site <domain> -html` или `-php` (автоопределение по наличию `*.php`), сразу с заглушкой `index.html`/`index.php` вместо голого 403 — пустой `htdocs` без `autoindex` отдаёт именно 403, не 404 (реальный пойманный баг, см. TODO.md, «Сквозное улучшение»).
+- SSL всегда: `sudo site <domain> -ssl=on` (обычный per-domain, HTTP-01, авто-продление) или `-add-to-wildcard=<base>` (мгновенно, без DNS-шага, если у base-домена уже есть wildcard-сертификат) — это и есть реальный MVP-путь, а не `-wildcard` на каждый домен.
+- Wildcard-сертификат на base-домен (`-ssl=on -wildcard`) — ручной DNS-01, два TXT-шага подряд, см. WILDCARD-SSL.md; прошли полностью дважды вживую (`antagorapp.ru`, `bolandau.ru`). Не автоматизировано — нужен DNS-провайдер с API (пока нет, DNS у Beget без API-доступа), отложено в TODO.md (2.1).
+- Удаление: `sudo site <domain> -delete=force -revoke=on|off`.
+- Password protection: `sudo httpauth <domain> -add=[user,pass]` / `-path=/` / `-path=all -purge` для снятия — реализовано в `hostme <domain> auth`, значения экранируются `shlex.quote` (без этого была бы command injection через `--pass`).
+- Редиректы: `sudo site <domain> -redirection -from=... -to=... -http-code=...` — `hostme <domain> config --redirect/--remove-redirect`.
+- CORS: своего флага у Webinoly нет — свой nginx-сниппет (`/var/www/<domain>/hostme-cors-nginx.conf`) на уровне `server{}`, без `location /` (уже занят самим Webinoly — второй `location /` в том же server-блоке роняет `nginx -t`). `hostme <domain> config --cors/--no-cors`.
+- Логи (`sudo log <domain>`) стримят в реальном времени и сами никогда не завершаются — `hostme <domain> debug` оборачивает в `timeout <N>s` на сервере, иначе команда виснет до собственного таймаута.
+- `nginx.conf` у Webinoly включает `open_file_cache` (`valid=30s`) — после любой смены symlink'а webroot (releases/rollback) обязателен `nginx -t && systemctl reload nginx`, иначе сайт до ~30с отдаёт старый контент несмотря на уже переключенный симлинк. Реальный пойманный баг, см. TODO.md 3.2.
+- Releases/rollback: `htdocs` — симлинк на `releases/<таймстамп>`, а не сама директория (жёсткое требование — nginx-конфиг Webinoly ожидает фиксированный `root /var/www/<domain>/htdocs`, руками не редактируется). `mkdir -p releases` создаёт директорию `root:root` — обязателен `chown www-data:www-data releases` сразу же, иначе весь сайт отдаёт 404 (реальный пойманный баг).
 - SFTP для загрузки файлов вручную (не только через Hostme): `sudo webinoly -sftp=on`.
-- WordPress и MySQL/MariaDB — сознательно не используются (см. PRD, раздел 10).
-
-## [TBD/уточнить] при реализации
-
-- Точное поведение `wget/curl ... weby -php` в полностью неинтерактивном режиме (для `hostme server init` без ручного вмешательства) — часть шагов в примерах документации подразумевает интерактивные вопросы (email для SSL, custom DB и т.п.), нужно проверить, какие есть unattended-флаги для самого install-скрипта.
-- Актуальный список публичных версий Webinoly/минимальная поддерживаемая версия на момент реализации — сверить с https://github.com/QROkes/webinoly/releases.
+- WordPress и MySQL/MariaDB — сознательно не используются (см. PRD, раздел 10); `-proxy=` (reverse proxy для Node/Java) — тоже вне скоупа по явному решению (только html/php/статика).

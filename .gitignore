@@ -7,3 +7,8 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+
+# Черновики с учётными данными (см. AGENTS.md) — никогда не коммитить
+vps.txt
+*.env
+.env*

@@ -1,3 +1,4 @@
+import shlex
 from unittest.mock import patch
 
 import pytest
@@ -125,13 +126,28 @@ def test_site_exists_false():
 def test_create_site_html():
     with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.create_site(SERVER, "a.dev", "html")
-    assert mock_run.call_args[0][1] == "sudo site a.dev -html"
+    assert mock_run.call_args_list[0][0][1] == "sudo site a.dev -html"
 
 
 def test_create_site_php():
     with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.create_site(SERVER, "a.dev", "php")
-    assert mock_run.call_args[0][1] == "sudo site a.dev -php"
+    assert mock_run.call_args_list[0][0][1] == "sudo site a.dev -php"
+
+
+def test_create_site_writes_placeholder_index():
+    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+        webinoly.create_site(SERVER, "a.dev", "html")
+    commands = [c[0][1] for c in mock_run.call_args_list]
+    assert any("index.html" in cmd for cmd in commands)
+    assert any("chown" in cmd for cmd in commands)
+
+
+def test_create_site_php_placeholder_uses_index_php():
+    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+        webinoly.create_site(SERVER, "a.dev", "php")
+    commands = [c[0][1] for c in mock_run.call_args_list]
+    assert any("index.php" in cmd for cmd in commands)
 
 
 def test_create_site_raises_on_failure():
@@ -204,3 +220,180 @@ def test_fix_ownership_raises_on_failure():
         pytest.raises(webinoly.WebinolyError, match="permission denied"),
     ):
         webinoly.fix_ownership(SERVER, "a.dev")
+
+
+# --- httpauth / redirects: экранирование пароля/аргументов через shlex.quote ---
+# критично для безопасности (см. AGENTS.md/PRD §9) — регрессия здесь означает
+# command injection через --pass/--user/--redirect.
+
+
+def test_set_http_auth_escapes_credentials():
+    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+        webinoly.set_http_auth(SERVER, "a.dev", "bob", "pass; rm -rf /")
+    commands = [c[0][1] for c in mock_run.call_args_list]
+    assert len(commands) == 2
+    # Ключевая проверка безопасности: shell должен распарсить -add=... как ОДИН
+    # аргумент, а не оборвать команду на ";" (это и была бы command injection).
+    tokens = shlex.split(commands[0])
+    assert tokens == ["sudo", "httpauth", "a.dev", "-add=[bob,pass; rm -rf /]"]
+    assert commands[1] == "sudo httpauth a.dev -path=/"
+
+
+def test_set_http_auth_raises_if_add_fails():
+    with (
+        patch("hostme.webinoly.run_remote", return_value=fail("invalid option")),
+        pytest.raises(webinoly.WebinolyError, match="invalid option"),
+    ):
+        webinoly.set_http_auth(SERVER, "a.dev", "bob", "secret")
+
+
+def test_disable_http_auth():
+    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+        webinoly.disable_http_auth(SERVER, "a.dev")
+    assert mock_run.call_args[0][1] == "sudo httpauth a.dev -path=all -purge"
+
+
+def test_add_redirect():
+    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+        webinoly.add_redirect(SERVER, "a.dev", "/old", "/new")
+    command = mock_run.call_args[0][1]
+    assert "-from=/old" in command
+    assert "-to=/new" in command
+    assert "-http-code=302" in command
+
+
+def test_remove_redirect():
+    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+        webinoly.remove_redirect(SERVER, "a.dev", "/old")
+    assert mock_run.call_args[0][1] == "sudo site a.dev -redirection -delete -from=/old"
+
+
+# --- CORS-сниппет: чистая функция + заливка/reload/откат при поломке ---
+
+
+def test_render_cors_snippet_contains_pattern_and_no_stray_location():
+    snippet = webinoly._render_cors_snippet(["https://a.com", "https://b.com"])
+    # origin'ы попадают в regex-паттерн re.escape'нутыми (точка экранирована,
+    # см. отдельный тест ниже) — здесь просто проверяем общую структуру сниппета.
+    assert "a.com" in snippet.replace("\\.", ".")
+    assert "b.com" in snippet.replace("\\.", ".")
+    assert "location" not in snippet  # намеренно: не дублировать location / Webinoly
+    assert "Access-Control-Allow-Origin" in snippet
+
+
+def test_render_cors_snippet_escapes_regex_metacharacters():
+    # origin с точкой не должен матчить произвольный домен из-за regex-спецсимвола
+    snippet = webinoly._render_cors_snippet(["https://a.com"])
+    assert r"a\.com" in snippet
+
+
+def test_set_cors_writes_and_reloads():
+    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+        webinoly.set_cors(SERVER, "a.dev", ["https://a.com"])
+    commands = [c[0][1] for c in mock_run.call_args_list]
+    assert any("base64" in cmd for cmd in commands)
+    assert "sudo nginx -t" in commands
+    assert "sudo systemctl reload nginx" in commands
+
+
+def test_set_cors_empty_origins_removes_snippet():
+    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+        webinoly.set_cors(SERVER, "a.dev", [])
+    commands = [c[0][1] for c in mock_run.call_args_list]
+    assert any(cmd.startswith("rm -f") for cmd in commands)
+
+
+def test_set_cors_rolls_back_snippet_when_nginx_test_fails():
+    # write ok, nginx -t fails -> должен откатить (rm -f) и не звать reload
+    with (
+        patch(
+            "hostme.webinoly.run_remote",
+            side_effect=[ok(), fail("syntax error"), ok()],
+        ) as mock_run,
+        pytest.raises(webinoly.WebinolyError, match="syntax error"),
+    ):
+        webinoly.set_cors(SERVER, "a.dev", ["https://a.com"])
+    commands = [c[0][1] for c in mock_run.call_args_list]
+    assert commands[-1].startswith("rm -f")  # откат сниппета
+    assert "sudo systemctl reload nginx" not in commands  # reload не звался
+
+
+# --- releases/rollback: конструирование команд + парсинг ls/readlink ---
+
+
+def test_ensure_releases_layout_chowns_releases_dir():
+    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+        webinoly.ensure_releases_layout(SERVER, "a.dev")
+    command = mock_run.call_args[0][1]
+    assert "mkdir -p releases" in command
+    assert "chown www-data:www-data releases" in command
+
+
+def test_switch_release_swaps_symlink_and_reloads():
+    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+        webinoly.switch_release(SERVER, "a.dev", "20260101000000")
+    commands = [c[0][1] for c in mock_run.call_args_list]
+    assert any("ln -sfn releases/20260101000000" in cmd for cmd in commands)
+    assert "sudo nginx -t" in commands
+    assert "sudo systemctl reload nginx" in commands
+
+
+def test_list_releases_parses_and_sorts():
+    with patch("hostme.webinoly.run_remote", return_value=ok("20260101000000\n20260102000000\n")):
+        releases = webinoly.list_releases(SERVER, "a.dev")
+    assert releases == ["20260101000000", "20260102000000"]
+
+
+def test_list_releases_empty():
+    with patch("hostme.webinoly.run_remote", return_value=ok("")):
+        assert webinoly.list_releases(SERVER, "a.dev") == []
+
+
+def test_current_release_parses_symlink_target():
+    with patch("hostme.webinoly.run_remote", return_value=ok("releases/20260101000000\n")):
+        assert webinoly.current_release(SERVER, "a.dev") == "20260101000000"
+
+
+def test_current_release_none_when_not_a_symlink():
+    with patch("hostme.webinoly.run_remote", return_value=fail("not a symlink")):
+        assert webinoly.current_release(SERVER, "a.dev") is None
+
+
+def test_prune_releases_noop_when_under_limit():
+    with patch("hostme.webinoly.run_remote", return_value=ok("a\nb\n")) as mock_run:
+        result = webinoly.prune_releases(SERVER, "a.dev", keep=5)
+    assert result is None
+    mock_run.assert_called_once()  # только list_releases, rm не звался
+
+
+def test_prune_releases_never_removes_current_even_if_old():
+    # r0..r6 (7 штук), keep=5 -> кандидаты на удаление: r0, r1 (releases[:-5]).
+    # current — намеренно r0 (симулирует rollback на старый релиз): должен
+    # уцелеть, несмотря на то что он старше "keep", а r1 — реально удалиться.
+    releases_output = "\n".join(f"r{i}" for i in range(7)) + "\n"
+    with patch(
+        "hostme.webinoly.run_remote",
+        side_effect=[ok(releases_output), ok("r0"), ok()],  # list, readlink(current=r0), rm
+    ) as mock_run:
+        webinoly.prune_releases(SERVER, "a.dev", keep=5)
+    rm_command = mock_run.call_args_list[-1][0][1]
+    assert "r0" not in rm_command
+    assert "r1" in rm_command
+
+
+# --- логи: обязательный timeout-враппер (у Webinoly `log` стримит бесконечно) ---
+
+
+def test_tail_log_wraps_with_timeout():
+    with patch("hostme.webinoly.run_remote", return_value=ok("log line\n")) as mock_run:
+        result = webinoly.tail_log(SERVER, "a.dev", lines=25)
+    command = mock_run.call_args[0][1]
+    assert command.startswith("sudo timeout")
+    assert "-lines=25" in command
+    assert result == "log line\n"
+
+
+def test_tail_log_error_flag():
+    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+        webinoly.tail_log(SERVER, "a.dev", error=True)
+    assert "-error" in mock_run.call_args[0][1]

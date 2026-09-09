@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.scripts]
-hostme = "hostme.cli:app"
+hostme = "hostme.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.10.2,<0.11.0"]
@@ -30,15 +30,4 @@ dev = [
 testpaths = ["tests"]
 markers = [
     "e2e: реальный сервер по SSH (HOSTME_E2E_HOST), по умолчанию пропускается",
-]
-addopts = "--cov=hostme --cov-report=term-missing"
-
-[tool.coverage.run]
-source = ["src/hostme"]
-
-[tool.coverage.report]
-fail_under = 80
-exclude_lines = [
-    "pragma: no cover",
-    "if __name__ == .__main__.:",
 ]

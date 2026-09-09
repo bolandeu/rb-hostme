@@ -5,6 +5,8 @@ from pathlib import Path
 
 from ruamel.yaml import YAML
 
+from hostme.errors import HostmeError
+
 CONFIG_DIR = Path.home() / ".config" / "hostme"
 SERVERS_FILE = CONFIG_DIR / "servers.yaml"
 SITES_FILE = CONFIG_DIR / "sites.yaml"
@@ -14,7 +16,7 @@ _yaml.preserve_quotes = True
 _yaml.indent(mapping=2, sequence=4, offset=2)
 
 
-class ConfigError(Exception):
+class ConfigError(HostmeError):
     pass
 
 
@@ -50,6 +52,11 @@ class Site:
     redirects: list[dict] = field(default_factory=list)
     password_protect: dict | None = None
     deployed_at: str | None = None
+    # Относительный путь include-файла (sites.d/*.yaml), откуда сайт был прочитан
+    # load_sites(); None значит "живёт в главном sites.yaml". Используется только
+    # save_sites(), чтобы писать обновление обратно в тот же файл, а не всегда в
+    # главный (раздел 2.5 TODO). Не сериализуется в сам YAML.
+    source_file: str | None = field(default=None, compare=False, repr=False)
 
 
 def _ensure_config_dir() -> None:
@@ -106,17 +113,19 @@ def load_sites() -> list[Site]:
     if not SITES_FILE.exists():
         return []
     data = _yaml.load(SITES_FILE.read_text()) or {}
-    sites = [_site_from_raw(raw) for raw in data.get("sites", [])]
+    sites = [_site_from_raw(raw, source_file=None) for raw in data.get("sites", [])]
     for included in data.get("include", []):
         included_path = SITES_FILE.parent / included
         if not included_path.exists():
             continue
         included_data = _yaml.load(included_path.read_text()) or {}
-        sites.extend(_site_from_raw(raw) for raw in included_data.get("sites", []))
+        sites.extend(
+            _site_from_raw(raw, source_file=included) for raw in included_data.get("sites", [])
+        )
     return sites
 
 
-def _site_from_raw(raw: dict) -> Site:
+def _site_from_raw(raw: dict, source_file: str | None) -> Site:
     return Site(
         domain=raw["domain"],
         server=raw["server"],
@@ -128,34 +137,55 @@ def _site_from_raw(raw: dict) -> Site:
         redirects=raw.get("redirects", []),
         password_protect=raw.get("password_protect"),
         deployed_at=raw.get("deployed_at"),
+        source_file=source_file,
     )
 
 
+def _site_to_raw(s: Site) -> dict:
+    return {
+        "domain": s.domain,
+        "server": s.server,
+        "local_path": s.local_path,
+        "php": s.php,
+        "ssl": s.ssl,
+        "force_https": s.force_https,
+        "cors": s.cors,
+        "redirects": s.redirects,
+        "password_protect": s.password_protect,
+        "deployed_at": s.deployed_at,
+    }
+
+
 def save_sites(sites: list[Site]) -> None:
+    """Каждый сайт пишется обратно в тот файл, откуда его прочитал load_sites()
+    (главный sites.yaml или include-файл из sites.d/) — иначе сайт, once заведённый
+    в отдельный include-файл вручную, при первом же обновлении из hostme переехал
+    бы в главный sites.yaml (раздел 2.5 TODO)."""
     _ensure_config_dir()
+    by_file: dict[str, list[Site]] = {}
+    main_sites: list[Site] = []
+    for s in sites:
+        if s.source_file:
+            by_file.setdefault(s.source_file, []).append(s)
+        else:
+            main_sites.append(s)
+
     data = {}
     if SITES_FILE.exists():
         existing = _yaml.load(SITES_FILE.read_text()) or {}
         if "include" in existing:
             data["include"] = existing["include"]
-    data["sites"] = [
-        {
-            "domain": s.domain,
-            "server": s.server,
-            "local_path": s.local_path,
-            "php": s.php,
-            "ssl": s.ssl,
-            "force_https": s.force_https,
-            "cors": s.cors,
-            "redirects": s.redirects,
-            "password_protect": s.password_protect,
-            "deployed_at": s.deployed_at,
-        }
-        for s in sites
-    ]
+    data["sites"] = [_site_to_raw(s) for s in main_sites]
     with SITES_FILE.open("w") as f:
         _yaml.dump(data, f)
     SITES_FILE.chmod(0o600)
+
+    for rel_path, file_sites in by_file.items():
+        path = SITES_FILE.parent / rel_path
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        with path.open("w") as f:
+            _yaml.dump({"sites": [_site_to_raw(s) for s in file_sites]}, f)
+        path.chmod(0o600)
 
 
 def find_server(servers: list[Server], name: str) -> Server | None:
@@ -202,11 +232,36 @@ def resolve_server(
     return resolve_server_for_domain(servers, domain)
 
 
+def normalize_domain(domain: str) -> str:
+    """Домен, введённый пользователем напрямую как аргумент CLI (не через slugify
+    имени папки), может быть кириллическим целиком — `растаможка-авто.рф`. DNS и
+    Let's Encrypt понимают только ASCII, поэтому приводим к punycode целиком через
+    встроенный кодек `str.encode("idna")` (в отличие от `slugify()` он сам бьёт
+    домен по точкам и ToASCII-кодирует каждый лейбл отдельно, включая TLD — `.рф`
+    → `.xn--p1ai`). ASCII-домены проходят как есть.
+    """
+    if domain.isascii():
+        return domain
+    try:
+        return domain.encode("idna").decode("ascii")
+    except UnicodeError as exc:
+        raise ConfigError(f"Не удалось привести домен {domain!r} к ASCII/punycode: {exc}") from exc
+
+
 def slugify(name: str) -> str:
     slug = "".join(c.lower() if c.isalnum() else "-" for c in name)
     while "--" in slug:
         slug = slug.replace("--", "-")
-    return slug.strip("-") or "site"
+    slug = slug.strip("-") or "site"
+    if slug.isascii():
+        return slug
+    # Не-ASCII буквы (например, кириллица в имени папки) — DNS-лейбл допускает
+    # только ASCII, поэтому кодируем в punycode (тот же алгоритм, что у браузеров/DNS):
+    # "под-проект" → "xn----...". Раскодируется обратно любым IDNA-совместимым резолвером.
+    try:
+        return f"xn--{slug.encode('punycode').decode('ascii')}"
+    except UnicodeError:
+        return "site"
 
 
 def default_domain(local_path: str, servers: list[Server]) -> str | None:

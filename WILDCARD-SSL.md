@@ -1,4 +1,6 @@
-# Выпуск wildcard SSL — инструкция (проверено на antagorapp.ru)
+# Выпуск wildcard SSL — инструкция (проверено на antagorapp.ru и bolandau.ru)
+
+**2026-09-09, bolandau.ru**: пройдено полностью успешно тем же путём. Единственное отличие от прогона на `antagorapp.ru` — TXT-запись `_acme-challenge.bolandau.ru` распространялась по 6 NS Beget неравномерно и не за один раз: между проверками "не хватает" NS менялся (то `ns1.beget.pro`, то `ns1.beget.com`), несколько минут ушло на ожидание, пока все 6 не показали одно и то же значение подряд. Сертификат подтверждён: SAN содержит `DNS:*.bolandau.ru, DNS:bolandau.ru`, `sudo site bolandau.ru -info` → `SSL: Let's Encrypt`.
 
 Ручная операция на сервере `sites-first-beget` (212.67.13.95), 2026-09-08. Делается руками через SSH, потому что Let's Encrypt для wildcard-сертификатов требует DNS-01 challenge (TXT-запись), а добавлять записи в DNS Beget можно только из панели Beget — API-доступа туда у меня пока нет (см. «Автоматизация» в конце).
 

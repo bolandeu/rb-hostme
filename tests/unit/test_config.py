@@ -182,12 +182,23 @@ def test_resolve_server_returns_none_when_nothing_matches():
     [
         ("my-landing", "my-landing"),
         ("My Landing!", "my-landing"),
-        ("под_проект  42", "под-проект-42"),
+        ("под_проект  42", "xn----42-p4dh9a2acgdm3a"),
         ("___", "site"),
     ],
 )
 def test_slugify(raw, expected):
     assert config.slugify(raw) == expected
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("example.com", "example.com"),  # ASCII — без изменений
+        ("растаможка-авто.рф", "xn----7sbaabmy6aqugnooj.xn--p1ai"),  # весь домен, включая TLD
+    ],
+)
+def test_normalize_domain(raw, expected):
+    assert config.normalize_domain(raw) == expected
 
 
 def test_default_domain_combines_folder_name_and_first_base_domain(tmp_path):
@@ -220,3 +231,24 @@ def test_load_sites_follows_include(isolated_config):
 
     assert len(loaded) == 1
     assert loaded[0].domain == "personal.dev"
+
+
+def test_save_sites_writes_back_to_originating_include_file(isolated_config):
+    # Раздел 2.5 TODO: сайт, прочитанный из sites.d/*.yaml, должен обновляться
+    # там же, а не переезжать в главный sites.yaml при первом же save_sites().
+    isolated_config.mkdir(parents=True, exist_ok=True)
+    included = isolated_config / "sites.d" / "personal.yaml"
+    included.parent.mkdir(parents=True, exist_ok=True)
+    included.write_text(
+        "sites:\n  - domain: personal.dev\n    server: vps1\n    local_path: /tmp/personal\n"
+    )
+    config.SITES_FILE.write_text("include:\n  - sites.d/personal.yaml\nsites: []\n")
+
+    sites = config.load_sites()
+    sites[0].deployed_at = "2026-09-09T00:00:00+00:00"
+    config.save_sites(sites)
+
+    assert config.load_sites()[0].deployed_at == "2026-09-09T00:00:00+00:00"
+    main_data = config.SITES_FILE.read_text()
+    assert "personal.dev" not in main_data  # не продублировалось в главный файл
+    assert "sites.d/personal.yaml" in main_data  # include-ссылка сохранилась

@@ -11,14 +11,20 @@ hostme <domain> config --nginx-snippet docs/nginx-snippets/<файл>.conf
 
 ## Прежде чем писать новый — проверить, что Webinoly уже даёт по умолчанию
 
-Не дублировать, иначе просто мёртвый код в сниппете:
+Не дублировать, иначе просто мёртвый код в сниппете. Реальные конфиги (не
+пересказ, а точные копии того, что на сервере) — **`webinoly-defaults/`**:
 
-- **gzip** — включён глобально (`nginx.conf`)
+- **gzip** — включён глобально (`webinoly-defaults/gzip.conf`)
 - **Заголовки** `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
-  `Strict-Transport-Security` (HSTS) — уже стоят (`common/headers-*.conf`)
+  `Strict-Transport-Security` (HSTS) — уже стоят (`webinoly-defaults/headers-*.conf`)
 - **Кэш статики** (картинки/шрифты/css/js по расширению) — `expires max` +
   `Access-Control-Allow-Origin: *` уже в отдельном `location` у Webinoly
+  (`webinoly-defaults/headers.conf`)
 - **HTML** — `Cache-Control: no-cache` уже стоит
+- **Security-правила** (dot-файлы, path traversal, заблокированные
+  расширения/имена) — `webinoly-defaults/locations.conf`, всегда включены
+- Структура сайта целиком (какой `location /` при HTML- и PHP-типе сайта) —
+  `webinoly-defaults/site-html.conf` / `site-php.conf` / `php.conf`
 
 Реально не хватает обычно только: чистых URL (Apache `RewriteRule` их обычно
 даёт из коробки через `.htaccess`, у nginx — нет), кастомного `error_page 404`,

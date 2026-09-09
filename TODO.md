@@ -65,7 +65,7 @@
 
 - [x] `hostme server add --name --host --user [--key] [--default]` — запись в `servers.yaml`, проверка дубликата имени
 - [x] `hostme server init <name>` — вызывает `webinoly_install` (1.3) + `enable_sftp`, выводит статус по шагам
-- [x] **2026-09-09**: `hostme server update <name>` → `sudo webinoly -update` — обновляет сам Webinoly (не пакеты сервера). Флаг подтверждён в `Options:` `/usr/bin/webinoly` и неинтерактивен (просто вызывает `webinoly_update()`) — не запускал вживую на реальном сервере (там 4 живых сайта), только код + юнит-тесты; live-прогон — по решению пользователя
+- [x] **2026-09-09**: `hostme server update <name>` → `sudo webinoly -update` — обновляет сам Webinoly (не пакеты сервера). Флаг подтверждён в `Options:` `/usr/bin/webinoly` и неинтерактивен. **Прогнан вживую** на `sites-first-beget` (по явному согласию пользователя) — версия осталась `1.21.2` (уже была актуальной, идемпотентный no-op), все 4 живых сайта (`bolandau.ru`, `antagorapp.ru`, `roksdigital.ru`, кириллический) после этого по-прежнему `200`
 - [x] `hostme server list` — таблица серверов
 - [x] `hostme server remove <name>` — с проверкой, что на сервере не осталось сайтов в реестре (или явное предупреждение/`--force`)
 - [x] `hostme domain add <server> <domain>` — регистрирует base-домен в `servers.yaml`; MVP: без wildcard SSL сразу (см. 1.3), просто резервирует домен для авто-генерации поддоменов

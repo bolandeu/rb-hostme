@@ -86,6 +86,7 @@
 ### 1.7 Остальные MVP-команды
 
 - [x] `hostme list` — таблица всех сайтов из `sites.yaml` (домен, сервер, php, ssl, deployed_at); `--json` — сырой список объектов
+- [x] **2026-09-09**: `hostme list` дополнительно показывает служебные (base) домены, у которых нет записи в `sites.yaml` (никогда не деплоились через `hostme <path> <domain>`, только заглушка/wildcard-настройка вручную) — помечены отдельно (`[служебный домен, без деплоя через hostme]`, `base_domain: true` в `--json`), а не молча пропадают из списка. Нашёл по реальному вопросу пользователя «почему bolandau.ru/antagorapp.ru не в list»
 - [x] `hostme open <domain>` — `webbrowser.open(f"https://{domain}")`
 - [x] `hostme <domain> teardown` — `site_delete` на сервере + удаление записи из `sites.yaml`, с подтверждением (`typer.confirm`), которое пропускается при `--yes`/`-y` или `--json` (не блокирует агентов)
 

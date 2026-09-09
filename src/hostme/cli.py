@@ -81,7 +81,7 @@ _COMMAND_REFERENCE: list[tuple[str, str]] = [
     ("hostme <domain> revs", "список релизов сайта (для rollback/rollfore)"),
     ("hostme <domain> rollback", "откатить сайт на предыдущий релиз"),
     ("hostme <domain> rollfore", "вернуть сайт на следующий (после rollback) релиз"),
-    ("hostme list", "таблица всех сайтов из реестра"),
+    ("hostme list", "таблица сайтов из реестра + служебные домены без деплоя через hostme (помечены отдельно)"),
     ("hostme open <domain>", "открыть сайт в браузере"),
     ("hostme server add --name N --host H --user U [--key PATH] [--default]", "зарегистрировать сервер"),
     ("hostme server init <name>", "поставить/проверить Webinoly на сервере"),
@@ -370,6 +370,16 @@ def deploy(
 @app.command("list")
 def list_sites_cmd() -> None:
     sites = config.load_sites()
+    servers = config.load_servers()
+    site_domains = {s.domain for s in sites}
+    # Служебные (base) домены сами по себе не "сайты" (никогда не проходили
+    # через hostme <path> <domain>), но домен на сервере реально есть (обычно
+    # заглушка «Сайт в разработке» под будущие поддомены) — не показывать их
+    # тут молча "как будто их нет", а явно пометить как служебные без деплоя.
+    bare_base_domains = [
+        (d.name, s.name) for s in servers for d in s.base_domains if d.name not in site_domains
+    ]
+
     if output.is_json_mode():
         output.info(
             "sites",
@@ -379,17 +389,24 @@ def list_sites_cmd() -> None:
                     "server": s.server,
                     "php": s.php,
                     "deployed_at": s.deployed_at,
+                    "base_domain": False,
                 }
                 for s in sites
+            ]
+            + [
+                {"domain": name, "server": server_name, "php": None, "deployed_at": None, "base_domain": True}
+                for name, server_name in bare_base_domains
             ],
         )
         return
-    if not sites:
+    if not sites and not bare_base_domains:
         output.console.print("Сайтов пока нет.")
         return
     for s in sites:
         kind = "php" if s.php else "html"
         output.console.print(f"https://{s.domain}  [{kind}]  {s.server}  {s.deployed_at or ''}")
+    for name, server_name in bare_base_domains:
+        output.console.print(f"https://{name}  [служебный домен, без деплоя через hostme]  {server_name}")
 
 
 @app.command("open")

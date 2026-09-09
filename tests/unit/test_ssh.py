@@ -96,3 +96,52 @@ def test_rsync_to_timeout_raises():
         side_effect=subprocess.TimeoutExpired(cmd="rsync", timeout=5),
     ), pytest.raises(ssh.SshError, match="не завершился"):
         ssh.rsync_to("/local/path", make_server(), "/remote/path", timeout=5)
+
+
+# --- rsync_to_target: Target-транспорт (connection=ssh), ключ или sshpass ---
+
+
+def make_target(**overrides):
+    from hostme.config import Target
+
+    defaults = {"name": "ext1", "connection": "ssh", "host": "host.example", "user": "u12345", "remote_path": "/www"}
+    defaults.update(overrides)
+    return Target(**defaults)
+
+
+def test_rsync_to_target_with_ssh_key_uses_key_not_sshpass():
+    with patch("hostme.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
+        ssh.rsync_to_target("/local/path", make_target(ssh_key="~/.ssh/id"))
+    call = mock_run.call_args
+    rsh = call[0][0][call[0][0].index("-e") + 1]
+    assert "-i ~/.ssh/id" in rsh
+    assert "sshpass" not in rsh
+    assert call.kwargs.get("env") is None
+
+
+def test_rsync_to_target_with_password_uses_sshpass_env_not_argv():
+    with patch("hostme.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
+        ssh.rsync_to_target("/local/path", make_target(password="s3cr3t"))
+    call = mock_run.call_args
+    args = call[0][0]
+    rsh = args[args.index("-e") + 1]
+    assert rsh.startswith("sshpass -e ssh")
+    # пароль не должен светиться голым текстом ни в одном argv-элементе команды
+    assert not any("s3cr3t" in a for a in args)
+    assert call.kwargs["env"]["SSHPASS"] == "s3cr3t"
+
+
+def test_rsync_to_target_without_key_or_password_raises():
+    with pytest.raises(ssh.SshError, match="ssh_key или password"):
+        ssh.rsync_to_target("/local/path", make_target())
+
+
+def test_rsync_to_target_keeps_relative_remote_path():
+    # Реальный баг, пойманный вживую 2026-09-09 на Beget shared-хостинге:
+    # путь к сайту там относительный от домашней директории аккаунта
+    # ("top-ved.ru/public_html"), а не абсолютный — форсировать ведущий "/"
+    # ломает деплой ("/top-ved.ru/public_html" на сервере просто не существует).
+    with patch("hostme.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
+        ssh.rsync_to_target("/local/path", make_target(remote_path="top-ved.ru/public_html", password="x"))
+    destination = mock_run.call_args[0][0][-1]
+    assert destination == "u12345@host.example:top-ved.ru/public_html/"

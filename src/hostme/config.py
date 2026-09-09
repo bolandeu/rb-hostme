@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 from ruamel.yaml import YAML
 
@@ -10,6 +11,11 @@ from hostme.errors import HostmeError
 CONFIG_DIR = Path.home() / ".config" / "hostme"
 SERVERS_FILE = CONFIG_DIR / "servers.yaml"
 SITES_FILE = CONFIG_DIR / "sites.yaml"
+# Локальные снепшоты "состояние на сервере перед деплоем" для Target-сайтов
+# (сторонний хостинг, без Webinoly-releases) — см. cli._backup_target_before_deploy.
+# Вне git-репозитория проекта по тому же принципу, что servers.yaml/sites.yaml
+# (PRD §8) — это runtime-состояние конкретной машины, не исходный код hostme.
+TARGET_BACKUPS_DIR = CONFIG_DIR / "target-backups"
 
 _yaml = YAML()
 _yaml.preserve_quotes = True
@@ -38,6 +44,27 @@ class Server:
     @property
     def ssh_target(self) -> str:
         return f"{self.user}@{self.host}"
+
+
+TargetConnection = Literal["ssh", "ftp", "sftp"]
+
+
+@dataclass
+class Target:
+    """Сторонний хостинг (не наш VPS, без Webinoly) — просто "куда залить файлы".
+    В отличие от Server: нет ssh_key-only допущения (часто только логин/пароль
+    от хостинг-панели, одинаковый для любого протокола), нет base_domains/SSL/
+    releases — хостер уже сам всё настроил, hostme тут просто транспорт.
+    connection определяет ТОЛЬКО механизм заливки (rsync по ssh vs lftp), не
+    подразумевает никакого управления сервером."""
+
+    name: str
+    connection: TargetConnection
+    host: str
+    user: str
+    remote_path: str = "/"
+    password: str | None = None
+    ssh_key: str | None = None
 
 
 @dataclass
@@ -87,26 +114,78 @@ def load_servers() -> list[Server]:
 
 
 def save_servers(servers: list[Server]) -> None:
+    # targets: живёт в том же файле (см. save_targets) — сохраняем, чтобы не
+    # затереть при обновлении одних только servers.
     _ensure_config_dir()
-    data = {
-        "servers": [
-            {
-                "name": s.name,
-                "host": s.host,
-                "user": s.user,
-                "ssh_key": s.ssh_key,
-                "default": s.default,
-                "base_domains": [
-                    {"name": d.name, **({"default": True} if d.default else {})}
-                    for d in s.base_domains
-                ],
-            }
-            for s in servers
-        ]
-    }
+    data = {}
+    if SERVERS_FILE.exists():
+        existing = _yaml.load(SERVERS_FILE.read_text()) or {}
+        if "targets" in existing:
+            data["targets"] = existing["targets"]
+    data["servers"] = [
+        {
+            "name": s.name,
+            "host": s.host,
+            "user": s.user,
+            "ssh_key": s.ssh_key,
+            "default": s.default,
+            "base_domains": [
+                {"name": d.name, **({"default": True} if d.default else {})}
+                for d in s.base_domains
+            ],
+        }
+        for s in servers
+    ]
     with SERVERS_FILE.open("w") as f:
         _yaml.dump(data, f)
     SERVERS_FILE.chmod(0o600)
+
+
+def load_targets() -> list[Target]:
+    if not SERVERS_FILE.exists():
+        return []
+    data = _yaml.load(SERVERS_FILE.read_text()) or {}
+    return [
+        Target(
+            name=raw["name"],
+            connection=raw["connection"],
+            host=raw["host"],
+            user=raw["user"],
+            remote_path=raw.get("remote_path", "/"),
+            password=raw.get("password"),
+            ssh_key=raw.get("ssh_key"),
+        )
+        for raw in data.get("targets", [])
+    ]
+
+
+def save_targets(targets: list[Target]) -> None:
+    # servers: живёт в том же файле (см. save_servers) — та же логика "не затереть".
+    _ensure_config_dir()
+    data = {}
+    if SERVERS_FILE.exists():
+        existing = _yaml.load(SERVERS_FILE.read_text()) or {}
+        if "servers" in existing:
+            data["servers"] = existing["servers"]
+    data["targets"] = [
+        {
+            "name": t.name,
+            "connection": t.connection,
+            "host": t.host,
+            "user": t.user,
+            "remote_path": t.remote_path,
+            "password": t.password,
+            "ssh_key": t.ssh_key,
+        }
+        for t in targets
+    ]
+    with SERVERS_FILE.open("w") as f:
+        _yaml.dump(data, f)
+    SERVERS_FILE.chmod(0o600)
+
+
+def find_target(targets: list[Target], name: str) -> Target | None:
+    return next((t for t in targets if t.name == name), None)
 
 
 def load_sites() -> list[Site]:

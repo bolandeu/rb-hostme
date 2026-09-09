@@ -180,6 +180,59 @@
 
 **Решено (2026-09-09): не нужно** — вне скоупа проекта по явному запросу, не реализуем.
 
+### 3.5 Target — деплой на сторонний хостинг (ftp/sftp/ssh, без Webinoly)
+
+**2026-09-09: реализовано и проверено вживую на `top-ved.ru` (Beget shared-хостинг)** —
+полный цикл deploy (с бэкапом) → curl 200 → реальный браузер (`agent-browser`,
+корректно показал «Сайт в разработке»).
+
+- [x] `Target` — отдельная сущность (не унифицирована с `Server`, см. PRD): `name`
+      (=domain), `connection` (ssh/ftp/sftp), `host`, `user`, `remote_path`,
+      `password`/`ssh_key`. Живёт в том же `servers.yaml`, сиблинг-ключ `targets:`
+      (не отдельный файл) — `config.py` (`Target`, `load_targets`/`save_targets`,
+      `find_target`); `save_servers`/`save_targets` оба read-modify-write, чтобы не
+      затирать соседний ключ
+- [x] `hostme target add/list/remove` — единое пространство имён с `Server`
+      (`_require_unique_name`), `target list` никогда не печатает пароль/ключ
+      (только `has_password`/`has_ssh_key`)
+- [x] Транспорт: ssh → `rsync` (переиспользует `rsync_to`/`run_remote`-паттерн,
+      `hostme/ssh.py`: `rsync_to_target`/`rsync_from_target`), с паролем —
+      `sshpass` через `SSHPASS` env (никогда не argv, `ps aux`-безопасно);
+      ftp/sftp → `lftp mirror --reverse --delete` (новый `hostme/ftp.py`),
+      credentials через `open -u user,pass` на **stdin** lftp-скрипта, не argv
+- [x] `hostme <path> <domain> --target NAME [--yes]` — просто заливка файлов,
+      без `create_site`/SSL/releases (хостер уже сам всё настроил)
+- [x] `hostme <domain> teardown` на target-сайте — переиспользует тот же
+      transport с пустой локальной директорией (`rsync --delete`/`lftp mirror
+      --delete` сами стирают всё на той стороне)
+- [x] Локальные бэкапы перед каждым деплоем на target: `~/.config/hostme/
+      target-backups/<target>/<ts>/` (вне git-репозитория — то же обоснование,
+      что у `servers.yaml`/`sites.yaml`, см. PRD §8), best-effort (не роняет
+      деплой, если бэкапить ещё нечего), хранит последние 5. `hostme <domain>
+      rollback` на target-сайте — восстановление самого свежего снепшота
+      (одношаговый откат, без позиции в истории как у Webinoly-releases)
+- [x] **Безопасность — подтверждение на каждый вызов**: `deploy`/`teardown`/
+      `rollback` на target требуют явного `--yes` (или интерактивного
+      подтверждения) — в отличие от остальных команд, **`--json` НЕ пропускает
+      это молча** (`_confirm_target_action`, `cli.py`). Причина: target —
+      чужая/сторонняя инфраструктура, а не собственный VPS пользователя;
+      агент, которому по инструкции положено всегда звать с `--json`, не должен
+      получать возможность деплоить/сносить/откатывать чужой сайт без
+      явного «да» человека на конкретное действие. Задокументировано в
+      `hostme help --json` и в `~/.claude/skills/hostme/SKILL.md`
+- **Найдено и исправлено вживую (2 реальных бага, не ловятся юнит-тестами с моками):**
+  1. `remote_path` форсировался в абсолютный путь (`"/" + path.strip("/")`) —
+     сломало реальный деплой: у Beget (и многих shared-хостингов) путь
+     относительный от домашней директории SSH-аккаунта (`top-ved.ru/public_html`,
+     не `/top-ved.ru/public_html`). Фикс: уважать `remote_path` как есть, только
+     нормализовать trailing slash, никогда не форсировать leading (`ssh.py`,
+     `ftp.py`) — регрессионный тест `test_rsync_to_target_keeps_relative_remote_path`
+  2. `BatchMode=yes` в rsh-строке (скопировано из ssh_key-ветки Server) ломало
+     sshpass — `BatchMode=yes` отключает ВСЁ запрос пароля в OpenSSH, sshpass
+     перехватывать нечего, `Permission denied` даже с верными credentials. Фикс:
+     `BatchMode=yes` убран именно из password/sshpass-ветки `_target_ssh_transport`
+     (оставлен для ssh_key-ветки, там безопасен/корректен)
+
 ---
 
 ## Сквозные задачи (не привязаны к одной фазе)

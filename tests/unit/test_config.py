@@ -47,6 +47,54 @@ def test_servers_file_has_restrictive_permissions():
     assert mode == 0o600
 
 
+# --- Target: делит servers.yaml с Server ("servers:"/"targets:" — соседние
+# ключи одного файла) — критично, чтобы save_servers/save_targets не затирали
+# друг друга (реальный риск, раз это один файл, а не раздельные).
+
+
+def make_target(**overrides):
+    defaults = {
+        "name": "ext1",
+        "connection": "sftp",
+        "host": "host.example",
+        "user": "u12345",
+        "remote_path": "/www",
+        "password": "s3cr3t",
+    }
+    defaults.update(overrides)
+    return config.Target(**defaults)
+
+
+def test_save_and_load_targets_roundtrip():
+    config.save_targets([make_target()])
+    loaded = config.load_targets()
+    assert len(loaded) == 1
+    assert loaded[0].name == "ext1"
+    assert loaded[0].connection == "sftp"
+    assert loaded[0].password == "s3cr3t"
+    assert loaded[0].remote_path == "/www"
+
+
+def test_save_targets_does_not_wipe_existing_servers():
+    config.save_servers([make_server()])
+    config.save_targets([make_target()])
+    assert len(config.load_servers()) == 1
+    assert len(config.load_targets()) == 1
+
+
+def test_save_servers_does_not_wipe_existing_targets():
+    config.save_targets([make_target()])
+    config.save_servers([make_server()])
+    assert len(config.load_targets()) == 1
+    assert len(config.load_servers()) == 1
+
+
+def test_find_target():
+    targets = [make_target(name="a"), make_target(name="b")]
+    assert config.find_target(targets, "b") is targets[1]
+    assert config.find_target(targets, "missing") is None
+
+
 def test_find_server():
     servers = [make_server("vps1"), make_server("vps2")]
     assert config.find_server(servers, "vps2").name == "vps2"

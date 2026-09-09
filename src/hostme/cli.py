@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import os
+import shutil
 import sys
+import tempfile
 import urllib.error
 import urllib.request
 import webbrowser
@@ -11,15 +14,15 @@ from typing import Annotated
 import typer
 from rich.markup import escape as rich_escape
 
-from hostme import config, output, webinoly
+from hostme import config, ftp, output, webinoly
 from hostme.errors import HostmeError
-from hostme.ssh import rsync_to
+from hostme.ssh import rsync_from_target, rsync_to, rsync_to_target
 
 # Форма команд копирует surge.sh (AGENTS.md): `hostme <path> [domain]` для деплоя,
 # `hostme <domain> <subcommand>` для управления — без промежуточных слов вроде "deploy".
 # Typer/Click умеет только статическое дерево подкоманд, поэтому реальный argv
 # переписывается в explicit-подкоманды (_translate_argv) до того, как его увидит Typer.
-_TOP_LEVEL_COMMANDS = {"server", "domain", "list", "open", "help", "--help", "-h"}
+_TOP_LEVEL_COMMANDS = {"server", "domain", "target", "list", "open", "help", "--help", "-h"}
 _DOMAIN_SUBCOMMANDS = {"teardown", "config", "auth", "ssl", "debug", "revs", "rollback", "rollfore"}
 
 
@@ -60,8 +63,12 @@ app = typer.Typer(
 
 server_app = typer.Typer(help="Управление серверами.", no_args_is_help=True)
 domain_app = typer.Typer(help="Управление служебными доменами.", no_args_is_help=True)
+target_app = typer.Typer(
+    help="Управление сторонними хостингами (ftp/sftp/ssh, без Webinoly).", no_args_is_help=True
+)
 app.add_typer(server_app, name="server")
 app.add_typer(domain_app, name="domain")
+app.add_typer(target_app, name="target")
 
 # Полный справочник — источник и для `hostme help` (человеку/агенту без доступа к
 # репозиторию), и для README/будущего Claude Code skill'а поверх hostme (PRD раздел
@@ -93,6 +100,23 @@ _COMMAND_REFERENCE: list[tuple[str, str]] = [
     ("hostme domain add <server> <domain> [--default]", "зарегистрировать служебный (base) домен"),
     ("hostme domain default <domain>", "сделать домен дефолтным (для авто-генерации поддоменов)"),
     ("hostme domain list", "таблица служебных доменов"),
+    (
+        "hostme target add --name N --connection ssh|ftp|sftp --host H --user U [--password P] [--ssh-key PATH] [--path REMOTE]",
+        "зарегистрировать сторонний хостинг (не Webinoly — просто заливка файлов)",
+    ),
+    ("hostme target list", "таблица target'ов"),
+    ("hostme target remove <name> [--force]", "убрать target из реестра"),
+    (
+        "hostme <path> <domain> --target NAME [--yes]",
+        (
+            "деплой на target вместо Webinoly-сервера (домен обязателен явно, нет base-доменов у target'ов); "
+            "требует --yes или интерактивного подтверждения — сторонний хостинг, --json НЕ пропускает молча"
+        ),
+    ),
+    (
+        "hostme <domain> teardown --yes / rollback --yes (для target-сайтов)",
+        "то же самое правило подтверждения, что и у deploy на target — --json не байпасит",
+    ),
     ("--json (глобальный флаг, до остальных)", "чистый JSON вместо rich-вывода, без цвета — для агентов"),
 ]
 
@@ -100,7 +124,14 @@ _NOT_IMPLEMENTED_NOTE = (
     "Не реализовано в MVP: `hostme <domain> ssl` (подстановка своего сертификата), "
     "`hostme <domain> discard` (нет аналога — у нас нет preview-концепции), wildcard SSL "
     "изнутри hostme (делается вручную по WILDCARD-SSL.md — DNS-01 требует ручного шага "
-    "с DNS-провайдером), git push-to-deploy, -proxy= сайты (вне скоупа — только html/php/статика)."
+    "с DNS-провайдером), git push-to-deploy, -proxy= сайты (вне скоупа — только html/php/статика). "
+    "Для сайтов на target (сторонний хостинг): `auth`/`config`/`ssl`/`debug`/`revs`/`rollfore` "
+    "не поддерживаются вовсе (Webinoly-специфичны) — только deploy/list/open/teardown/rollback. "
+    "ВАЖНО для агентов: deploy/teardown/rollback на target — это чужая/стороннняя инфраструктура, "
+    "не собственный VPS пользователя. Такое действие требует явного --yes (или интерактивного "
+    "подтверждения) НА КАЖДЫЙ конкретный вызов; --json НЕ пропускает это подтверждение молча "
+    "(в отличие от teardown на своём сервере) — агент не должен передавать --yes сам по себе, "
+    "не получив явного «да» от человека на именно это действие прямо сейчас."
 )
 
 
@@ -116,6 +147,16 @@ def root(
 # --- server ---------------------------------------------------------------
 
 
+def _require_unique_name(name: str) -> None:
+    """servers.yaml и targets.yaml делят одно пространство имён (Site.server
+    резолвится в любой из них по имени без квалификатора) — нельзя допустить
+    коллизию между `hostme server add` и `hostme target add`."""
+    if config.find_server(config.load_servers(), name) is not None:
+        raise HostmeError(f"Имя {name!r} уже занято сервером (hostme server list)")
+    if config.find_target(config.load_targets(), name) is not None:
+        raise HostmeError(f"Имя {name!r} уже занято target'ом (hostme target list)")
+
+
 @server_app.command("add")
 def server_add(
     name: Annotated[str, typer.Option("--name")],
@@ -124,9 +165,8 @@ def server_add(
     key: Annotated[str, typer.Option("--key")] = "~/.ssh/id_ed25519",
     default: Annotated[bool, typer.Option("--default")] = False,
 ) -> None:
+    _require_unique_name(name)
     servers = config.load_servers()
-    if config.find_server(servers, name) is not None:
-        raise HostmeError(f"Сервер {name!r} уже зарегистрирован")
 
     if default:
         for s in servers:
@@ -276,6 +316,95 @@ def domain_list_cmd() -> None:
         output.console.print(f"{d.name}{mark} — {server_name}")
 
 
+# --- target (сторонний хостинг, ftp/sftp/ssh, без Webinoly) -----------------
+
+
+@target_app.command("add")
+def target_add(
+    name: Annotated[str, typer.Option("--name")],
+    connection: Annotated[str, typer.Option("--connection")],
+    host: Annotated[str, typer.Option("--host")],
+    user: Annotated[str, typer.Option("--user")],
+    password: Annotated[str | None, typer.Option("--password")] = None,
+    ssh_key: Annotated[str | None, typer.Option("--ssh-key")] = None,
+    remote_path: Annotated[str, typer.Option("--path")] = "/",
+) -> None:
+    if connection not in ("ssh", "ftp", "sftp"):
+        raise HostmeError(f"--connection должен быть ssh/ftp/sftp, получено {connection!r}")
+    if not password and not ssh_key:
+        raise HostmeError("Укажи --password или --ssh-key")
+    if connection in ("ftp", "sftp") and not password:
+        raise HostmeError(f"--connection={connection} требует --password (ssh_key не подходит для {connection})")
+
+    _require_unique_name(name)
+    targets = config.load_targets()
+    targets.append(
+        config.Target(
+            name=name,
+            connection=connection,  # type: ignore[arg-type]
+            host=host,
+            user=user,
+            remote_path=remote_path,
+            password=password,
+            ssh_key=ssh_key,
+        )
+    )
+    config.save_targets(targets)
+    output.success(f"Target {name} добавлен", target=name, host=host, connection=connection)
+
+
+@target_app.command("list")
+def target_list_cmd() -> None:
+    targets = config.load_targets()
+    if output.is_json_mode():
+        output.info(
+            "targets",
+            targets=[
+                {
+                    "name": t.name,
+                    "connection": t.connection,
+                    "host": t.host,
+                    "user": t.user,
+                    "remote_path": t.remote_path,
+                    # пароль/ключ никогда не печатаем — ни в --json, ни в человеческом выводе
+                    "has_password": bool(t.password),
+                    "has_ssh_key": bool(t.ssh_key),
+                }
+                for t in targets
+            ],
+        )
+        return
+    if not targets:
+        output.console.print("Target'ов пока нет. `hostme target add ...`")
+        return
+    for t in targets:
+        output.console.print(f"{t.name} ({t.connection}) — {t.user}@{t.host}:{t.remote_path}")
+
+
+@target_app.command("remove")
+def target_remove(
+    name: Annotated[str, typer.Argument()],
+    force: Annotated[bool, typer.Option("--force")] = False,
+) -> None:
+    targets = config.load_targets()
+    target = config.find_target(targets, name)
+    if target is None:
+        raise HostmeError(f"Target {name!r} не найден")
+
+    sites = config.load_sites()
+    remaining = [s for s in sites if s.server == name]
+    if remaining and not force:
+        domains = ", ".join(s.domain for s in remaining)
+        raise HostmeError(
+            f"На target {name} остались сайты в реестре ({domains}). "
+            f"Сначала `hostme <domain> teardown` их, либо повтори с --force."
+        )
+
+    targets.remove(target)
+    config.save_targets(targets)
+    output.success(f"Target {name} удалён из реестра", target=name)
+
+
 # --- deploy / list / open / teardown ----------------------------------------
 
 
@@ -283,15 +412,144 @@ def _detect_site_type(local_path: Path) -> webinoly.SiteType:
     return "php" if any(local_path.rglob("*.php")) else "html"
 
 
+def _confirm_target_action(action: str, target: config.Target, yes: bool) -> None:
+    """Target — сторонний хостинг (не наш VPS), часто чужая/клиентская
+    инфраструктура. В отличие от teardown на своём сервере, --json НЕ пропускает
+    это подтверждение молча — иначе агент, которому по инструкции положено всегда
+    звать с --json, получил бы возможность деплоить/сносить/откатывать чужой сайт
+    без единого явного "да" от человека на КОНКРЕТНОЕ действие. Пропустить можно
+    только явным --yes — то есть кто бы ни звал команду, обязан осознанно решить
+    пропустить подтверждение, а не получить его в подарок за --json."""
+    if yes:
+        return
+    if output.is_json_mode():
+        raise HostmeError(
+            f"{action} на target {target.name!r} (сторонний хостинг) требует явного --yes "
+            f"даже при --json — не выполнять без подтверждения человека на это конкретное действие"
+        )
+    if not typer.confirm(f"{action} на target {target.name!r} ({target.connection}, сторонний хостинг). Продолжить?"):
+        output.info("Отменено")
+        raise typer.Exit(code=1)
+
+
+_KEEP_TARGET_BACKUPS = 5
+
+
+def _target_backup_dir(target_name: str) -> Path:
+    return config.TARGET_BACKUPS_DIR / target_name
+
+
+def _target_backup_snapshots(target_name: str) -> list[Path]:
+    backups_dir = _target_backup_dir(target_name)
+    if not backups_dir.is_dir():
+        return []
+    return sorted(p for p in backups_dir.iterdir() if p.is_dir())
+
+
+def _prune_target_backups(target_name: str, keep: int = _KEEP_TARGET_BACKUPS) -> None:
+    snapshots = _target_backup_snapshots(target_name)
+    for old in snapshots[:-keep]:
+        shutil.rmtree(old, ignore_errors=True)
+
+
+def _backup_target_before_deploy(target: config.Target) -> None:
+    """Бэкап перед деплоем на Target — скачиваем текущее содержимое remote_path
+    в локальный снепшот ДО заливки нового. Работает одинаково для ssh/ftp/sftp
+    (просто ещё один `mirror`/rsync в обратную сторону) — в отличие от Webinoly-
+    releases не нужен shell на сервере (у shared-хостингов часто его нет вовсе).
+    Best-effort: если скачивать нечего (первый деплой на этот target, remote_path
+    ещё не существует) — не роняем весь деплой, просто предупреждаем."""
+    backups_dir = _target_backup_dir(target.name)
+    backups_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    ts = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+    snapshot = backups_dir / ts
+    snapshot.mkdir(mode=0o700)
+    try:
+        if target.connection == "ssh":
+            rsync_from_target(target, str(snapshot))
+        else:
+            ftp.mirror_from(target, str(snapshot))
+    except HostmeError as exc:
+        shutil.rmtree(snapshot, ignore_errors=True)
+        output.info(f"Бэкап перед деплоем не удался (возможно, это первый деплой на {target.name}): {exc}")
+        return
+    _prune_target_backups(target.name)
+
+
+def _deploy_to_target(local_path: Path, domain: str | None, target_name: str, yes: bool) -> None:
+    """Деплой на сторонний хостинг (ftp/sftp/ssh, без Webinoly) — просто залить
+    файлы, никакого create_site/SSL/releases (хостер уже сам всё настроил)."""
+    if domain is None:
+        raise HostmeError(
+            "Для --target домен нужно указывать явно — у сторонних хостингов нет "
+            "служебных (base) доменов для авто-генерации поддомена."
+        )
+    domain = config.normalize_domain(domain)
+
+    target = config.find_target(config.load_targets(), target_name)
+    if target is None:
+        raise HostmeError(f"Target {target_name!r} не найден. Сначала `hostme target add`.")
+
+    _confirm_target_action(f"Деплой {domain}", target, yes)
+
+    sites = config.load_sites()
+    config.check_collision(sites, domain, str(local_path))
+
+    _backup_target_before_deploy(target)
+
+    output.info(f"Заливаю файлы на {target.name} ({target.connection})...")
+    if target.connection == "ssh":
+        rsync_to_target(str(local_path), target)
+    else:
+        ftp.mirror_to(str(local_path), target)
+
+    existing = next((s for s in sites if s.domain == domain), None)
+    if existing is not None:
+        sites.remove(existing)
+    sites.append(
+        config.Site(
+            domain=domain,
+            server=target.name,
+            local_path=str(local_path),
+            deployed_at=datetime.now(UTC).isoformat(),
+            source_file=existing.source_file if existing is not None else None,
+        )
+    )
+    config.save_sites(sites)
+    output.success(f"Залито на {target.name}", target=target.name, domain=domain)
+
+
+def _teardown_target(target: config.Target) -> None:
+    """Для target нет понятия "сайт" на удалённой стороне (хостер уже сам всё
+    настроил) — teardown тут значит "убрать то, что мы туда залили". Не пишем
+    отдельную команду удаления по SSH/FTP — переиспользуем тот же transport,
+    что и deploy, просто с ПУСТОЙ локальной папкой: rsync/lftp --delete сами
+    сотрут всё существующее на той стороне."""
+    empty_dir = tempfile.mkdtemp(prefix="hostme-empty-")
+    try:
+        if target.connection == "ssh":
+            rsync_to_target(empty_dir, target)
+        else:
+            ftp.mirror_to(empty_dir, target)
+    finally:
+        os.rmdir(empty_dir)
+
+
 @app.command("_deploy", hidden=True)
 def deploy(
     path: Annotated[str, typer.Argument()],
     domain: Annotated[str | None, typer.Argument()] = None,
     server_name: Annotated[str | None, typer.Option("--server")] = None,
+    target_name: Annotated[str | None, typer.Option("--target")] = None,
+    yes: Annotated[bool, typer.Option("--yes", "-y")] = False,
 ) -> None:
     local_path = Path(path).expanduser().resolve()
     if not local_path.is_dir():
         raise HostmeError(f"{local_path} не является директорией")
+
+    if target_name is not None:
+        _deploy_to_target(local_path, domain, target_name, yes)
+        return
 
     servers = config.load_servers()
     sites = config.load_sites()
@@ -417,16 +675,31 @@ def open_site(domain: Annotated[str, typer.Argument()]) -> None:
     output.success(f"Открываю https://{domain}")
 
 
-def _require_site_server(domain: str) -> tuple[config.Site, config.Server]:
-    sites = config.load_sites()
-    site = next((s for s in sites if s.domain == domain), None)
+def _find_site(domain: str) -> config.Site:
+    site = next((s for s in config.load_sites() if s.domain == domain), None)
     if site is None:
         raise HostmeError(f"Сайт {domain} не найден в реестре")
-    servers = config.load_servers()
-    server = config.find_server(servers, site.server)
-    if server is None:
-        raise HostmeError(f"Сервер {site.server!r} для сайта {domain} не найден в конфиге")
-    return site, server
+    return site
+
+
+def _require_site_server(domain: str) -> tuple[config.Site, config.Server]:
+    """Для команд, которые умеют работать ТОЛЬКО с Webinoly-сервером (auth/config/
+    debug/revs/rollback/rollfore — весь их смысл завязан на Webinoly). Если сайт
+    задеплоен на Target (сторонний хостинг) — понятная ошибка вместо "сервер не
+    найден в конфиге" (дело не в отсутствующем конфиге, а в том, что фича
+    Webinoly-специфична и для target'ов не имеет смысла)."""
+    site = _find_site(domain)
+    server = config.find_server(config.load_servers(), site.server)
+    if server is not None:
+        return site, server
+    target = config.find_target(config.load_targets(), site.server)
+    if target is not None:
+        raise HostmeError(
+            f"{domain} задеплоен на target {site.server!r} (сторонний хостинг, "
+            f"connection={target.connection}) — эта команда Webinoly-специфична, "
+            f"для target'ов не поддерживается"
+        )
+    raise HostmeError(f"Сервер {site.server!r} для сайта {domain} не найден в конфиге")
 
 
 @app.command("revs")
@@ -446,21 +719,51 @@ def revs(domain: Annotated[str, typer.Argument()]) -> None:
         output.console.print(f"{r}{' (current)' if r == current else ''}")
 
 
+def _rollback_target(target: config.Target) -> None:
+    """Одношаговый откат для Target — нет полноценной истории с указателем
+    "текущей" позиции, как у Webinoly-releases (там она на сервере, тут только
+    локальные снепшоты) — просто заливаем самый свежий локальный бэкап обратно."""
+    snapshots = _target_backup_snapshots(target.name)
+    if not snapshots:
+        raise HostmeError(f"У target {target.name!r} нет локальных бэкапов для отката")
+    snapshot = snapshots[-1]
+    if target.connection == "ssh":
+        rsync_to_target(str(snapshot), target)
+    else:
+        ftp.mirror_to(str(snapshot), target)
+
+
 @app.command("rollback")
-def rollback(domain: Annotated[str, typer.Argument()]) -> None:
-    """Вызов: hostme <domain> rollback — откатить на предыдущий релиз."""
+def rollback(
+    domain: Annotated[str, typer.Argument()],
+    yes: Annotated[bool, typer.Option("--yes", "-y")] = False,
+) -> None:
+    """Вызов: hostme <domain> rollback [--yes] — откатить на предыдущий релиз
+    (сервер) или последний локальный бэкап (target, требует --yes/подтверждения —
+    сторонний хостинг)."""
     domain = config.normalize_domain(domain)
-    _site, server = _require_site_server(domain)
-    releases = webinoly.list_releases(server, domain)
-    current = webinoly.current_release(server, domain)
-    if current is None or current not in releases:
-        raise HostmeError(f"Не удалось определить текущий релиз {domain}")
-    idx = releases.index(current)
-    if idx == 0:
-        raise HostmeError(f"У {domain} нет более старого релиза для отката (текущий — самый старый: {current})")
-    target = releases[idx - 1]
-    webinoly.switch_release(server, domain, target)
-    output.success(f"{domain} откачен на релиз {target}", domain=domain, release=target)
+    site = _find_site(domain)
+
+    server = config.find_server(config.load_servers(), site.server)
+    if server is not None:
+        releases = webinoly.list_releases(server, domain)
+        current = webinoly.current_release(server, domain)
+        if current is None or current not in releases:
+            raise HostmeError(f"Не удалось определить текущий релиз {domain}")
+        idx = releases.index(current)
+        if idx == 0:
+            raise HostmeError(f"У {domain} нет более старого релиза для отката (текущий — самый старый: {current})")
+        release = releases[idx - 1]
+        webinoly.switch_release(server, domain, release)
+        output.success(f"{domain} откачен на релиз {release}", domain=domain, release=release)
+        return
+
+    site_target = config.find_target(config.load_targets(), site.server)
+    if site_target is None:
+        raise HostmeError(f"Сервер/target {site.server!r} для сайта {domain} не найден в конфиге")
+    _confirm_target_action(f"Rollback {domain}", site_target, yes)
+    _rollback_target(site_target)
+    output.success(f"{domain} откачен на предыдущий бэкап", domain=domain, target=site_target.name)
 
 
 @app.command("rollfore")
@@ -485,27 +788,32 @@ def teardown(
     domain: Annotated[str, typer.Argument()],
     yes: Annotated[bool, typer.Option("--yes", "-y")] = False,
 ) -> None:
-    """Вызов: hostme <domain> teardown [--yes] — снести сайт и убрать из реестра."""
+    """Вызов: hostme <domain> teardown [--yes] — снести сайт и убрать из реестра.
+    Для target-сайтов (сторонний хостинг) --json НЕ пропускает подтверждение
+    молча — нужен явный --yes (см. _confirm_target_action)."""
     domain = config.normalize_domain(domain)
-    servers = config.load_servers()
-    sites = config.load_sites()
+    site = _find_site(domain)
 
-    site = next((s for s in sites if s.domain == domain), None)
-    if site is None:
-        raise HostmeError(f"Сайт {domain} не найден в реестре")
+    server = config.find_server(config.load_servers(), site.server)
+    target = None if server is not None else config.find_target(config.load_targets(), site.server)
 
-    if not yes and not output.is_json_mode() and not typer.confirm(
-        f"Снести сайт {domain} на сервере (файлы + SSL) и убрать из реестра?"
+    if target is not None:
+        _confirm_target_action(f"Teardown {domain}", target, yes)
+    elif not yes and not output.is_json_mode() and not typer.confirm(
+        f"Снести сайт {domain} и убрать из реестра?"
     ):
         output.info("Отменено")
         raise typer.Exit(code=1)
 
-    server = config.find_server(servers, site.server)
-    if server is None:
-        raise HostmeError(f"Сервер {site.server!r} для сайта {domain} не найден в конфиге")
+    if server is not None:
+        webinoly.delete_site(server, domain)
+    else:
+        if target is None:
+            raise HostmeError(f"Сервер/target {site.server!r} для сайта {domain} не найден в конфиге")
+        _teardown_target(target)
 
-    webinoly.delete_site(server, domain)
-    sites.remove(site)
+    sites = config.load_sites()
+    sites.remove(next(s for s in sites if s.domain == domain))
     config.save_sites(sites)
     output.success(f"Сайт {domain} удалён", domain=domain)
 
@@ -519,15 +827,10 @@ def auth(
 ) -> None:
     """Вызов: hostme <domain> auth --user U --pass P (или --off) — password protection."""
     domain = config.normalize_domain(domain)
-    servers = config.load_servers()
+    _require_site_server(domain)  # только валидация — упадёт понятной ошибкой для target'ов
     sites = config.load_sites()
-
-    site = next((s for s in sites if s.domain == domain), None)
-    if site is None:
-        raise HostmeError(f"Сайт {domain} не найден в реестре")
-    server = config.find_server(servers, site.server)
-    if server is None:
-        raise HostmeError(f"Сервер {site.server!r} для сайта {domain} не найден в конфиге")
+    site = next(s for s in sites if s.domain == domain)
+    server = config.find_server(config.load_servers(), site.server)
 
     if off:
         webinoly.disable_http_auth(server, domain)
@@ -623,10 +926,7 @@ def site_config(
         _print_site_config(site)
         return
 
-    servers = config.load_servers()
-    server = config.find_server(servers, site.server)
-    if server is None:
-        raise HostmeError(f"Сервер {site.server!r} для сайта {domain} не найден в конфиге")
+    _site, server = _require_site_server(domain)
 
     for pair in redirect:
         frm, sep, to = pair.partition("=")
@@ -675,14 +975,7 @@ def debug(
 ) -> None:
     """Вызов: hostme <domain> debug [--error] [--lines N] — HTTP-статус + хвост лога."""
     domain = config.normalize_domain(domain)
-    sites = config.load_sites()
-    site = next((s for s in sites if s.domain == domain), None)
-    if site is None:
-        raise HostmeError(f"Сайт {domain} не найден в реестре")
-    servers = config.load_servers()
-    server = config.find_server(servers, site.server)
-    if server is None:
-        raise HostmeError(f"Сервер {site.server!r} для сайта {domain} не найден в конфиге")
+    _site, server = _require_site_server(domain)
 
     status = _http_status(domain)
     log_output = webinoly.tail_log(server, domain, error=error, lines=lines)

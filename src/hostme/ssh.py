@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from hostme.config import Server
+from hostme.config import Server, Target
 from hostme.errors import HostmeError
 
 DEFAULT_TIMEOUT = 30
@@ -129,3 +130,82 @@ def rsync_to(
             result=result,
         )
     return result
+
+
+def _target_remote_path(target: Target) -> str:
+    # НЕ форсировать ведущий "/" — у многих shared-хостингов (напр. Beget) путь
+    # к сайту относительный от домашней директории аккаунта ("domain.ru/public_html",
+    # без слэша), а не абсолютный ("/domain.ru/public_html" — такого пути там
+    # просто нет). Уважаем то, что явно указано в remote_path, включая пусто/"/".
+    return target.remote_path.rstrip("/") + "/" if target.remote_path.strip("/") else target.remote_path
+
+
+def _target_ssh_transport(target: Target) -> tuple[str, dict[str, str] | None]:
+    """rsh-команда для rsync `-e` + env под connection=ssh Target — общее и для
+    заливки (deploy), и для скачивания (бэкап перед деплоем, см. cli.py).
+    Ключ (как у Server) или пароль через sshpass — частый случай для сторонних
+    хостингов, где SSH дают, но ключ туда не загрузить, только тот же логин/
+    пароль, что и для FTP/панели."""
+    if not target.ssh_key and not target.password:
+        raise SshError(f"Target {target.name!r}: для connection=ssh нужен ssh_key или password")
+
+    if target.ssh_key:
+        return f"ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -i {target.ssh_key}", None
+
+    # BatchMode=yes НЕЛЬЗЯ здесь (в отличие от ключевой ветки выше) — эта опция
+    # отключает у ssh вообще любой запрос пароля, включая тот самый prompt,
+    # который должен перехватывать sshpass; с ней password-auth падает с
+    # "Permission denied" даже при верном пароле. Поймано вживую 2026-09-09
+    # на реальном Beget-хостинге — ручной sshpass-тест без BatchMode прошёл,
+    # а тот же вызов внутри rsync_to_target с BatchMode=yes — нет.
+    rsh = "sshpass -e ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new"
+    # Пароль через переменную окружения SSHPASS (sshpass -e), не флагом -p —
+    # флаг был бы виден в `ps aux` всем локальным пользователям машины.
+    env = {**os.environ, "SSHPASS": target.password}
+    return rsh, env
+
+
+def _run_target_rsync(args: list[str], target: Target, timeout: int, env: dict[str, str] | None) -> RemoteResult:
+    try:
+        proc = subprocess.run(args, capture_output=True, text=True, timeout=timeout, env=env, check=False)
+    except subprocess.TimeoutExpired as exc:
+        raise SshError(f"rsync на {target.name} не завершился за {timeout}с") from exc
+    except FileNotFoundError as exc:
+        # sshpass отсутствующим тут не поймать: его запускает сам rsync как
+        # дочерний процесс (через -e), а не Python напрямую — эта ветка бывает
+        # только если не найден сам rsync.
+        raise SshError("Команда `rsync` не найдена в системе") from exc
+
+    result = RemoteResult(stdout=proc.stdout, stderr=proc.stderr, returncode=proc.returncode)
+    if not result.ok:
+        hint = ""
+        if target.password and not target.ssh_key and "sshpass" in result.stderr.lower():
+            hint = " (похоже, не установлен sshpass — нужен для password-based SSH на Target)"
+        raise SshError(
+            f"rsync на {target.name} завершился с ошибкой: {proc.stderr.strip()}{hint}",
+            result=result,
+        )
+    return result
+
+
+def rsync_to_target(local_path: str, target: Target, timeout: int = LONG_TIMEOUT) -> RemoteResult:
+    """Заливка на Target с connection=ssh — тот же rsync, что и у Server, но без
+    ControlMaster (Target — обычно один rsync-вызов на деплой, не серия команд,
+    как у Webinoly-пайплайна) и без ssh_key-only допущения (см. _target_ssh_transport)."""
+    rsh, env = _target_ssh_transport(target)
+    local = local_path.rstrip("/") + "/"
+    destination = f"{target.user}@{target.host}:{_target_remote_path(target)}"
+    args = ["rsync", "-az", "--delete", "-e", rsh, local, destination]
+    return _run_target_rsync(args, target, timeout, env)
+
+
+def rsync_from_target(target: Target, local_dir: str, timeout: int = LONG_TIMEOUT) -> RemoteResult:
+    """Скачивает текущее содержимое remote_path в local_dir — бэкап перед
+    деплоем на Target (см. cli._backup_target_before_deploy), не rollback как
+    таковой. Без --delete: local_dir — свежая пустая директория под конкретный
+    таймстамп, синхронизировать с ней нечего, только заполнить."""
+    rsh, env = _target_ssh_transport(target)
+    local = local_dir.rstrip("/") + "/"
+    source = f"{target.user}@{target.host}:{_target_remote_path(target)}"
+    args = ["rsync", "-az", "-e", rsh, source, local]
+    return _run_target_rsync(args, target, timeout, env)

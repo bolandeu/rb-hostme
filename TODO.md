@@ -41,14 +41,16 @@
 
 ### 1.3 Webinoly-адаптер (docs/webinoly.md)
 
-- [ ] `webinoly_install(server, mode="-php")` — `wget -qO weby qrok.es/wy && sudo bash weby -php`; идемпотентность — проверить, установлен ли уже Webinoly, прежде чем повторно ставить (`sudo webinoly -version` или `-info`, ловим код возврата)
-- [ ] **[Нужна проверка на реальном сервере]** Неинтерактивность install-скрипта `weby` — задаёт ли он вопросы в процессе; если да — найти unattended-флаги или заскриптовать ответы (см. открытый вопрос в `docs/webinoly.md`)
-- [ ] `site_create(server, domain, type: "html"|"php")` → `sudo site <domain> -html` / `-php`
-- [ ] `site_exists(server, domain)` — через `sudo site -list` (парсинг вывода) или `sudo site <domain> -info` (код возврата/наличие в выводе)
-- [ ] `site_delete(server, domain, force=True, revoke_ssl=True)` → `sudo site <domain> -delete=force -revoke=on`
-- [ ] `site_ssl_on(server, domain, wildcard=False)` → `sudo site <domain> -ssl=on [-wildcard]`; учесть, что для wildcard нужна ручная DNS TXT-валидация (см. docs/webinoly.md) — для MVP: включаем SSL для конкретных поддоменов не через wildcard, а через обычный `-ssl=on` на каждый домен отдельно (Let's Encrypt лимиты позволяют); wildcard — Phase 2, когда понадобится сразу закрыть весь base-домен
-- [ ] Парсер вывода `sudo site -list` → структура (тип сайта, ssl вкл/выкл и т.д.) для сверки с локальным реестром
-- [ ] Общий helper для выполнения команд Webinoly с `sudo` без интерактивного пароля (условие: пользователь на сервере имеет passwordless sudo, либо `sudo -n`) — задокументировать требование к серверу в README/`server add`
+Реализовано в `src/hostme/webinoly.py`, юнит-тесты в `tests/unit/test_webinoly.py` (100% покрытие модуля) + e2e в `tests/e2e/test_webinoly_adapter.py` (прогнан на `sites-first-beget`, полный цикл create→ssl→upload→curl→delete зелёный).
+
+- [x] `install(server, mode="-php")` — подтверждено вживую: `wget -qO weby qrok.es/wy && bash weby -php` полностью неинтерактивен (никаких вопросов). Идемпотентность через `is_installed()` (`command -v webinoly`) перед установкой
+- [x] `create_site(server, domain, site_type)` → `sudo site <domain> -html` / `-php`
+- [x] `site_exists(server, domain)` / `list_sites(server)` — через `sudo site -list` + `parse_site_list()`
+- [x] `delete_site(server, domain, revoke_ssl=True)` → `sudo site <domain> -delete=force -revoke=on|off`
+- [x] `enable_ssl(server, domain, wildcard=False, add_to_wildcard=None)` — три режима: обычный `-ssl=on`, новый wildcard-сертификат (`-wildcard`, ручной DNS-01, см. WILDCARD-SSL.md), и **`-add-to-wildcard=<base>`** — привязка к уже существующему wildcard-сертификату **без единого DNS-шага** (подтверждено вживую на test1/test2.antagorapp.ru). Это и есть реальный путь для MVP: base-домен получает wildcard один раз вручную (WILDCARD-SSL.md), а каждый новый поддомен цепляется через `add_to_wildcard` — быстрее и надёжнее, чем per-domain `-ssl=on` (не бьёт по Let's Encrypt rate limit на много сайтов)
+- [x] `fix_ownership(server, domain)` — обязательный `chown -R www-data:www-data` после заливки (см. 1.2/AGENTS.md)
+- [x] `parse_site_list()` — **найден и исправлен реальный баг**: формат тегов у Webinoly — несколько отдельных скобочных групп подряд без разделителя, `(HTML)(NoSSL)`, а не `(HTML, NoSSL)`, как можно было бы предположить по документации. Юнит-тест `test_parse_site_list_multiple_adjacent_parens_no_ssl` фиксирует это явно
+- [x] `sudo` без пароля — подтверждено, работает из коробки на `sites-first-beget` (пользователь `root`, `sudo` не спрашивает пароль сам у себя)
 
 ### 1.4 CLI-каркас (Typer)
 

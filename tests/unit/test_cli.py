@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -5,7 +6,14 @@ import typer
 from typer.testing import CliRunner
 
 from hostme import output
-from hostme.cli import _confirm_target_action, _translate_argv, app, main, root
+from hostme.cli import (
+    _confirm_target_action,
+    _ensure_target_htaccess,
+    _translate_argv,
+    app,
+    main,
+    root,
+)
 from hostme.config import Target
 from hostme.errors import HostmeError
 
@@ -113,3 +121,22 @@ def test_confirm_target_action_interactive_declined_exits() -> None:
         pytest.raises(typer.Exit),
     ):
         _confirm_target_action("Деплой x", make_target(), yes=False)
+
+
+# _ensure_target_htaccess — target'ы это shared-хостинг на Apache, а статические
+# сборки .htaccess сами не кладут (раньше это делал `make deploy` в генераторе) —
+# без него на Apache ломаются clean URLs/кеш/gzip.
+
+
+def test_ensure_target_htaccess_adds_default_when_missing(tmp_path: Path) -> None:
+    _ensure_target_htaccess(tmp_path)
+    htaccess = tmp_path / ".htaccess"
+    assert htaccess.exists()
+    assert "RewriteEngine On" in htaccess.read_text()
+
+
+def test_ensure_target_htaccess_does_not_overwrite_existing(tmp_path: Path) -> None:
+    htaccess = tmp_path / ".htaccess"
+    htaccess.write_text("# custom site-specific rules\n")
+    _ensure_target_htaccess(tmp_path)
+    assert htaccess.read_text() == "# custom site-specific rules\n"

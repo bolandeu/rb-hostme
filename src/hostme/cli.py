@@ -476,6 +476,23 @@ def _backup_target_before_deploy(target: config.Target) -> None:
     _prune_target_backups(target.name)
 
 
+_APACHE_HTACCESS_TEMPLATE = Path(__file__).parent / "templates" / "apache-htaccess.conf"
+
+
+def _ensure_target_htaccess(local_path: Path) -> None:
+    """Все текущие Target — shared-хостинг на Apache (не nginx/Webinoly), а
+    статические сборки (см. static-site-generator) сами .htaccess не кладут —
+    раньше это делал отдельный шаг `make deploy` (`cp docs/apache-htaccess.conf
+    dist/.../.htaccess`), которого у hostme нет. Без него ломаются clean URLs/
+    кеширование/gzip на Apache. Подставляем дефолтный ТОЛЬКО если сборка не
+    принесла свой — не затираем сайт-специфичный .htaccess, если он появится."""
+    htaccess = local_path / ".htaccess"
+    if htaccess.exists():
+        return
+    shutil.copy(_APACHE_HTACCESS_TEMPLATE, htaccess)
+    output.info(".htaccess не найден в сборке — подставлен дефолтный (Apache: clean URLs, кеш, gzip, security headers)")
+
+
 def _deploy_to_target(local_path: Path, domain: str | None, target_name: str, yes: bool) -> None:
     """Деплой на сторонний хостинг (ftp/sftp/ssh, без Webinoly) — просто залить
     файлы, никакого create_site/SSL/releases (хостер уже сам всё настроил)."""
@@ -496,6 +513,7 @@ def _deploy_to_target(local_path: Path, domain: str | None, target_name: str, ye
     config.check_collision(sites, domain, str(local_path))
 
     _backup_target_before_deploy(target)
+    _ensure_target_htaccess(local_path)
 
     output.info(f"Заливаю файлы на {target.name} ({target.connection})...")
     if target.connection == "ssh":

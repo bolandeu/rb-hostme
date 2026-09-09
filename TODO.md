@@ -65,6 +65,7 @@
 
 - [x] `hostme server add --name --host --user [--key] [--default]` — запись в `servers.yaml`, проверка дубликата имени
 - [x] `hostme server init <name>` — вызывает `webinoly_install` (1.3) + `enable_sftp`, выводит статус по шагам
+- [x] **2026-09-09**: `hostme server update <name>` → `sudo webinoly -update` — обновляет сам Webinoly (не пакеты сервера). Флаг подтверждён в `Options:` `/usr/bin/webinoly` и неинтерактивен (просто вызывает `webinoly_update()`) — не запускал вживую на реальном сервере (там 4 живых сайта), только код + юнит-тесты; live-прогон — по решению пользователя
 - [x] `hostme server list` — таблица серверов
 - [x] `hostme server remove <name>` — с проверкой, что на сервере не осталось сайтов в реестре (или явное предупреждение/`--force`)
 - [x] `hostme domain add <server> <domain>` — регистрирует base-домен в `servers.yaml`; MVP: без wildcard SSL сразу (см. 1.3), просто резервирует домен для авто-генерации поддоменов
@@ -125,7 +126,7 @@
 ### 2.3 `hostme <domain> auth` — password protection
 
 - [x] `hostme <domain> auth --user U --pass P` → `sudo httpauth <domain> -add=[user,pass]` + `sudo httpauth <domain> -path=/` (`webinoly.set_http_auth`, `-add=` значение экранируется через `shlex.quote` — без этого пароль от пользователя шёл бы прямой command injection в root-сессию по SSH)
-- [x] `hostme <domain> auth --off` → `sudo httpauth <domain> -path=all -purge` (`webinoly.disable_http_auth`)
+- [x] `hostme <domain> auth --off` → `sudo httpauth <domain> -path=all -delete` (`webinoly.disable_http_auth`). **Реальный баг публичной доки Webinoly (найден 2026-09-09 на живом `roksdigital.ru`)**: флага `-purge` у `httpauth` не существует вовсе (шапка `/usr/bin/httpauth`: `Options: -add, -delete, -list, -wp-admin, -whitelist, -path`), `-path=all -purge` падал с `[ERROR] Please, enter a valid URL path!`. Заодно выяснилось: Webinoly пишет `[ERROR]`-сообщения в **stdout**, не stderr — из-за этого исключение показывало пустой текст ошибки; исправлено везде в `webinoly.py` через новый хелпер `_error_text()` (stderr с фолбэком на stdout, 17 мест). Оба фикса — код + `docs/webinoly.md` + regression-тест
 - [x] Обновление `password_protect` в `sites.yaml` — **решено: не хранить пароль вовсе**, только `{"enabled": true, "user": ...}`, раз он уже ушёл на сервер
 - [x] Закрыт открытый вопрос PRD §13.2: `--pass` в аргументе командной строки — **ок для MVP** (single user, локальная машина), без `--password-file`; решение зафиксировано в PRD.md §13. Проверено вживую на `sites-first-beget` (`auth --off` на несуществующем домене корректно упал с понятной ошибкой, реестр не тронут при ошибке)
 
@@ -181,6 +182,7 @@
 ## Сквозные задачи (не привязаны к одной фазе)
 
 - [x] **2026-09-09**: `docs/webinoly.md` актуализирован по факту — раздел «Итог для Hostme» переписан с реальными пойманными багами (chown на releases/, open_file_cache, заглушка вместо 403, add-to-wildcard как реальный MVP-путь), снят устаревший `[TBD/уточнить]` про флаг удаления (решён, `-delete=force`, подтверждён e2e)
+- [x] **2026-09-09, полный аудит флагов**: после того как `-purge` у `httpauth` оказался несуществующим (см. 2.3), сверил вообще все флаги, которые `hostme` реально шлёт в `site`/`log`/`webinoly`/`httpauth`, с шапками `Options:`/`Arguments:` в самих скриптах на сервере (`/usr/bin/site` и т.д.) — единственный найденный баг был в `httpauth -purge`, всё остальное (`site -html/-php/-ssl=on/-delete=force/-redirection/...`, `log -error/-lines=`, `webinoly -sftp=on/-version`) соответствует реальным Options/Arguments дословно
 - [x] **2026-09-09**: чек-лист требований к серверу — README.md, раздел «Требования к серверу перед server add/server init» (Ubuntu 24.04/26.04, порты, passwordless sudo, apt update+upgrade заранее)
 - [x] **2026-09-09**: секьюрити-ревью пройден — подробности в PRD.md §9 (Нефункциональные требования). Коротко: права `700`/`600` на конфиг верные, `ssh_key` — только путь, пароль `httpauth` не хранится локально и не эхается в ошибках (проверено вживую), нет сырых стектрейсов наружу. Заодно добавил `vps.txt`/`*.env`/`.env*` в `.gitignore` (было только на дисциплине агента, не enforced)
 - [x] **2026-09-09**: `hostme help` (+ `hostme -h`/`--help`, теперь тоже работает как алиас) — полный справочник команд с реальным синтаксисом вызова (домен/путь первым, не как в обычном Click-дереве), с `--json`-вариантом для агентов. Root `--help`/epilog явно предупреждает, что список Commands от Click вводит в заблуждение (показывает `teardown`/`config`/`auth` как будто их вызывают первыми) и отсылает к `hostme help`. Попутно найден и исправлен баг: Rich интерпретировал `[domain]`/`[--server NAME]` в тексте как markup-теги и съедал их — исправлено `markup=False` для `help_cmd` и `rich.markup.escape()` для epilog

@@ -26,6 +26,14 @@ class WebinolyError(HostmeError):
         self.result = result
 
 
+def _error_text(result: RemoteResult) -> str:
+    """Webinoly сам пишет свои `[ERROR] ...` сообщения в stdout, не в stderr
+    (поймано вживую 2026-09-09 на `httpauth -path=all -purge`: returncode=1,
+    stderr пустой, реальный текст ошибки — в stdout) — без этого фолбэка
+    исключение показывало бы пустой текст после двоеточия."""
+    return result.stderr.strip() or result.stdout.strip() or "неизвестная ошибка"
+
+
 @dataclass
 class SiteInfo:
     domain: str
@@ -56,7 +64,7 @@ def install(server: Server, mode: str = "-php") -> RemoteResult:
     command = f"cd /root && wget -qO weby {INSTALL_URL} && bash weby {mode}"
     result = run_remote(server, command, timeout=300)
     if not result.ok:
-        raise WebinolyError(f"Установка Webinoly на {server.name} провалилась: {result.stderr}", result)
+        raise WebinolyError(f"Установка Webinoly на {server.name} провалилась: {_error_text(result)}", result)
     return result
 
 
@@ -96,7 +104,7 @@ def create_site(server: Server, domain: str, site_type: SiteType) -> RemoteResul
     flag = "-html" if site_type == "html" else "-php"
     result = run_remote(server, f"sudo site {domain} {flag}")
     if not result.ok:
-        raise WebinolyError(f"Не удалось создать сайт {domain} на {server.name}: {result.stderr}", result)
+        raise WebinolyError(f"Не удалось создать сайт {domain} на {server.name}: {_error_text(result)}", result)
     # Заглушка вместо голого 403 в промежутке между созданием сайта и заливкой
     # реального контента (nginx у Webinoly не отдаёт autoindex, try_files на
     # пустой htdocs даёт 403, не 404). Best-effort — не мешает deploy, если вдруг
@@ -130,7 +138,7 @@ def enable_ssl(
         command = f"sudo site {domain} -ssl=on"
     result = run_remote(server, command, timeout=120)
     if not result.ok:
-        raise WebinolyError(f"Не удалось включить SSL для {domain} на {server.name}: {result.stderr}", result)
+        raise WebinolyError(f"Не удалось включить SSL для {domain} на {server.name}: {_error_text(result)}", result)
     return result
 
 
@@ -138,7 +146,7 @@ def delete_site(server: Server, domain: str, revoke_ssl: bool = True) -> RemoteR
     revoke = "-revoke=on" if revoke_ssl else "-revoke=off"
     result = run_remote(server, f"sudo site {domain} -delete=force {revoke}")
     if not result.ok:
-        raise WebinolyError(f"Не удалось удалить сайт {domain} на {server.name}: {result.stderr}", result)
+        raise WebinolyError(f"Не удалось удалить сайт {domain} на {server.name}: {_error_text(result)}", result)
     return result
 
 
@@ -154,7 +162,7 @@ def fix_ownership(server: Server, domain: str) -> RemoteResult:
 def fix_ownership_path(server: Server, path: str) -> RemoteResult:
     result = run_remote(server, f"sudo chown -R www-data:www-data {shlex.quote(path)}")
     if not result.ok:
-        raise WebinolyError(f"Не удалось поправить владельца {path}: {result.stderr}", result)
+        raise WebinolyError(f"Не удалось поправить владельца {path}: {_error_text(result)}", result)
     return result
 
 
@@ -197,7 +205,7 @@ def ensure_releases_layout(server: Server, domain: str) -> RemoteResult:
     )
     result = run_remote(server, script)
     if not result.ok:
-        raise WebinolyError(f"Не удалось перевести {domain} на releases-схему: {result.stderr}", result)
+        raise WebinolyError(f"Не удалось перевести {domain} на releases-схему: {_error_text(result)}", result)
     return result
 
 
@@ -213,7 +221,7 @@ def switch_release(server: Server, domain: str, ts: str) -> RemoteResult:
     )
     result = run_remote(server, script)
     if not result.ok:
-        raise WebinolyError(f"Не удалось переключить {domain} на релиз {ts}: {result.stderr}", result)
+        raise WebinolyError(f"Не удалось переключить {domain} на релиз {ts}: {_error_text(result)}", result)
     # nginx.conf у Webinoly включает open_file_cache (valid=30s) — без reload сайт
     # отдаёт старый контент по кэшированному файловому дескриптору ещё до ~30с
     # после смены симлинка (поймано вживую 2026-09-09, tests/e2e-стиль прогон).
@@ -245,12 +253,23 @@ def prune_releases(server: Server, domain: str, keep: int = _KEEP_RELEASES) -> R
     paths = " ".join(shlex.quote(release_path(domain, r)) for r in to_remove)
     result = run_remote(server, f"rm -rf {paths}")
     if not result.ok:
-        raise WebinolyError(f"Не удалось почистить старые релизы {domain}: {result.stderr}", result)
+        raise WebinolyError(f"Не удалось почистить старые релизы {domain}: {_error_text(result)}", result)
     return result
 
 
 def enable_sftp(server: Server) -> RemoteResult:
     return run_remote(server, "sudo webinoly -sftp=on")
+
+
+def update_webinoly(server: Server) -> RemoteResult:
+    """`hostme server update <name>` — обновляет только сам Webinoly (не пакеты
+    сервера типа nginx/php, для этого `sudo stack ...`, не используется Hostme).
+    Неинтерактивен (`webinoly -update` просто вызывает webinoly_update(), без
+    вопросов — тот же принцип, что и у install, docs/webinoly.md)."""
+    result = run_remote(server, "sudo webinoly -update", timeout=120)
+    if not result.ok:
+        raise WebinolyError(f"Не удалось обновить Webinoly на {server.name}: {_error_text(result)}", result)
+    return result
 
 
 def set_http_auth(server: Server, domain: str, username: str, password: str) -> RemoteResult:
@@ -261,20 +280,26 @@ def set_http_auth(server: Server, domain: str, username: str, password: str) -> 
     add_result = run_remote(server, f"sudo httpauth {domain} -add={creds}")
     if not add_result.ok:
         raise WebinolyError(
-            f"Не удалось создать httpauth-юзера для {domain}: {add_result.stderr}", add_result
+            f"Не удалось создать httpauth-юзера для {domain}: {_error_text(add_result)}", add_result
         )
     path_result = run_remote(server, f"sudo httpauth {domain} -path=/")
     if not path_result.ok:
         raise WebinolyError(
-            f"Не удалось включить защиту паролем для {domain}: {path_result.stderr}", path_result
+            f"Не удалось включить защиту паролем для {domain}: {_error_text(path_result)}", path_result
         )
     return path_result
 
 
 def disable_http_auth(server: Server, domain: str) -> RemoteResult:
-    result = run_remote(server, f"sudo httpauth {domain} -path=all -purge")
+    # -purge не существует у httpauth (шапка /usr/bin/httpauth: "Options: -add,
+    # -delete, -list, -wp-admin, -whitelist, -path") — это ошибка в публичной
+    # доке Webinoly, а не наша. Реальный флаг снятия защиты — -delete.
+    # Поймано вживую 2026-09-09 на roksdigital.ru: -purge падал с
+    # "[ERROR] Please, enter a valid URL path!" (returncode=1, текст в stdout,
+    # см. _error_text).
+    result = run_remote(server, f"sudo httpauth {domain} -path=all -delete")
     if not result.ok:
-        raise WebinolyError(f"Не удалось снять пароль с {domain}: {result.stderr}", result)
+        raise WebinolyError(f"Не удалось снять пароль с {domain}: {_error_text(result)}", result)
     return result
 
 
@@ -286,7 +311,7 @@ def add_redirect(server: Server, domain: str, from_path: str, to: str, http_code
     result = run_remote(server, command)
     if not result.ok:
         raise WebinolyError(
-            f"Не удалось добавить redirect {from_path} -> {to} для {domain}: {result.stderr}", result
+            f"Не удалось добавить redirect {from_path} -> {to} для {domain}: {_error_text(result)}", result
         )
     return result
 
@@ -294,7 +319,7 @@ def add_redirect(server: Server, domain: str, from_path: str, to: str, http_code
 def remove_redirect(server: Server, domain: str, from_path: str) -> RemoteResult:
     result = run_remote(server, f"sudo site {domain} -redirection -delete -from={shlex.quote(from_path)}")
     if not result.ok:
-        raise WebinolyError(f"Не удалось удалить redirect {from_path} для {domain}: {result.stderr}", result)
+        raise WebinolyError(f"Не удалось удалить redirect {from_path} для {domain}: {_error_text(result)}", result)
     return result
 
 
@@ -336,14 +361,14 @@ def set_cors(server: Server, domain: str, origins: list[str]) -> RemoteResult:
     if not origins:
         result = run_remote(server, f"rm -f {quoted_path}")
         if not result.ok:
-            raise WebinolyError(f"Не удалось убрать CORS-сниппет для {domain}: {result.stderr}", result)
+            raise WebinolyError(f"Не удалось убрать CORS-сниппет для {domain}: {_error_text(result)}", result)
         return _reload_nginx(server, domain, action="удаление CORS")
 
     content = _render_cors_snippet(origins)
     encoded = base64.b64encode(content.encode()).decode()
     write_result = run_remote(server, f"echo {encoded} | base64 -d > {quoted_path}")
     if not write_result.ok:
-        raise WebinolyError(f"Не удалось залить CORS-сниппет для {domain}: {write_result.stderr}", write_result)
+        raise WebinolyError(f"Не удалось залить CORS-сниппет для {domain}: {_error_text(write_result)}", write_result)
 
     return _reload_nginx(server, domain, action="включение CORS", rollback=lambda: run_remote(server, f"rm -f {quoted_path}"))
 
@@ -370,10 +395,10 @@ def _reload_nginx(server: Server, domain: str, *, action: str, rollback=None) ->
             rollback()
         raise WebinolyError(
             f"nginx -t провалился после {action} для {domain} (изменение откачено, "
-            f"nginx не перезагружался): {test_result.stderr}",
+            f"nginx не перезагружался): {_error_text(test_result)}",
             test_result,
         )
     reload_result = run_remote(server, "sudo systemctl reload nginx")
     if not reload_result.ok:
-        raise WebinolyError(f"Не удалось перезагрузить nginx после {action} для {domain}: {reload_result.stderr}", reload_result)
+        raise WebinolyError(f"Не удалось перезагрузить nginx после {action} для {domain}: {_error_text(reload_result)}", reload_result)
     return reload_result

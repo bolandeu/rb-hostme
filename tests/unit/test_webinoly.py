@@ -97,6 +97,20 @@ def test_install_runs_installer_when_missing():
     assert webinoly.INSTALL_URL in install_command
 
 
+def test_update_webinoly():
+    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+        webinoly.update_webinoly(SERVER)
+    assert mock_run.call_args[0][1] == "sudo webinoly -update"
+
+
+def test_update_webinoly_raises_on_failure():
+    with (
+        patch("hostme.webinoly.run_remote", return_value=fail("connection reset")),
+        pytest.raises(webinoly.WebinolyError, match="connection reset"),
+    ):
+        webinoly.update_webinoly(SERVER)
+
+
 def test_install_raises_on_failure():
     with (
         patch("hostme.webinoly.run_remote", side_effect=[fail(), fail("network unreachable")]),
@@ -250,7 +264,22 @@ def test_set_http_auth_raises_if_add_fails():
 def test_disable_http_auth():
     with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.disable_http_auth(SERVER, "a.dev")
-    assert mock_run.call_args[0][1] == "sudo httpauth a.dev -path=all -purge"
+    # -purge не существует у httpauth (см. комментарий в webinoly.py) — реальный
+    # флаг -delete, поймано вживую 2026-09-09 на roksdigital.ru.
+    assert mock_run.call_args[0][1] == "sudo httpauth a.dev -path=all -delete"
+
+
+def test_disable_http_auth_shows_real_error_from_stdout():
+    # Webinoly пишет [ERROR] в stdout, не stderr — регрессионный тест на баг,
+    # который дал пустое сообщение об ошибке при первом реальном вызове.
+    with (
+        patch(
+            "hostme.webinoly.run_remote",
+            return_value=RemoteResult(stdout="[ERROR] Please, enter a valid URL path!", stderr="", returncode=1),
+        ),
+        pytest.raises(webinoly.WebinolyError, match="valid URL path"),
+    ):
+        webinoly.disable_http_auth(SERVER, "a.dev")
 
 
 def test_add_redirect():

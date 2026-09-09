@@ -331,9 +331,11 @@ sudo httpauth example.com -path=/folder                 # защитить па�
 sudo httpauth example.com -path=/                        # защитить весь сайт — то, что нужно Hostme
 sudo httpauth example.com -path=/folder/file.php -exact  # защитить конкретный файл
 sudo httpauth example.com -path=/one/folder/ -subfolder=/one
-sudo httpauth example.com -path=/folder -purge           # снять защиту с папки
-sudo httpauth example.com -path=all -purge                # снять защиту полностью — то, что нужно Hostme для `auth --off`
+sudo httpauth example.com -path=/folder -delete           # снять защиту с папки
+sudo httpauth example.com -path=all -delete                # снять защиту полностью — то, что нужно Hostme для `auth --off`
 ```
+
+**Важно, реальный баг публичной доки (найден 2026-09-09):** флага `-purge` у `httpauth` **не существует** — шапка самого `/usr/bin/httpauth` перечисляет: `Options: -add, -delete, -list, -wp-admin, -whitelist, -path`. `-path=... -purge` падает с `[ERROR] Please, enter a valid URL path!` (returncode 1, текст в stdout, не в stderr — ещё один нюанс, см. «Итог для Hostme»). Правильный флаг — **`-delete`**. Проверено вживую на `roksdigital.ru`: `-path=/ -delete` реально снимает защиту, `-path=all -delete` (внутри скрипта разворачивается в `-path -delete-all`) — снимает со всех путей сразу.
 
 ```
 sudo httpauth -whitelist                        # добавить свой IP в whitelist (интерактивно)
@@ -513,7 +515,7 @@ sudo webinoly -uninstall [-no-recovery]   # сайты и пакеты НЕ уд
 - SSL всегда: `sudo site <domain> -ssl=on` (обычный per-domain, HTTP-01, авто-продление) или `-add-to-wildcard=<base>` (мгновенно, без DNS-шага, если у base-домена уже есть wildcard-сертификат) — это и есть реальный MVP-путь, а не `-wildcard` на каждый домен.
 - Wildcard-сертификат на base-домен (`-ssl=on -wildcard`) — ручной DNS-01, два TXT-шага подряд, см. WILDCARD-SSL.md; прошли полностью дважды вживую (`antagorapp.ru`, `bolandau.ru`). Не автоматизировано — нужен DNS-провайдер с API (пока нет, DNS у Beget без API-доступа), отложено в TODO.md (2.1).
 - Удаление: `sudo site <domain> -delete=force -revoke=on|off`.
-- Password protection: `sudo httpauth <domain> -add=[user,pass]` / `-path=/` / `-path=all -purge` для снятия — реализовано в `hostme <domain> auth`, значения экранируются `shlex.quote` (без этого была бы command injection через `--pass`).
+- Password protection: `sudo httpauth <domain> -add=[user,pass]` / `-path=/` / `-path=all -delete` для снятия (**не `-purge`** — этого флага у `httpauth` не существует, ошибка в публичной доке Webinoly, см. раздел `httpauth` выше) — реализовано в `hostme <domain> auth`, значения экранируются `shlex.quote` (без этого была бы command injection через `--pass`). Заодно: сообщения об ошибках Webinoly пишет в **stdout**, не в stderr — `webinoly.py` строит текст исключений через `_error_text()` (stderr, с фолбэком на stdout), иначе ошибка показывалась бы пустой.
 - Редиректы: `sudo site <domain> -redirection -from=... -to=... -http-code=...` — `hostme <domain> config --redirect/--remove-redirect`.
 - CORS: своего флага у Webinoly нет — свой nginx-сниппет (`/var/www/<domain>/hostme-cors-nginx.conf`) на уровне `server{}`, без `location /` (уже занят самим Webinoly — второй `location /` в том же server-блоке роняет `nginx -t`). `hostme <domain> config --cors/--no-cors`.
 - Логи (`sudo log <domain>`) стримят в реальном времени и сами никогда не завершаются — `hostme <domain> debug` оборачивает в `timeout <N>s` на сервере, иначе команда виснет до собственного таймаута.

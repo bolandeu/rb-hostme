@@ -85,6 +85,7 @@ _COMMAND_REFERENCE: list[tuple[str, str]] = [
     ("hostme open <domain>", "открыть сайт в браузере"),
     ("hostme server add --name N --host H --user U [--key PATH] [--default]", "зарегистрировать сервер"),
     ("hostme server init <name>", "поставить/проверить Webinoly на сервере"),
+    ("hostme server update <name>", "обновить сам Webinoly на сервере (не пакеты)"),
     ("hostme server list", "таблица серверов"),
     ("hostme server remove <name> [--force]", "убрать сервер из реестра"),
     ("hostme domain add <server> <domain> [--default]", "зарегистрировать служебный (base) домен"),
@@ -149,6 +150,20 @@ def server_init(name: Annotated[str, typer.Argument()]) -> None:
     webinoly.install(server)
     webinoly.enable_sftp(server)
     output.success(f"Сервер {name} готов (Webinoly установлен)", server=name)
+
+
+@server_app.command("update")
+def server_update(name: Annotated[str, typer.Argument()]) -> None:
+    """Обновить сам Webinoly на сервере (`sudo webinoly -update`) — не пакеты
+    сервера (nginx/php/mysql), только сам Webinoly."""
+    servers = config.load_servers()
+    server = config.find_server(servers, name)
+    if server is None:
+        raise HostmeError(f"Сервер {name!r} не найден")
+
+    output.info(f"Обновляю Webinoly на {server.name}...")
+    webinoly.update_webinoly(server)
+    output.success(f"Webinoly на {name} обновлён", server=name)
 
 
 @server_app.command("list")

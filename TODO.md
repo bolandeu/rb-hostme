@@ -12,6 +12,7 @@
 - [x] Зависимости: `uv add typer rich ruamel.yaml`; dev: `uv add --dev pytest pytest-cov ruff`
 - [x] Entry point в `pyproject.toml`: `[project.scripts] hostme = "hostme.cli:app"`
 - [x] Проверка глобальной установки: `uv tool install --editable .` → `hostme --help` работает из любой директории (проверено из `/tmp`)
+- [x] **2026-09-09, реальный найденный баг**: `[project.scripts]` в `pyproject.toml` поменяли с `hostme.cli:app` на `hostme.cli:main` (Phase 1.4, единый обработчик ошибок), но глобально установленный `~/.local/bin/hostme` — это сгенерированный при установке скрипт-обёртка, который **не перегенерируется сам** при простом изменении `pyproject.toml` (editable-режим подхватывает изменения кода модуля, но не меняет уже сгенерированный launcher). Из-за этого весь день глобальный `hostme` вызывал `app()` напрямую в обход `_translate_argv` — surge-грамматика (`hostme <domain> teardown` и т.п.) молча не работала при вызове голым `hostme` (работало только через `uv run hostme` из репозитория, где entry point резолвится заново). Обнаружено при попытке `hostme roksdigital.ru auth ...` → `No such command 'roksdigital.ru'`. Фикс: `uv tool install --editable . --force` после **любого** изменения `[project.scripts]`. Стоит запомнить/автоматизировать (хук на изменение `pyproject.toml`?) — иначе Skill для агентов будет выглядеть сломанным без явной причины
 - [x] Базовый `README.md` (что это, как поставить, ссылка на PRD.md)
 
 ---

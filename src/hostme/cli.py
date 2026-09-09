@@ -75,6 +75,8 @@ _COMMAND_REFERENCE: list[tuple[str, str]] = [
     ("hostme <domain> config --remove-redirect FROM", "убрать redirect"),
     ("hostme <domain> config --cors ORIGIN [--cors ORIGIN ...]", "задать список разрешённых CORS-origin'ов"),
     ("hostme <domain> config --no-cors", "убрать CORS"),
+    ("hostme <domain> config --nginx-snippet PATH", "залить произвольный локальный .conf как кастомный nginx-сниппет сайта"),
+    ("hostme <domain> config --no-nginx-snippet", "убрать кастомный nginx-сниппет"),
     ("hostme <domain> auth --user U --pass P", "включить password protection (HTTP Basic Auth)"),
     ("hostme <domain> auth --off", "выключить password protection"),
     ("hostme <domain> debug [--error] [--lines N]", "HTTP-статус + хвост access/error-лога"),
@@ -582,6 +584,8 @@ def site_config(
     remove_redirect: Annotated[list[str], typer.Option("--remove-redirect")] = [],  # noqa: B006
     force_https: Annotated[bool, typer.Option("--force-https")] = False,
     no_force_https: Annotated[bool, typer.Option("--no-force-https")] = False,
+    nginx_snippet: Annotated[str | None, typer.Option("--nginx-snippet")] = None,
+    no_nginx_snippet: Annotated[bool, typer.Option("--no-nginx-snippet")] = False,
 ) -> None:
     """Вызов: hostme <domain> config [--cors ...] [--redirect FROM=TO] [...] — настройки сайта; без флагов печатает текущие."""
     domain = config.normalize_domain(domain)
@@ -604,7 +608,17 @@ def site_config(
         )
         return
 
-    has_changes = bool(cors) or no_cors or bool(redirect) or bool(remove_redirect)
+    if nginx_snippet and no_nginx_snippet:
+        raise HostmeError("--nginx-snippet и --no-nginx-snippet вместе не имеют смысла")
+
+    snippet_content: str | None = None
+    if nginx_snippet:
+        snippet_path = Path(nginx_snippet).expanduser()
+        if not snippet_path.is_file():
+            raise HostmeError(f"{snippet_path} не найден")
+        snippet_content = snippet_path.read_text()
+
+    has_changes = bool(cors) or no_cors or bool(redirect) or bool(remove_redirect) or bool(nginx_snippet) or no_nginx_snippet
     if not has_changes:
         _print_site_config(site)
         return
@@ -632,6 +646,11 @@ def site_config(
     elif cors:
         webinoly.set_cors(server, domain, cors)
         site.cors = list(cors)
+
+    if no_nginx_snippet:
+        webinoly.set_custom_nginx_snippet(server, domain, "")
+    elif snippet_content is not None:
+        webinoly.set_custom_nginx_snippet(server, domain, snippet_content)
 
     config.save_sites(sites)
     output.success(f"Настройки {domain} обновлены", domain=domain)

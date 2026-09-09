@@ -332,6 +332,32 @@ def test_set_cors_empty_origins_removes_snippet():
     assert any(cmd.startswith("rm -f") for cmd in commands)
 
 
+def test_set_custom_nginx_snippet_writes_and_reloads():
+    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+        webinoly.set_custom_nginx_snippet(SERVER, "a.dev", "error_page 404 /404.html;")
+    commands = [c[0][1] for c in mock_run.call_args_list]
+    assert any("base64" in cmd and "hostme-custom-nginx.conf" in cmd for cmd in commands)
+    assert "sudo nginx -t" in commands
+    assert "sudo systemctl reload nginx" in commands
+
+
+def test_set_custom_nginx_snippet_empty_removes():
+    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+        webinoly.set_custom_nginx_snippet(SERVER, "a.dev", "")
+    commands = [c[0][1] for c in mock_run.call_args_list]
+    assert any(cmd.startswith("rm -f") and "hostme-custom-nginx.conf" in cmd for cmd in commands)
+
+
+def test_set_custom_nginx_snippet_rolls_back_on_nginx_test_failure():
+    with (
+        patch("hostme.webinoly.run_remote", side_effect=[ok(), fail("syntax error"), ok()]) as mock_run,
+        pytest.raises(webinoly.WebinolyError, match="syntax error"),
+    ):
+        webinoly.set_custom_nginx_snippet(SERVER, "a.dev", "garbage {{{")
+    commands = [c[0][1] for c in mock_run.call_args_list]
+    assert commands[-1].startswith("rm -f")
+
+
 def test_set_cors_rolls_back_snippet_when_nginx_test_fails():
     # write ok, nginx -t fails -> должен откатить (rm -f) и не звать reload
     with (

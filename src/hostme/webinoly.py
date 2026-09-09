@@ -354,23 +354,53 @@ def _render_cors_snippet(origins: list[str]) -> str:
     )
 
 
-def set_cors(server: Server, domain: str, origins: list[str]) -> RemoteResult:
-    path = _cors_snippet_path(domain)
+def _write_snippet_or_remove(server: Server, domain: str, path: str, content: str, *, label: str) -> RemoteResult:
+    """Общая безопасная заливка nginx-сниппета: пустой content -> удалить файл,
+    иначе залить + nginx -t + reload, с откатом файла при поломке конфига.
+    Используется и для CORS, и для произвольных пользовательских сниппетов."""
     quoted_path = shlex.quote(path)
 
-    if not origins:
+    if not content:
         result = run_remote(server, f"rm -f {quoted_path}")
         if not result.ok:
-            raise WebinolyError(f"Не удалось убрать CORS-сниппет для {domain}: {_error_text(result)}", result)
-        return _reload_nginx(server, domain, action="удаление CORS")
+            raise WebinolyError(f"Не удалось убрать {label} для {domain}: {_error_text(result)}", result)
+        return _reload_nginx(server, domain, action=f"удаление {label}")
 
-    content = _render_cors_snippet(origins)
     encoded = base64.b64encode(content.encode()).decode()
     write_result = run_remote(server, f"echo {encoded} | base64 -d > {quoted_path}")
     if not write_result.ok:
-        raise WebinolyError(f"Не удалось залить CORS-сниппет для {domain}: {_error_text(write_result)}", write_result)
+        raise WebinolyError(f"Не удалось залить {label} для {domain}: {_error_text(write_result)}", write_result)
 
-    return _reload_nginx(server, domain, action="включение CORS", rollback=lambda: run_remote(server, f"rm -f {quoted_path}"))
+    return _reload_nginx(
+        server, domain, action=f"включение {label}", rollback=lambda: run_remote(server, f"rm -f {quoted_path}")
+    )
+
+
+def set_cors(server: Server, domain: str, origins: list[str]) -> RemoteResult:
+    content = _render_cors_snippet(origins) if origins else ""
+    return _write_snippet_or_remove(server, domain, _cors_snippet_path(domain), content, label="CORS-сниппет")
+
+
+_CUSTOM_SNIPPET_NAME = "hostme-custom-nginx.conf"
+
+
+def custom_nginx_snippet_path(domain: str) -> str:
+    return f"/var/www/{domain}/{_CUSTOM_SNIPPET_NAME}"
+
+
+def set_custom_nginx_snippet(server: Server, domain: str, content: str) -> RemoteResult:
+    """`hostme <domain> config --nginx-snippet PATH` / `--no-nginx-snippet`.
+    Webinoly не даёт кастомных per-site nginx-настроек из коробки (docs/webinoly.md,
+    «Кастомный Nginx-конфиг») — общий механизм для того, чего нет в стандартных
+    флагах Hostme (config --cors/--redirect): чистые URL, кастомный error_page,
+    что угодно ещё. В отличие от CORS-сниппета содержимое произвольное — за
+    корректность отвечает пользователь, но безопасность та же: nginx -t перед
+    reload, откат файла при поломке (сломанный конфиг никогда не попадёт в
+    работающий nginx). Как и у CORS-сниппета — на уровне server{}, не своя
+    location / (её уже объявил сам Webinoly, дублировать нельзя)."""
+    return _write_snippet_or_remove(
+        server, domain, custom_nginx_snippet_path(domain), content, label="custom nginx-сниппет"
+    )
 
 
 def tail_log(server: Server, domain: str, *, error: bool = False, lines: int = 10, seconds: int = 3) -> str:

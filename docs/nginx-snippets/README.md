@@ -17,10 +17,23 @@ hostme <domain> config --nginx-snippet docs/nginx-snippets/<файл>.conf
 - **gzip** — включён глобально (`webinoly-defaults/gzip.conf`)
 - **Заголовки** `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
   `Strict-Transport-Security` (HSTS) — уже стоят (`webinoly-defaults/headers-*.conf`)
-- **Кэш статики** (картинки/шрифты/css/js по расширению) — `expires max` +
-  `Access-Control-Allow-Origin: *` уже в отдельном `location` у Webinoly
-  (`webinoly-defaults/headers.conf`)
+- **Кэш статики** (картинки/шрифты/css/js/**txt/json** и ещё много расширений
+  по списку) — `expires max` (= `Cache-Control: max-age=315360000`, **10 лет**)
+  и `Access-Control-Allow-Origin: *` уже в отдельном `location` у Webinoly
+  (`webinoly-defaults/headers.conf`, полный список расширений там же). **Реальный
+  грабль (поймано вживую 2026-09-09 на `/llm.txt`)**: `.txt` тоже попадает под
+  этот `location` — если такой файл содержит кириллицу/UTF-8 без charset в
+  заголовке (см. ниже), браузер закэширует БИТЫЙ ответ на 10 лет и повторный
+  запрос на сервер даже не уйдёт после фикса; проверять через `curl` напрямую
+  или с `?cache-bust` в URL, не доверять «не помогло» из уже открытой вкладки
 - **HTML** — `Cache-Control: no-cache` уже стоит
+- **Charset — НЕ стоит нигде**: у `.html`-страниц это переживается за счёт
+  собственного `<meta charset="utf-8">` внутри файла, но у файлов без такой
+  возможности (`.txt`, `.json`, `.xml`, ...) сервер вообще не сообщает
+  браузеру кодировку — UTF-8-байты с кириллицей рендерятся кракозябрами, хотя
+  сам файл на диске в полном порядке. Добавить `charset utf-8;` в свой
+  сниппет (см. `static-site-generator.conf`) — безопасная server-level
+  директива, ничего не ломает
 - **Security-правила** (dot-файлы, path traversal, заблокированные
   расширения/имена) — `webinoly-defaults/locations.conf`, всегда включены
 - Структура сайта целиком (какой `location /` при HTML- и PHP-типе сайта) —

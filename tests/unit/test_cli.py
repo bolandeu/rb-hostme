@@ -10,9 +10,10 @@ from hostme.cli import (
     _translate_argv,
     app,
     main,
+    maintenance,
     root,
 )
-from hostme.config import Target
+from hostme.config import Server, Site, Target
 from hostme.errors import HostmeError
 
 runner = CliRunner()
@@ -119,3 +120,93 @@ def test_confirm_target_action_interactive_declined_exits() -> None:
         pytest.raises(typer.Exit),
     ):
         _confirm_target_action("Деплой x", make_target(), yes=False)
+
+
+# maintenance — плейсхолдер "в разработке" вместо содержимого сайта, встроенный
+# в hostme (не нужно таскать отдельную папку). Реестр (local_path) НЕ трогаем —
+# редеплой реальной сборки должен продолжать работать как раньше; старое
+# содержимое сохраняется штатным механизмом (релиз/target-бэкап) и откатывается
+# через `rollback`.
+
+
+def make_server(**overrides) -> Server:
+    defaults = {"name": "vps1", "host": "host.example", "user": "root", "ssh_key": "/key"}
+    defaults.update(overrides)
+    return Server(**defaults)
+
+
+def make_site(**overrides) -> Site:
+    defaults = {"domain": "a.dev", "server": "vps1", "local_path": "/real/site/dist"}
+    defaults.update(overrides)
+    return Site(**defaults)
+
+
+def test_maintenance_server_site_deploys_placeholder_as_new_release_without_touching_registry() -> None:
+    site = make_site(server="vps1")
+    server = make_server(name="vps1")
+    with (
+        patch("hostme.cli.config.load_sites", return_value=[site]),
+        patch("hostme.cli.config.load_servers", return_value=[server]),
+        patch("hostme.cli.config.find_server", return_value=server),
+        patch("hostme.cli.config.save_sites") as mock_save_sites,
+        patch("hostme.cli.webinoly.ensure_releases_layout") as mock_ensure,
+        patch("hostme.cli.webinoly.release_path", return_value="/htdocs/releases/20260101000000"),
+        patch("hostme.cli.rsync_to") as mock_rsync,
+        patch("hostme.cli.webinoly.fix_ownership_path") as mock_chown,
+        patch("hostme.cli.webinoly.switch_release") as mock_switch,
+        patch("hostme.cli.webinoly.prune_releases") as mock_prune,
+    ):
+        maintenance("a.dev", yes=False)
+
+    mock_ensure.assert_called_once_with(server, "a.dev")
+    mock_rsync.assert_called_once()
+    assert mock_rsync.call_args[0][2] == "/htdocs/releases/20260101000000"
+    mock_chown.assert_called_once()
+    mock_switch.assert_called_once()
+    mock_prune.assert_called_once()
+    mock_save_sites.assert_not_called()
+
+
+def test_maintenance_target_site_requires_confirmation_and_backs_up_first() -> None:
+    site = make_site(server="thirdparty")
+    target = make_target(name="thirdparty")
+    output.set_json_mode(False)
+    with (
+        patch("hostme.cli.config.load_sites", return_value=[site]),
+        patch("hostme.cli.config.load_servers", return_value=[]),
+        patch("hostme.cli.config.find_server", return_value=None),
+        patch("hostme.cli.config.load_targets", return_value=[target]),
+        patch("hostme.cli.config.find_target", return_value=target),
+        patch("hostme.cli.config.save_sites") as mock_save_sites,
+        patch("hostme.cli.typer.confirm", return_value=False),
+        patch("hostme.cli._backup_target_before_deploy") as mock_backup,
+        patch("hostme.cli.rsync_to_target") as mock_rsync_target,
+        pytest.raises(typer.Exit),
+    ):
+        maintenance("a.dev", yes=False)
+
+    mock_backup.assert_not_called()
+    mock_rsync_target.assert_not_called()
+    mock_save_sites.assert_not_called()
+
+
+def test_maintenance_target_site_yes_flag_proceeds_without_prompt() -> None:
+    site = make_site(server="thirdparty")
+    target = make_target(name="thirdparty")
+    with (
+        patch("hostme.cli.config.load_sites", return_value=[site]),
+        patch("hostme.cli.config.load_servers", return_value=[]),
+        patch("hostme.cli.config.find_server", return_value=None),
+        patch("hostme.cli.config.load_targets", return_value=[target]),
+        patch("hostme.cli.config.find_target", return_value=target),
+        patch("hostme.cli.config.save_sites") as mock_save_sites,
+        patch("hostme.cli.typer.confirm") as mock_confirm,
+        patch("hostme.cli._backup_target_before_deploy") as mock_backup,
+        patch("hostme.cli.rsync_to_target") as mock_rsync_target,
+    ):
+        maintenance("a.dev", yes=True)
+
+    mock_confirm.assert_not_called()
+    mock_backup.assert_called_once_with(target)
+    mock_rsync_target.assert_called_once()
+    mock_save_sites.assert_not_called()

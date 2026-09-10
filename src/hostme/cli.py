@@ -23,7 +23,7 @@ from hostme.ssh import rsync_from_target, rsync_to, rsync_to_target
 # Typer/Click умеет только статическое дерево подкоманд, поэтому реальный argv
 # переписывается в explicit-подкоманды (_translate_argv) до того, как его увидит Typer.
 _TOP_LEVEL_COMMANDS = {"server", "domain", "target", "list", "open", "help", "--help", "-h"}
-_DOMAIN_SUBCOMMANDS = {"teardown", "config", "auth", "ssl", "debug", "revs", "rollback", "rollfore"}
+_DOMAIN_SUBCOMMANDS = {"teardown", "config", "auth", "ssl", "debug", "revs", "rollback", "rollfore", "maintenance"}
 
 
 def _translate_argv(argv: list[str]) -> list[str]:
@@ -90,6 +90,10 @@ _COMMAND_REFERENCE: list[tuple[str, str]] = [
     ("hostme <domain> revs", "список релизов сайта (для rollback/rollfore)"),
     ("hostme <domain> rollback", "откатить сайт на предыдущий релиз"),
     ("hostme <domain> rollfore", "вернуть сайт на следующий (после rollback) релиз"),
+    (
+        "hostme <domain> maintenance [--yes]",
+        "очистить сайт, оставив встроенный плейсхолдер «в разработке»; старое содержимое не теряется — откат через rollback",
+    ),
     ("hostme list", "таблица сайтов из реестра + служебные домены без деплоя через hostme (помечены отдельно)"),
     ("hostme open <domain>", "открыть сайт в браузере"),
     ("hostme server add --name N --host H --user U [--key PATH] [--default]", "зарегистрировать сервер"),
@@ -781,6 +785,46 @@ def rollfore(domain: Annotated[str, typer.Argument()]) -> None:
     target = releases[idx + 1]
     webinoly.switch_release(server, domain, target)
     output.success(f"{domain} переключён на релиз {target}", domain=domain, release=target)
+
+
+_MAINTENANCE_TEMPLATE_DIR = Path(__file__).parent / "templates" / "maintenance"
+
+
+@app.command("maintenance")
+def maintenance(
+    domain: Annotated[str, typer.Argument()],
+    yes: Annotated[bool, typer.Option("--yes", "-y")] = False,
+) -> None:
+    """Вызов: hostme <domain> maintenance [--yes] — очистить сайт, оставив
+    встроенный плейсхолдер "в разработке". Реестр (local_path) не трогаем —
+    редеплой реальной сборки продолжает работать как раньше. Старое содержимое
+    не теряется: для сервера это обычный новый релиз, для target — обычный
+    бэкап перед заливкой — откат в обоих случаях через `rollback`."""
+    domain = config.normalize_domain(domain)
+    site = _find_site(domain)
+
+    server = config.find_server(config.load_servers(), site.server)
+    if server is not None:
+        webinoly.ensure_releases_layout(server, domain)
+        ts = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+        release = webinoly.release_path(domain, ts)
+        rsync_to(str(_MAINTENANCE_TEMPLATE_DIR), server, release)
+        webinoly.fix_ownership_path(server, release)
+        webinoly.switch_release(server, domain, ts)
+        webinoly.prune_releases(server, domain)
+        output.success(f"{domain} переведён в режим обслуживания (релиз {ts})", domain=domain, release=ts)
+        return
+
+    target = config.find_target(config.load_targets(), site.server)
+    if target is None:
+        raise HostmeError(f"Сервер/target {site.server!r} для сайта {domain} не найден в конфиге")
+    _confirm_target_action(f"Maintenance {domain}", target, yes)
+    _backup_target_before_deploy(target)
+    if target.connection == "ssh":
+        rsync_to_target(str(_MAINTENANCE_TEMPLATE_DIR), target)
+    else:
+        ftp.mirror_to(str(_MAINTENANCE_TEMPLATE_DIR), target)
+    output.success(f"{domain} переведён в режим обслуживания на {target.name}", domain=domain, target=target.name)
 
 
 @app.command("teardown")

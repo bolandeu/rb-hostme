@@ -4,7 +4,7 @@ import pytest
 import typer
 
 from hostme import output
-from hostme.config import Server, Site, Target
+from hostme.config import BaseDomain, Server, Site, Target
 from hostme.core import services
 from hostme.errors import ConfirmationRequiredError, HostmeError
 
@@ -256,6 +256,44 @@ def test_rollback_own_server_without_yes_requires_confirmation() -> None:
     ):
         services.rollback("a.dev", yes=False)
     mock_switch.assert_not_called()
+
+
+# --- remove_domain — парная команда к domain add ---
+
+
+def test_remove_domain_not_registered_raises() -> None:
+    server = make_server(base_domains=[BaseDomain(name="a.dev", default=True)])
+    with (
+        patch("hostme.core.services.config.load_servers", return_value=[server]),
+        pytest.raises(HostmeError, match="не зарегистрирован"),
+    ):
+        services.remove_domain("b.dev")
+
+
+def test_remove_domain_removes_from_server() -> None:
+    server = make_server(
+        base_domains=[BaseDomain(name="a.dev", default=True), BaseDomain(name="b.dev")]
+    )
+    with (
+        patch("hostme.core.services.config.load_servers", return_value=[server]),
+        patch("hostme.core.services.config.save_servers") as mock_save,
+    ):
+        result = services.remove_domain("b.dev")
+    assert result["domain"] == "b.dev"
+    assert [d.name for d in server.base_domains] == ["a.dev"]
+    mock_save.assert_called_once_with([server])
+
+
+def test_remove_domain_promotes_new_default_when_default_removed() -> None:
+    server = make_server(
+        base_domains=[BaseDomain(name="a.dev", default=True), BaseDomain(name="b.dev")]
+    )
+    with (
+        patch("hostme.core.services.config.load_servers", return_value=[server]),
+        patch("hostme.core.services.config.save_servers"),
+    ):
+        services.remove_domain("a.dev")
+    assert server.base_domains == [BaseDomain(name="b.dev", default=True)]
 
 
 # --- require_unique_name — servers.yaml и targets.yaml делят пространство имён ---

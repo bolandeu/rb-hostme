@@ -101,6 +101,7 @@ _COMMAND_REFERENCE: list[tuple[str, str]] = [
     ("hostme domain add <server> <domain> [--default]", "зарегистрировать служебный (base) домен"),
     ("hostme domain default <domain>", "сделать домен дефолтным (для авто-генерации поддоменов)"),
     ("hostme domain list", "таблица служебных доменов"),
+    ("hostme domain remove <domain>", "убрать служебный домен из реестра"),
     (
         "hostme target add --name N --connection ssh|ftp|sftp --host H --user U [--password P] [--ssh-key PATH] [--path REMOTE]",
         "зарегистрировать сторонний хостинг (не Webinoly — просто заливка файлов)",
@@ -225,6 +226,12 @@ def domain_add(
 @domain_app.command("default")
 def domain_default(domain: Annotated[str, typer.Argument()]) -> None:
     result = services.set_default_domain(domain)
+    output.success(result.pop("message"), **result)
+
+
+@domain_app.command("remove")
+def domain_remove(domain: Annotated[str, typer.Argument()]) -> None:
+    result = services.remove_domain(domain)
     output.success(result.pop("message"), **result)
 
 

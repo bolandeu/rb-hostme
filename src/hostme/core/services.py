@@ -128,6 +128,25 @@ def list_domains() -> list[tuple[str, config.BaseDomain]]:
     return [(s.name, d) for s in servers for d in s.base_domains]
 
 
+def remove_domain(domain: str) -> dict:
+    domain = config.normalize_domain(domain)
+    servers = config.load_servers()
+    server = next((s for s in servers if any(d.name == domain for d in s.base_domains)), None)
+    if server is None:
+        raise HostmeError(f"Домен {domain!r} не зарегистрирован")
+
+    target = next(d for d in server.base_domains if d.name == domain)
+    was_default = target.default
+    server.base_domains.remove(target)
+
+    remaining = [d for s in servers for d in s.base_domains]
+    if was_default and remaining:
+        remaining[0].default = True
+
+    config.save_servers(servers)
+    return {"message": f"Домен {domain} удалён из реестра", "domain": domain}
+
+
 # --- target (сторонний хостинг, ftp/sftp/ssh, без Webinoly) ---------------
 
 

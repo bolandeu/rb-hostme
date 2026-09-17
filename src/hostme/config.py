@@ -6,7 +6,8 @@ from typing import Literal
 
 from ruamel.yaml import YAML
 
-from hostme.errors import HostmeError
+from hostme.core.errors import InvalidArgumentsError
+from hostme.credentials import manager as credentials
 
 CONFIG_DIR = Path.home() / ".config" / "hostme"
 SERVERS_FILE = CONFIG_DIR / "servers.yaml"
@@ -20,10 +21,6 @@ TARGET_BACKUPS_DIR = CONFIG_DIR / "target-backups"
 _yaml = YAML()
 _yaml.preserve_quotes = True
 _yaml.indent(mapping=2, sequence=4, offset=2)
-
-
-class ConfigError(HostmeError):
-    pass
 
 
 @dataclass
@@ -96,10 +93,7 @@ def load_servers() -> list[Server]:
     data = _yaml.load(SERVERS_FILE.read_text()) or {}
     servers = []
     for raw in data.get("servers", []):
-        domains = [
-            BaseDomain(name=d["name"], default=d.get("default", False))
-            for d in raw.get("base_domains", [])
-        ]
+        domains = [BaseDomain(name=d["name"], default=d.get("default", False)) for d in raw.get("base_domains", [])]
         servers.append(
             Server(
                 name=raw["name"],
@@ -129,10 +123,7 @@ def save_servers(servers: list[Server]) -> None:
             "user": s.user,
             "ssh_key": s.ssh_key,
             "default": s.default,
-            "base_domains": [
-                {"name": d.name, **({"default": True} if d.default else {})}
-                for d in s.base_domains
-            ],
+            "base_domains": [{"name": d.name, **({"default": True} if d.default else {})} for d in s.base_domains],
         }
         for s in servers
     ]
@@ -145,22 +136,39 @@ def load_targets() -> list[Target]:
     if not SERVERS_FILE.exists():
         return []
     data = _yaml.load(SERVERS_FILE.read_text()) or {}
-    return [
-        Target(
-            name=raw["name"],
-            connection=raw["connection"],
-            host=raw["host"],
-            user=raw["user"],
-            remote_path=raw.get("remote_path", "/"),
-            password=raw.get("password"),
-            ssh_key=raw.get("ssh_key"),
+    targets = []
+    has_legacy_password = False
+    for raw in data.get("targets", []):
+        name = raw["name"]
+        legacy_password = raw.get("password")
+        if legacy_password:
+            # Миграция со старой версии, где password лежал открытым текстом в
+            # servers.yaml — save_targets() ниже перенесёт его в OS keychain и
+            # перепишет файл уже без поля password.
+            has_legacy_password = True
+            password = legacy_password
+        else:
+            password = credentials.get_secret(name)
+        targets.append(
+            Target(
+                name=name,
+                connection=raw["connection"],
+                host=raw["host"],
+                user=raw["user"],
+                remote_path=raw.get("remote_path", "/"),
+                password=password,
+                ssh_key=raw.get("ssh_key"),
+            )
         )
-        for raw in data.get("targets", [])
-    ]
+    if has_legacy_password:
+        save_targets(targets)
+    return targets
 
 
 def save_targets(targets: list[Target]) -> None:
     # servers: живёт в том же файле (см. save_servers) — та же логика "не затереть".
+    # password НЕ пишем в servers.yaml — секрет уходит только в OS keychain
+    # (credentials/manager.py), сюда — только не-секретные поля подключения.
     _ensure_config_dir()
     data = {}
     if SERVERS_FILE.exists():
@@ -174,7 +182,6 @@ def save_targets(targets: list[Target]) -> None:
             "host": t.host,
             "user": t.user,
             "remote_path": t.remote_path,
-            "password": t.password,
             "ssh_key": t.ssh_key,
         }
         for t in targets
@@ -182,6 +189,9 @@ def save_targets(targets: list[Target]) -> None:
     with SERVERS_FILE.open("w") as f:
         _yaml.dump(data, f)
     SERVERS_FILE.chmod(0o600)
+    for t in targets:
+        if t.password:
+            credentials.store_secret(t.name, t.password)
 
 
 def find_target(targets: list[Target], name: str) -> Target | None:
@@ -198,9 +208,7 @@ def load_sites() -> list[Site]:
         if not included_path.exists():
             continue
         included_data = _yaml.load(included_path.read_text()) or {}
-        sites.extend(
-            _site_from_raw(raw, source_file=included) for raw in included_data.get("sites", [])
-        )
+        sites.extend(_site_from_raw(raw, source_file=included) for raw in included_data.get("sites", []))
     return sites
 
 
@@ -324,7 +332,7 @@ def normalize_domain(domain: str) -> str:
     try:
         return domain.encode("idna").decode("ascii")
     except UnicodeError as exc:
-        raise ConfigError(f"Не удалось привести домен {domain!r} к ASCII/punycode: {exc}") from exc
+        raise InvalidArgumentsError(f"Не удалось привести домен {domain!r} к ASCII/punycode: {exc}") from exc
 
 
 def slugify(name: str) -> str:
@@ -360,7 +368,7 @@ def check_collision(sites: list[Site], domain: str, local_path: str) -> None:
     existing_path = str(Path(existing.local_path).resolve())
     new_path = str(Path(local_path).resolve())
     if existing_path != new_path:
-        raise ConfigError(
+        raise InvalidArgumentsError(
             f"Домен {domain} уже используется другим сайтом "
             f"(local_path={existing.local_path}). "
             f"Укажи другой домен или удали существующий сайт (teardown)."

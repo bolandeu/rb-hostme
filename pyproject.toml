@@ -7,6 +7,7 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
+    "keyring>=25.0.0",
     "rich>=15.0.0",
     "ruamel-yaml>=0.19.1",
     "typer>=0.27.2",
@@ -14,6 +15,9 @@ dependencies = [
 
 [project.scripts]
 hostme = "hostme.cli:main"
+
+[project.urls]
+Repository = "https://github.com/bolandeu/hostme"
 
 [build-system]
 requires = ["uv_build>=0.10.2,<0.11.0"]
@@ -24,10 +28,38 @@ dev = [
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
     "ruff>=0.16.6",
+    "ty>=0.0.80",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "--cov --cov-report=term-missing:skip-covered"
 markers = [
     "e2e: реальный сервер по SSH (HOSTME_E2E_HOST), по умолчанию пропускается",
 ]
+
+[tool.coverage.run]
+source = ["src"]
+
+[tool.coverage.report]
+# Порог — по факту на момент рефакторинга на cli-builder-архитектуру.
+# Поднимать по мере добавления тестов, никогда не опускать (новая команда
+# без тестов должна падать именно здесь — это осознанный «пинок»).
+fail_under = 65
+show_missing = true
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "SIM", "RUF", "S", "BLE"]
+# RUF001-003 («похожие на латиницу» символы) — весь текст проекта на русском.
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.per-file-ignores]
+# assert — суть теста; тестовые пароли/subprocess в e2e — тоже намеренно
+"tests/*" = ["S101", "S105", "S106", "S108", "S603", "S607"]
+"scripts/*" = ["S603", "S607"]      # subprocess с фиксированным argv (git, uv), без shell
+# providers/ — весь смысл слоя в запуске ssh/rsync/lftp: argv-списком, без shell;
+# бинарь ищется в PATH намеренно (уважаем окружение пользователя, кроссплатформенно)
+"src/hostme/providers/*" = ["S603", "S607"]

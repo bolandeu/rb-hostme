@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from hostme import ssh
 from hostme.config import Server
+from hostme.providers import ssh
 
 pytestmark = pytest.mark.e2e
 

@@ -508,7 +508,7 @@ sudo webinoly -uninstall [-no-recovery]   # сайты и пакеты НЕ уд
 
 ## Итог для Hostme (см. также PRD.md/AGENTS.md)
 
-Всё ниже реализовано в `src/hostme/webinoly.py` и подтверждено вживую на `sites-first-beget` (Ubuntu 24.04.4, Webinoly 1.21.2, стек 1.13), не только по документации:
+Всё ниже реализовано в `src/hostme/providers/webinoly.py` и подтверждено вживую на `sites-first-beget` (Ubuntu 24.04.4, Webinoly 1.21.2, стек 1.13), не только по документации:
 
 - Установка на новый сервер: `wget -qO weby qrok.es/wy && sudo bash weby -php` — подтверждено полностью неинтерактивным (никаких вопросов про email/DB на этом шаге).
 - Создание сайта: `sudo site <domain> -html` или `-php` (автоопределение по наличию `*.php`), сразу с заглушкой `index.html`/`index.php` вместо голого 403 — пустой `htdocs` без `autoindex` отдаёт именно 403, не 404 (реальный пойманный баг, см. TODO.md, «Сквозное улучшение»).

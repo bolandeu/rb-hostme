@@ -1,6 +1,9 @@
+import sys
+
 import pytest
 
 from hostme import config
+from hostme.core.errors import InvalidArgumentsError
 
 
 @pytest.fixture(autouse=True)
@@ -41,6 +44,7 @@ def test_save_and_load_servers_roundtrip():
     assert loaded[0].base_domains[0].default is True
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-биты прав; на Windows chmod — no-op")
 def test_servers_file_has_restrictive_permissions():
     config.save_servers([make_server()])
     mode = config.SERVERS_FILE.stat().st_mode & 0o777
@@ -65,7 +69,7 @@ def make_target(**overrides):
     return config.Target(**defaults)
 
 
-def test_save_and_load_targets_roundtrip():
+def test_save_and_load_targets_roundtrip(fake_keyring):
     config.save_targets([make_target()])
     loaded = config.load_targets()
     assert len(loaded) == 1
@@ -73,6 +77,9 @@ def test_save_and_load_targets_roundtrip():
     assert loaded[0].connection == "sftp"
     assert loaded[0].password == "s3cr3t"
     assert loaded[0].remote_path == "/www"
+    # пароль ушёл в (фейковый) keychain, а не в yaml — и не в реальный keychain машины
+    assert ("hostme:ext1", "ext1") in fake_keyring.store
+    assert "s3cr3t" not in config.SERVERS_FILE.read_text()
 
 
 def test_save_targets_does_not_wipe_existing_servers():
@@ -97,18 +104,21 @@ def test_find_target():
 
 def test_find_server():
     servers = [make_server("vps1"), make_server("vps2")]
-    assert config.find_server(servers, "vps2").name == "vps2"
+    found = config.find_server(servers, "vps2")
+    assert found is not None and found.name == "vps2"
     assert config.find_server(servers, "missing") is None
 
 
 def test_default_server_prefers_flagged_default():
     servers = [make_server("vps1"), make_server("vps2", default=True)]
-    assert config.default_server(servers).name == "vps2"
+    chosen = config.default_server(servers)
+    assert chosen is not None and chosen.name == "vps2"
 
 
 def test_default_server_falls_back_to_first_when_none_flagged():
     servers = [make_server("vps1"), make_server("vps2")]
-    assert config.default_server(servers).name == "vps1"
+    chosen = config.default_server(servers)
+    assert chosen is not None and chosen.name == "vps1"
 
 
 def test_default_server_empty_list():
@@ -165,7 +175,7 @@ def test_check_collision_rejects_different_local_path(tmp_path):
         config.Site(domain="a.dev", server="vps1", local_path=str(existing_path)),
     ]
 
-    with pytest.raises(config.ConfigError):
+    with pytest.raises(InvalidArgumentsError):
         config.check_collision(sites, "a.dev", str(new_path))
 
 
@@ -191,6 +201,7 @@ def test_save_and_load_sites_roundtrip(tmp_path):
     assert loaded[0].deployed_at == "2026-09-08T12:00:00"
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-биты прав; на Windows mkdir(mode=) — no-op")
 def test_ensure_config_dir_created_on_first_save(isolated_config):
     assert not isolated_config.exists()
     config.save_servers([make_server()])
@@ -252,9 +263,7 @@ def test_normalize_domain(raw, expected):
 def test_default_domain_combines_folder_name_and_first_base_domain(tmp_path):
     project = tmp_path / "my-landing"
     project.mkdir()
-    servers = [
-        make_server("vps1", base_domains=[config.BaseDomain("example.dev", default=True)])
-    ]
+    servers = [make_server("vps1", base_domains=[config.BaseDomain("example.dev", default=True)])]
 
     assert config.default_domain(str(project), servers) == "my-landing.example.dev"
 
@@ -267,12 +276,7 @@ def test_load_sites_follows_include(isolated_config):
     isolated_config.mkdir(parents=True, exist_ok=True)
     included = isolated_config / "sites.d" / "personal.yaml"
     included.parent.mkdir(parents=True, exist_ok=True)
-    included.write_text(
-        "sites:\n"
-        "  - domain: personal.dev\n"
-        "    server: vps1\n"
-        "    local_path: /tmp/personal\n"
-    )
+    included.write_text("sites:\n  - domain: personal.dev\n    server: vps1\n    local_path: /tmp/personal\n")
     config.SITES_FILE.write_text("include:\n  - sites.d/personal.yaml\nsites: []\n")
 
     loaded = config.load_sites()
@@ -287,9 +291,7 @@ def test_save_sites_writes_back_to_originating_include_file(isolated_config):
     isolated_config.mkdir(parents=True, exist_ok=True)
     included = isolated_config / "sites.d" / "personal.yaml"
     included.parent.mkdir(parents=True, exist_ok=True)
-    included.write_text(
-        "sites:\n  - domain: personal.dev\n    server: vps1\n    local_path: /tmp/personal\n"
-    )
+    included.write_text("sites:\n  - domain: personal.dev\n    server: vps1\n    local_path: /tmp/personal\n")
     config.SITES_FILE.write_text("include:\n  - sites.d/personal.yaml\nsites: []\n")
 
     sites = config.load_sites()

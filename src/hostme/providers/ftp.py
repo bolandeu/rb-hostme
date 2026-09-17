@@ -1,15 +1,17 @@
 from __future__ import annotations
 
+import logging
 import subprocess
 
 from hostme.config import Target
-from hostme.errors import HostmeError
+from hostme.core.errors import InvalidArgumentsError, ProviderError
 
 DEFAULT_TIMEOUT = 300
+_log = logging.getLogger(__name__)
 
 
-class FtpError(HostmeError):
-    pass
+class FtpError(ProviderError):
+    provider = "lftp"
 
 
 def _lftp_quote(value: str) -> str:
@@ -27,6 +29,8 @@ def _remote_path(target: Target) -> str:
 
 
 def _run_lftp(script: str, target: Target, timeout: int) -> None:
+    # Скрипт целиком не логируем — в нём `open -u user,password`.
+    _log.debug("lftp %s@%s (%s), %d строк скрипта", target.user, target.host, target.connection, script.count("\n"))
     try:
         proc = subprocess.run(["lftp"], input=script, capture_output=True, text=True, timeout=timeout, check=False)
     except subprocess.TimeoutExpired as exc:
@@ -58,7 +62,7 @@ def mirror_to(local_path: str, target: Target, timeout: int = DEFAULT_TIMEOUT) -
     виден в `ps aux` всем локальным пользователям машины.
     """
     if not target.password:
-        raise HostmeError(f"Target {target.name!r}: для connection={target.connection} нужен password")
+        raise InvalidArgumentsError(f"Target {target.name!r}: для connection={target.connection} нужен password")
 
     local = local_path.rstrip("/") + "/"
     script = (
@@ -74,7 +78,7 @@ def mirror_from(target: Target, local_dir: str, timeout: int = DEFAULT_TIMEOUT) 
     на Target (см. cli._backup_target_before_deploy), не rollback как таковой.
     Без --delete: local_dir — свежая пустая директория под конкретный таймстамп."""
     if not target.password:
-        raise HostmeError(f"Target {target.name!r}: для connection={target.connection} нужен password")
+        raise InvalidArgumentsError(f"Target {target.name!r}: для connection={target.connection} нужен password")
 
     local = local_dir.rstrip("/") + "/"
     # lftp `mirror` без --reverse — как раз скачивание remote -> local.

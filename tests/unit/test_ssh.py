@@ -3,8 +3,9 @@ from unittest.mock import patch
 
 import pytest
 
-from hostme import ssh
 from hostme.config import Server
+from hostme.core.errors import InvalidArgumentsError
+from hostme.providers import ssh
 
 
 def make_server() -> Server:
@@ -16,7 +17,7 @@ def fake_completed(returncode=0, stdout="ok", stderr=""):
 
 
 def test_run_remote_success():
-    with patch("hostme.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
+    with patch("hostme.providers.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
         result = ssh.run_remote(make_server(), "echo hi")
 
     assert result.ok
@@ -27,7 +28,7 @@ def test_run_remote_success():
 
 
 def test_run_remote_nonzero_exit_returns_result_without_raising():
-    with patch("hostme.ssh.subprocess.run", return_value=fake_completed(returncode=1, stderr="boom")):
+    with patch("hostme.providers.ssh.subprocess.run", return_value=fake_completed(returncode=1, stderr="boom")):
         result = ssh.run_remote(make_server(), "false")
 
     assert not result.ok
@@ -36,31 +37,37 @@ def test_run_remote_nonzero_exit_returns_result_without_raising():
 
 
 def test_run_remote_connection_failure_raises():
-    with patch(
-        "hostme.ssh.subprocess.run",
-        return_value=fake_completed(returncode=255, stderr="Permission denied"),
-    ), pytest.raises(ssh.SshError, match="Permission denied"):
+    with (
+        patch(
+            "hostme.providers.ssh.subprocess.run",
+            return_value=fake_completed(returncode=255, stderr="Permission denied"),
+        ),
+        pytest.raises(ssh.SshError, match="Permission denied"),
+    ):
         ssh.run_remote(make_server(), "echo hi")
 
 
 def test_run_remote_timeout_raises():
-    with patch(
-        "hostme.ssh.subprocess.run",
-        side_effect=subprocess.TimeoutExpired(cmd="ssh", timeout=10),
-    ), pytest.raises(ssh.SshError, match="не завершилась"):
+    with (
+        patch(
+            "hostme.providers.ssh.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="ssh", timeout=10),
+        ),
+        pytest.raises(ssh.SshError, match="не завершилась"),
+    ):
         ssh.run_remote(make_server(), "echo hi", timeout=10)
 
 
 def test_run_remote_missing_ssh_binary_raises():
     with (
-        patch("hostme.ssh.subprocess.run", side_effect=FileNotFoundError()),
+        patch("hostme.providers.ssh.subprocess.run", side_effect=FileNotFoundError()),
         pytest.raises(ssh.SshError, match="ssh"),
     ):
         ssh.run_remote(make_server(), "echo hi")
 
 
 def test_rsync_to_success():
-    with patch("hostme.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
+    with patch("hostme.providers.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
         result = ssh.rsync_to("/local/path", make_server(), "/remote/path")
 
     assert result.ok
@@ -72,7 +79,7 @@ def test_rsync_to_success():
 
 
 def test_rsync_to_without_delete():
-    with patch("hostme.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
+    with patch("hostme.providers.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
         ssh.rsync_to("/local/path", make_server(), "/remote/path", delete=False)
 
     call_args = mock_run.call_args[0][0]
@@ -82,7 +89,7 @@ def test_rsync_to_without_delete():
 def test_rsync_to_failure_raises():
     with (
         patch(
-            "hostme.ssh.subprocess.run",
+            "hostme.providers.ssh.subprocess.run",
             return_value=fake_completed(returncode=23, stderr="rsync error"),
         ),
         pytest.raises(ssh.SshError, match="rsync error"),
@@ -91,10 +98,13 @@ def test_rsync_to_failure_raises():
 
 
 def test_rsync_to_timeout_raises():
-    with patch(
-        "hostme.ssh.subprocess.run",
-        side_effect=subprocess.TimeoutExpired(cmd="rsync", timeout=5),
-    ), pytest.raises(ssh.SshError, match="не завершился"):
+    with (
+        patch(
+            "hostme.providers.ssh.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="rsync", timeout=5),
+        ),
+        pytest.raises(ssh.SshError, match="не завершился"),
+    ):
         ssh.rsync_to("/local/path", make_server(), "/remote/path", timeout=5)
 
 
@@ -110,7 +120,7 @@ def make_target(**overrides):
 
 
 def test_rsync_to_target_with_ssh_key_uses_key_not_sshpass():
-    with patch("hostme.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
+    with patch("hostme.providers.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
         ssh.rsync_to_target("/local/path", make_target(ssh_key="~/.ssh/id"))
     call = mock_run.call_args
     rsh = call[0][0][call[0][0].index("-e") + 1]
@@ -120,7 +130,7 @@ def test_rsync_to_target_with_ssh_key_uses_key_not_sshpass():
 
 
 def test_rsync_to_target_with_password_uses_sshpass_env_not_argv():
-    with patch("hostme.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
+    with patch("hostme.providers.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
         ssh.rsync_to_target("/local/path", make_target(password="s3cr3t"))
     call = mock_run.call_args
     args = call[0][0]
@@ -132,7 +142,7 @@ def test_rsync_to_target_with_password_uses_sshpass_env_not_argv():
 
 
 def test_rsync_to_target_without_key_or_password_raises():
-    with pytest.raises(ssh.SshError, match="ssh_key или password"):
+    with pytest.raises(InvalidArgumentsError, match="ssh_key или password"):
         ssh.rsync_to_target("/local/path", make_target())
 
 
@@ -141,7 +151,7 @@ def test_rsync_to_target_keeps_relative_remote_path():
     # путь к сайту там относительный от домашней директории аккаунта
     # ("top-ved.ru/public_html"), а не абсолютный — форсировать ведущий "/"
     # ломает деплой ("/top-ved.ru/public_html" на сервере просто не существует).
-    with patch("hostme.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
+    with patch("hostme.providers.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
         ssh.rsync_to_target("/local/path", make_target(remote_path="top-ved.ru/public_html", password="x"))
     destination = mock_run.call_args[0][0][-1]
     assert destination == "u12345@host.example:top-ved.ru/public_html/"

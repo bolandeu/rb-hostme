@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from typing import Literal
 
 from hostme.config import Server
-from hostme.errors import HostmeError
-from hostme.ssh import RemoteResult, run_remote
+from hostme.core.errors import ProviderError
+from hostme.providers.ssh import RemoteResult, run_remote
 
 SiteType = Literal["html", "php"]
 
@@ -20,7 +20,9 @@ _LIST_LINE_RE = re.compile(r"^\s*\+\s+(\S+)\s+((?:\([^)]*\))+)\s*$", re.MULTILIN
 _TAG_RE = re.compile(r"\(([^)]*)\)")
 
 
-class WebinolyError(HostmeError):
+class WebinolyError(ProviderError):
+    provider = "webinoly"
+
     def __init__(self, message: str, result: RemoteResult | None = None) -> None:
         super().__init__(message)
         self.result = result
@@ -72,12 +74,7 @@ def parse_site_list(output: str) -> list[SiteInfo]:
     sites = []
     for match in _LIST_LINE_RE.finditer(output):
         domain, groups_raw = match.groups()
-        tags = [
-            tag.strip()
-            for group in _TAG_RE.findall(groups_raw)
-            for tag in group.split(",")
-            if tag.strip()
-        ]
+        tags = [tag.strip() for group in _TAG_RE.findall(groups_raw) for tag in group.split(",") if tag.strip()]
         sites.append(SiteInfo(domain=domain, tags=tags))
     return sites
 
@@ -279,14 +276,10 @@ def set_http_auth(server: Server, domain: str, username: str, password: str) -> 
     creds = shlex.quote(f"[{username},{password}]")
     add_result = run_remote(server, f"sudo httpauth {domain} -add={creds}")
     if not add_result.ok:
-        raise WebinolyError(
-            f"Не удалось создать httpauth-юзера для {domain}: {_error_text(add_result)}", add_result
-        )
+        raise WebinolyError(f"Не удалось создать httpauth-юзера для {domain}: {_error_text(add_result)}", add_result)
     path_result = run_remote(server, f"sudo httpauth {domain} -path=/")
     if not path_result.ok:
-        raise WebinolyError(
-            f"Не удалось включить защиту паролем для {domain}: {_error_text(path_result)}", path_result
-        )
+        raise WebinolyError(f"Не удалось включить защиту паролем для {domain}: {_error_text(path_result)}", path_result)
     return path_result
 
 
@@ -305,8 +298,7 @@ def disable_http_auth(server: Server, domain: str) -> RemoteResult:
 
 def add_redirect(server: Server, domain: str, from_path: str, to: str, http_code: int = 302) -> RemoteResult:
     command = (
-        f"sudo site {domain} -redirection -from={shlex.quote(from_path)} "
-        f"-to={shlex.quote(to)} -http-code={http_code}"
+        f"sudo site {domain} -redirection -from={shlex.quote(from_path)} -to={shlex.quote(to)} -http-code={http_code}"
     )
     result = run_remote(server, command)
     if not result.ok:
@@ -430,5 +422,7 @@ def _reload_nginx(server: Server, domain: str, *, action: str, rollback=None) ->
         )
     reload_result = run_remote(server, "sudo systemctl reload nginx")
     if not reload_result.ok:
-        raise WebinolyError(f"Не удалось перезагрузить nginx после {action} для {domain}: {_error_text(reload_result)}", reload_result)
+        raise WebinolyError(
+            f"Не удалось перезагрузить nginx после {action} для {domain}: {_error_text(reload_result)}", reload_result
+        )
     return reload_result

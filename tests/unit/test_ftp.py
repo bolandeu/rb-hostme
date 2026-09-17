@@ -3,9 +3,9 @@ from unittest.mock import patch
 
 import pytest
 
-from hostme import ftp
 from hostme.config import Target
-from hostme.errors import HostmeError
+from hostme.core.errors import HostmeError
+from hostme.providers import ftp
 
 
 def make_target(**overrides):
@@ -26,7 +26,7 @@ def fake_completed(returncode=0, stdout="", stderr=""):
 
 
 def test_mirror_to_passes_credentials_via_stdin_not_argv():
-    with patch("hostme.ftp.subprocess.run", return_value=fake_completed()) as mock_run:
+    with patch("hostme.providers.ftp.subprocess.run", return_value=fake_completed()) as mock_run:
         ftp.mirror_to("/local/path", make_target())
     call = mock_run.call_args
     # argv — только сама команда lftp, без -u/пароля голым текстом
@@ -37,7 +37,7 @@ def test_mirror_to_passes_credentials_via_stdin_not_argv():
 
 
 def test_mirror_to_builds_reverse_delete_mirror_command():
-    with patch("hostme.ftp.subprocess.run", return_value=fake_completed()) as mock_run:
+    with patch("hostme.providers.ftp.subprocess.run", return_value=fake_completed()) as mock_run:
         ftp.mirror_to("/local/path", make_target())
     script = mock_run.call_args.kwargs["input"]
     assert "mirror --reverse --delete" in script
@@ -52,7 +52,7 @@ def test_mirror_to_without_password_raises():
 
 def test_mirror_to_raises_on_failure():
     with (
-        patch("hostme.ftp.subprocess.run", return_value=fake_completed(returncode=1, stderr="Login failed")),
+        patch("hostme.providers.ftp.subprocess.run", return_value=fake_completed(returncode=1, stderr="Login failed")),
         pytest.raises(ftp.FtpError, match="Login failed"),
     ):
         ftp.mirror_to("/local/path", make_target())
@@ -60,7 +60,7 @@ def test_mirror_to_raises_on_failure():
 
 def test_mirror_to_timeout_raises():
     with (
-        patch("hostme.ftp.subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="lftp", timeout=5)),
+        patch("hostme.providers.ftp.subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="lftp", timeout=5)),
         pytest.raises(ftp.FtpError, match="не завершился"),
     ):
         ftp.mirror_to("/local/path", make_target(), timeout=5)
@@ -68,7 +68,7 @@ def test_mirror_to_timeout_raises():
 
 def test_mirror_to_missing_lftp_raises():
     with (
-        patch("hostme.ftp.subprocess.run", side_effect=FileNotFoundError()),
+        patch("hostme.providers.ftp.subprocess.run", side_effect=FileNotFoundError()),
         pytest.raises(ftp.FtpError, match="lftp"),
     ):
         ftp.mirror_to("/local/path", make_target())

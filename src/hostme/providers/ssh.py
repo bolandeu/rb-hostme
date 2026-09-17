@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
+import shlex
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 from hostme.config import Server, Target
-from hostme.errors import HostmeError
+from hostme.core.errors import InvalidArgumentsError, ProviderError
 
 DEFAULT_TIMEOUT = 30
+_log = logging.getLogger(__name__)
 LONG_TIMEOUT = 300  # server init / webinoly install
 
 # Много коротких SSH-подключений подряд (site_exists → create_site → enable_ssl →
@@ -21,7 +24,9 @@ _CONTROL_DIR = Path.home() / ".cache" / "hostme" / "ssh-control"
 _CONTROL_PERSIST = "60s"  # держим сокет после последней команды — не оставлять сессию навечно
 
 
-class SshError(HostmeError):
+class SshError(ProviderError):
+    provider = "ssh"
+
     def __init__(self, message: str, result: RemoteResult | None = None) -> None:
         super().__init__(message)
         self.result = result
@@ -73,6 +78,7 @@ def _ssh_command_string(server: Server) -> str:
 
 
 def run_remote(server: Server, command: str, timeout: int = DEFAULT_TIMEOUT) -> RemoteResult:
+    _log.debug("ssh %s: %s", server.ssh_target, command)
     try:
         proc = subprocess.run(
             [*_ssh_base_args(server), command],
@@ -82,9 +88,7 @@ def run_remote(server: Server, command: str, timeout: int = DEFAULT_TIMEOUT) -> 
             check=False,
         )
     except subprocess.TimeoutExpired as exc:
-        raise SshError(
-            f"Команда на {server.name} не завершилась за {timeout}с: {command!r}"
-        ) from exc
+        raise SshError(f"Команда на {server.name} не завершилась за {timeout}с: {command!r}") from exc
     except FileNotFoundError as exc:
         raise SshError("Команда `ssh` не найдена в системе") from exc
 
@@ -116,6 +120,7 @@ def rsync_to(
         local,
         f"{server.ssh_target}:{remote}",
     ]
+    _log.debug("%s", shlex.join(args))
     try:
         proc = subprocess.run(args, capture_output=True, text=True, timeout=timeout, check=False)
     except subprocess.TimeoutExpired as exc:
@@ -146,11 +151,13 @@ def _target_ssh_transport(target: Target) -> tuple[str, dict[str, str] | None]:
     Ключ (как у Server) или пароль через sshpass — частый случай для сторонних
     хостингов, где SSH дают, но ключ туда не загрузить, только тот же логин/
     пароль, что и для FTP/панели."""
-    if not target.ssh_key and not target.password:
-        raise SshError(f"Target {target.name!r}: для connection=ssh нужен ssh_key или password")
-
     if target.ssh_key:
-        return f"ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -i {target.ssh_key}", None
+        return (
+            f"ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -i {target.ssh_key}",
+            None,
+        )
+    if not target.password:
+        raise InvalidArgumentsError(f"Target {target.name!r}: для connection=ssh нужен ssh_key или password")
 
     # BatchMode=yes НЕЛЬЗЯ здесь (в отличие от ключевой ветки выше) — эта опция
     # отключает у ssh вообще любой запрос пароля, включая тот самый prompt,
@@ -166,6 +173,7 @@ def _target_ssh_transport(target: Target) -> tuple[str, dict[str, str] | None]:
 
 
 def _run_target_rsync(args: list[str], target: Target, timeout: int, env: dict[str, str] | None) -> RemoteResult:
+    _log.debug("%s", shlex.join(args))  # пароль сюда не попадает — он в env SSHPASS, не в argv
     try:
         proc = subprocess.run(args, capture_output=True, text=True, timeout=timeout, env=env, check=False)
     except subprocess.TimeoutExpired as exc:

@@ -11,10 +11,11 @@ import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
-from hostme import config, data, ftp, output, webinoly
+from hostme import config, data, output
 from hostme.credentials import manager as credentials
 from hostme.errors import HostmeError, InvalidArgumentsError
-from hostme.ssh import rsync_from_target, rsync_to, rsync_to_target
+from hostme.providers import ftp, http, webinoly
+from hostme.providers.ssh import rsync_from_target, rsync_to, rsync_to_target
 
 MAINTENANCE_TEMPLATE_DIR = Path(__file__).parent.parent / "templates" / "maintenance"
 
@@ -723,23 +724,9 @@ def update_site_config(
     return {"message": f"Настройки {domain} обновлены", "domain": domain, "site": site}
 
 
-def http_status(domain: str, timeout: float = 8.0) -> str:
-    import urllib.error
-    import urllib.request
-
-    req = urllib.request.Request(f"https://{domain}", method="HEAD")
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return str(resp.status)
-    except urllib.error.HTTPError as exc:
-        return str(exc.code)
-    except Exception as exc:  # noqa: BLE001
-        return f"ошибка: {exc}"
-
-
 def get_debug_info(domain: str, error: bool, lines: int) -> dict:
     _site, server = require_site_server(domain)
-    status = http_status(domain)
+    status = http.head_status(domain)
     log_output = webinoly.tail_log(server, domain, error=error, lines=lines)
     return {"domain": domain, "http_status": status, "log": log_output}
 

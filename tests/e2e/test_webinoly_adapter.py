@@ -14,9 +14,9 @@ import uuid
 
 import pytest
 
-from hostme import webinoly
 from hostme.config import Server
-from hostme.ssh import run_remote
+from hostme.providers import webinoly
+from hostme.providers.ssh import run_remote
 
 pytestmark = pytest.mark.e2e
 

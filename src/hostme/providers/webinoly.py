@@ -8,7 +8,7 @@ from typing import Literal
 
 from hostme.config import Server
 from hostme.errors import HostmeError
-from hostme.ssh import RemoteResult, run_remote
+from hostme.providers.ssh import RemoteResult, run_remote
 
 SiteType = Literal["html", "php"]
 

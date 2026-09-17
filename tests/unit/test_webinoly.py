@@ -3,9 +3,9 @@ from unittest.mock import patch
 
 import pytest
 
-from hostme import webinoly
 from hostme.config import Server
-from hostme.ssh import RemoteResult
+from hostme.providers import webinoly
+from hostme.providers.ssh import RemoteResult
 
 SERVER = Server(name="vps1", host="1.2.3.4", user="root", ssh_key="~/.ssh/id")
 
@@ -70,17 +70,17 @@ def test_site_info_has_ssl_false_with_nossl_tag():
 
 
 def test_is_installed_true():
-    with patch("hostme.webinoly.run_remote", return_value=ok("/usr/bin/webinoly")):
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok("/usr/bin/webinoly")):
         assert webinoly.is_installed(SERVER) is True
 
 
 def test_is_installed_false():
-    with patch("hostme.webinoly.run_remote", return_value=fail()):
+    with patch("hostme.providers.webinoly.run_remote", return_value=fail()):
         assert webinoly.is_installed(SERVER) is False
 
 
 def test_install_skips_when_already_installed():
-    with patch("hostme.webinoly.run_remote", side_effect=[ok(), ok("Webinoly version: 1.21.2")]) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", side_effect=[ok(), ok("Webinoly version: 1.21.2")]) as mock_run:
         webinoly.install(SERVER)
 
     assert mock_run.call_count == 2
@@ -89,7 +89,7 @@ def test_install_skips_when_already_installed():
 
 
 def test_install_runs_installer_when_missing():
-    with patch("hostme.webinoly.run_remote", side_effect=[fail(), ok()]) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", side_effect=[fail(), ok()]) as mock_run:
         webinoly.install(SERVER, mode="-php")
 
     install_command = mock_run.call_args_list[1][0][1]
@@ -98,14 +98,14 @@ def test_install_runs_installer_when_missing():
 
 
 def test_update_webinoly():
-    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.update_webinoly(SERVER)
     assert mock_run.call_args[0][1] == "sudo webinoly -update"
 
 
 def test_update_webinoly_raises_on_failure():
     with (
-        patch("hostme.webinoly.run_remote", return_value=fail("connection reset")),
+        patch("hostme.providers.webinoly.run_remote", return_value=fail("connection reset")),
         pytest.raises(webinoly.WebinolyError, match="connection reset"),
     ):
         webinoly.update_webinoly(SERVER)
@@ -113,14 +113,14 @@ def test_update_webinoly_raises_on_failure():
 
 def test_install_raises_on_failure():
     with (
-        patch("hostme.webinoly.run_remote", side_effect=[fail(), fail("network unreachable")]),
+        patch("hostme.providers.webinoly.run_remote", side_effect=[fail(), fail("network unreachable")]),
         pytest.raises(webinoly.WebinolyError, match="network unreachable"),
     ):
         webinoly.install(SERVER)
 
 
 def test_list_sites_uses_run_remote():
-    with patch("hostme.webinoly.run_remote", return_value=ok(LIST_OUTPUT)) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok(LIST_OUTPUT)) as mock_run:
         sites = webinoly.list_sites(SERVER)
 
     mock_run.assert_called_once_with(SERVER, "sudo site -list")
@@ -128,29 +128,29 @@ def test_list_sites_uses_run_remote():
 
 
 def test_site_exists_true():
-    with patch("hostme.webinoly.run_remote", return_value=ok(LIST_OUTPUT)):
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok(LIST_OUTPUT)):
         assert webinoly.site_exists(SERVER, "test1.antagorapp.ru") is True
 
 
 def test_site_exists_false():
-    with patch("hostme.webinoly.run_remote", return_value=ok(EMPTY_LIST_OUTPUT)):
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok(EMPTY_LIST_OUTPUT)):
         assert webinoly.site_exists(SERVER, "missing.dev") is False
 
 
 def test_create_site_html():
-    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.create_site(SERVER, "a.dev", "html")
     assert mock_run.call_args_list[0][0][1] == "sudo site a.dev -html"
 
 
 def test_create_site_php():
-    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.create_site(SERVER, "a.dev", "php")
     assert mock_run.call_args_list[0][0][1] == "sudo site a.dev -php"
 
 
 def test_create_site_writes_placeholder_index():
-    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.create_site(SERVER, "a.dev", "html")
     commands = [c[0][1] for c in mock_run.call_args_list]
     assert any("index.html" in cmd for cmd in commands)
@@ -158,7 +158,7 @@ def test_create_site_writes_placeholder_index():
 
 
 def test_create_site_php_placeholder_uses_index_php():
-    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.create_site(SERVER, "a.dev", "php")
     commands = [c[0][1] for c in mock_run.call_args_list]
     assert any("index.php" in cmd for cmd in commands)
@@ -166,53 +166,53 @@ def test_create_site_php_placeholder_uses_index_php():
 
 def test_create_site_raises_on_failure():
     with (
-        patch("hostme.webinoly.run_remote", return_value=fail("domain taken")),
+        patch("hostme.providers.webinoly.run_remote", return_value=fail("domain taken")),
         pytest.raises(webinoly.WebinolyError, match="domain taken"),
     ):
         webinoly.create_site(SERVER, "a.dev", "html")
 
 
 def test_enable_ssl_plain():
-    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.enable_ssl(SERVER, "a.dev")
     assert mock_run.call_args[0][1] == "sudo site a.dev -ssl=on"
 
 
 def test_enable_ssl_wildcard():
-    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.enable_ssl(SERVER, "a.dev", wildcard=True)
     assert mock_run.call_args[0][1] == "sudo site a.dev -ssl=on -wildcard"
 
 
 def test_enable_ssl_add_to_wildcard():
-    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.enable_ssl(SERVER, "sub.a.dev", add_to_wildcard="a.dev")
     assert mock_run.call_args[0][1] == "sudo site sub.a.dev -ssl=on -add-to-wildcard=a.dev"
 
 
 def test_enable_ssl_raises_on_failure():
     with (
-        patch("hostme.webinoly.run_remote", return_value=fail("dns not ready")),
+        patch("hostme.providers.webinoly.run_remote", return_value=fail("dns not ready")),
         pytest.raises(webinoly.WebinolyError, match="dns not ready"),
     ):
         webinoly.enable_ssl(SERVER, "a.dev")
 
 
 def test_delete_site_default_revokes_ssl():
-    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.delete_site(SERVER, "a.dev")
     assert mock_run.call_args[0][1] == "sudo site a.dev -delete=force -revoke=on"
 
 
 def test_delete_site_without_revoke():
-    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.delete_site(SERVER, "a.dev", revoke_ssl=False)
     assert mock_run.call_args[0][1] == "sudo site a.dev -delete=force -revoke=off"
 
 
 def test_delete_site_raises_on_failure():
     with (
-        patch("hostme.webinoly.run_remote", return_value=fail("not found")),
+        patch("hostme.providers.webinoly.run_remote", return_value=fail("not found")),
         pytest.raises(webinoly.WebinolyError, match="not found"),
     ):
         webinoly.delete_site(SERVER, "a.dev")
@@ -223,14 +223,14 @@ def test_webroot_path():
 
 
 def test_fix_ownership():
-    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.fix_ownership(SERVER, "a.dev")
     assert mock_run.call_args[0][1] == "sudo chown -R www-data:www-data /var/www/a.dev/htdocs"
 
 
 def test_fix_ownership_raises_on_failure():
     with (
-        patch("hostme.webinoly.run_remote", return_value=fail("permission denied")),
+        patch("hostme.providers.webinoly.run_remote", return_value=fail("permission denied")),
         pytest.raises(webinoly.WebinolyError, match="permission denied"),
     ):
         webinoly.fix_ownership(SERVER, "a.dev")
@@ -242,7 +242,7 @@ def test_fix_ownership_raises_on_failure():
 
 
 def test_set_http_auth_escapes_credentials():
-    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.set_http_auth(SERVER, "a.dev", "bob", "pass; rm -rf /")
     commands = [c[0][1] for c in mock_run.call_args_list]
     assert len(commands) == 2
@@ -255,14 +255,14 @@ def test_set_http_auth_escapes_credentials():
 
 def test_set_http_auth_raises_if_add_fails():
     with (
-        patch("hostme.webinoly.run_remote", return_value=fail("invalid option")),
+        patch("hostme.providers.webinoly.run_remote", return_value=fail("invalid option")),
         pytest.raises(webinoly.WebinolyError, match="invalid option"),
     ):
         webinoly.set_http_auth(SERVER, "a.dev", "bob", "secret")
 
 
 def test_disable_http_auth():
-    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.disable_http_auth(SERVER, "a.dev")
     # -purge не существует у httpauth (см. комментарий в webinoly.py) — реальный
     # флаг -delete, поймано вживую 2026-09-09 на roksdigital.ru.
@@ -274,7 +274,7 @@ def test_disable_http_auth_shows_real_error_from_stdout():
     # который дал пустое сообщение об ошибке при первом реальном вызове.
     with (
         patch(
-            "hostme.webinoly.run_remote",
+            "hostme.providers.webinoly.run_remote",
             return_value=RemoteResult(stdout="[ERROR] Please, enter a valid URL path!", stderr="", returncode=1),
         ),
         pytest.raises(webinoly.WebinolyError, match="valid URL path"),
@@ -283,7 +283,7 @@ def test_disable_http_auth_shows_real_error_from_stdout():
 
 
 def test_add_redirect():
-    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.add_redirect(SERVER, "a.dev", "/old", "/new")
     command = mock_run.call_args[0][1]
     assert "-from=/old" in command
@@ -292,7 +292,7 @@ def test_add_redirect():
 
 
 def test_remove_redirect():
-    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.remove_redirect(SERVER, "a.dev", "/old")
     assert mock_run.call_args[0][1] == "sudo site a.dev -redirection -delete -from=/old"
 
@@ -317,7 +317,7 @@ def test_render_cors_snippet_escapes_regex_metacharacters():
 
 
 def test_set_cors_writes_and_reloads():
-    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.set_cors(SERVER, "a.dev", ["https://a.com"])
     commands = [c[0][1] for c in mock_run.call_args_list]
     assert any("base64" in cmd for cmd in commands)
@@ -326,14 +326,14 @@ def test_set_cors_writes_and_reloads():
 
 
 def test_set_cors_empty_origins_removes_snippet():
-    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.set_cors(SERVER, "a.dev", [])
     commands = [c[0][1] for c in mock_run.call_args_list]
     assert any(cmd.startswith("rm -f") for cmd in commands)
 
 
 def test_set_custom_nginx_snippet_writes_and_reloads():
-    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.set_custom_nginx_snippet(SERVER, "a.dev", "error_page 404 /404.html;")
     commands = [c[0][1] for c in mock_run.call_args_list]
     assert any("base64" in cmd and "hostme-custom-nginx.conf" in cmd for cmd in commands)
@@ -342,7 +342,7 @@ def test_set_custom_nginx_snippet_writes_and_reloads():
 
 
 def test_set_custom_nginx_snippet_empty_removes():
-    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.set_custom_nginx_snippet(SERVER, "a.dev", "")
     commands = [c[0][1] for c in mock_run.call_args_list]
     assert any(cmd.startswith("rm -f") and "hostme-custom-nginx.conf" in cmd for cmd in commands)
@@ -350,7 +350,7 @@ def test_set_custom_nginx_snippet_empty_removes():
 
 def test_set_custom_nginx_snippet_rolls_back_on_nginx_test_failure():
     with (
-        patch("hostme.webinoly.run_remote", side_effect=[ok(), fail("syntax error"), ok()]) as mock_run,
+        patch("hostme.providers.webinoly.run_remote", side_effect=[ok(), fail("syntax error"), ok()]) as mock_run,
         pytest.raises(webinoly.WebinolyError, match="syntax error"),
     ):
         webinoly.set_custom_nginx_snippet(SERVER, "a.dev", "garbage {{{")
@@ -362,7 +362,7 @@ def test_set_cors_rolls_back_snippet_when_nginx_test_fails():
     # write ok, nginx -t fails -> должен откатить (rm -f) и не звать reload
     with (
         patch(
-            "hostme.webinoly.run_remote",
+            "hostme.providers.webinoly.run_remote",
             side_effect=[ok(), fail("syntax error"), ok()],
         ) as mock_run,
         pytest.raises(webinoly.WebinolyError, match="syntax error"),
@@ -377,7 +377,7 @@ def test_set_cors_rolls_back_snippet_when_nginx_test_fails():
 
 
 def test_ensure_releases_layout_chowns_releases_dir():
-    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.ensure_releases_layout(SERVER, "a.dev")
     command = mock_run.call_args[0][1]
     assert "mkdir -p releases" in command
@@ -385,7 +385,7 @@ def test_ensure_releases_layout_chowns_releases_dir():
 
 
 def test_switch_release_swaps_symlink_and_reloads():
-    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.switch_release(SERVER, "a.dev", "20260101000000")
     commands = [c[0][1] for c in mock_run.call_args_list]
     assert any("ln -sfn releases/20260101000000" in cmd for cmd in commands)
@@ -394,28 +394,28 @@ def test_switch_release_swaps_symlink_and_reloads():
 
 
 def test_list_releases_parses_and_sorts():
-    with patch("hostme.webinoly.run_remote", return_value=ok("20260101000000\n20260102000000\n")):
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok("20260101000000\n20260102000000\n")):
         releases = webinoly.list_releases(SERVER, "a.dev")
     assert releases == ["20260101000000", "20260102000000"]
 
 
 def test_list_releases_empty():
-    with patch("hostme.webinoly.run_remote", return_value=ok("")):
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok("")):
         assert webinoly.list_releases(SERVER, "a.dev") == []
 
 
 def test_current_release_parses_symlink_target():
-    with patch("hostme.webinoly.run_remote", return_value=ok("releases/20260101000000\n")):
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok("releases/20260101000000\n")):
         assert webinoly.current_release(SERVER, "a.dev") == "20260101000000"
 
 
 def test_current_release_none_when_not_a_symlink():
-    with patch("hostme.webinoly.run_remote", return_value=fail("not a symlink")):
+    with patch("hostme.providers.webinoly.run_remote", return_value=fail("not a symlink")):
         assert webinoly.current_release(SERVER, "a.dev") is None
 
 
 def test_prune_releases_noop_when_under_limit():
-    with patch("hostme.webinoly.run_remote", return_value=ok("a\nb\n")) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok("a\nb\n")) as mock_run:
         result = webinoly.prune_releases(SERVER, "a.dev", keep=5)
     assert result is None
     mock_run.assert_called_once()  # только list_releases, rm не звался
@@ -427,7 +427,7 @@ def test_prune_releases_never_removes_current_even_if_old():
     # уцелеть, несмотря на то что он старше "keep", а r1 — реально удалиться.
     releases_output = "\n".join(f"r{i}" for i in range(7)) + "\n"
     with patch(
-        "hostme.webinoly.run_remote",
+        "hostme.providers.webinoly.run_remote",
         side_effect=[ok(releases_output), ok("r0"), ok()],  # list, readlink(current=r0), rm
     ) as mock_run:
         webinoly.prune_releases(SERVER, "a.dev", keep=5)
@@ -440,7 +440,7 @@ def test_prune_releases_never_removes_current_even_if_old():
 
 
 def test_tail_log_wraps_with_timeout():
-    with patch("hostme.webinoly.run_remote", return_value=ok("log line\n")) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok("log line\n")) as mock_run:
         result = webinoly.tail_log(SERVER, "a.dev", lines=25)
     command = mock_run.call_args[0][1]
     assert command.startswith("sudo timeout")
@@ -449,6 +449,6 @@ def test_tail_log_wraps_with_timeout():
 
 
 def test_tail_log_error_flag():
-    with patch("hostme.webinoly.run_remote", return_value=ok()) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.tail_log(SERVER, "a.dev", error=True)
     assert "-error" in mock_run.call_args[0][1]

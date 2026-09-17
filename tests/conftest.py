@@ -1,6 +1,42 @@
 import os
 
+import keyring.errors
 import pytest
+
+from hostme.credentials import manager as credentials
+
+
+class _FakeKeyring:
+    """In-memory замена keyring: тесты не должны трогать реальный OS keychain.
+
+    Поймано CI: на Mac разработчика тесты молча писали `hostme:ext1` в настоящий
+    login.keychain, а на Linux-раннере без бэкенда падали с NoKeyringError.
+    Тот же интерфейс, что у модуля keyring (включая `errors`, на который
+    ссылаются except-ветки в credentials/manager.py).
+    """
+
+    errors = keyring.errors
+
+    def __init__(self) -> None:
+        self.store: dict[tuple[str, str], str] = {}
+
+    def get_password(self, service: str, username: str) -> str | None:
+        return self.store.get((service, username))
+
+    def set_password(self, service: str, username: str, password: str) -> None:
+        self.store[(service, username)] = password
+
+    def delete_password(self, service: str, username: str) -> None:
+        if (service, username) not in self.store:
+            raise keyring.errors.PasswordDeleteError(f"{service}/{username} not found")
+        del self.store[(service, username)]
+
+
+@pytest.fixture(autouse=True)
+def fake_keyring(monkeypatch: pytest.MonkeyPatch) -> _FakeKeyring:
+    fake = _FakeKeyring()
+    monkeypatch.setattr(credentials, "keyring", fake)
+    return fake
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:

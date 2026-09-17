@@ -1,3 +1,5 @@
+import sys
+
 import pytest
 
 from hostme import config
@@ -42,6 +44,7 @@ def test_save_and_load_servers_roundtrip():
     assert loaded[0].base_domains[0].default is True
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-биты прав; на Windows chmod — no-op")
 def test_servers_file_has_restrictive_permissions():
     config.save_servers([make_server()])
     mode = config.SERVERS_FILE.stat().st_mode & 0o777
@@ -66,7 +69,7 @@ def make_target(**overrides):
     return config.Target(**defaults)
 
 
-def test_save_and_load_targets_roundtrip():
+def test_save_and_load_targets_roundtrip(fake_keyring):
     config.save_targets([make_target()])
     loaded = config.load_targets()
     assert len(loaded) == 1
@@ -74,6 +77,9 @@ def test_save_and_load_targets_roundtrip():
     assert loaded[0].connection == "sftp"
     assert loaded[0].password == "s3cr3t"
     assert loaded[0].remote_path == "/www"
+    # пароль ушёл в (фейковый) keychain, а не в yaml — и не в реальный keychain машины
+    assert ("hostme:ext1", "ext1") in fake_keyring.store
+    assert "s3cr3t" not in config.SERVERS_FILE.read_text()
 
 
 def test_save_targets_does_not_wipe_existing_servers():
@@ -195,6 +201,7 @@ def test_save_and_load_sites_roundtrip(tmp_path):
     assert loaded[0].deployed_at == "2026-09-08T12:00:00"
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-биты прав; на Windows mkdir(mode=) — no-op")
 def test_ensure_config_dir_created_on_first_save(isolated_config):
     assert not isolated_config.exists()
     config.save_servers([make_server()])

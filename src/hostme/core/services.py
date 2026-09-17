@@ -813,7 +813,7 @@ def run_doctor() -> dict:
             )
 
     ok = not any(c["status"] == "fail" for c in checks)
-    return {"ok": ok, "checks": checks}
+    return {"healthy": ok, "checks": checks}
 
 
 # --- skill (bundled SKILL.md для AI-агентов, см. hostme --ai) --------------

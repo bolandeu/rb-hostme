@@ -69,7 +69,7 @@ def test_root_callback_sets_output_state() -> None:
 
 
 def test_guarded_command_emits_json_error_envelope_on_stdout() -> None:
-    with patch("hostme.cli.services.teardown", side_effect=HostmeError("сломалось", action="почини")):
+    with patch("hostme.commands.site.services.teardown", side_effect=HostmeError("сломалось", action="почини")):
         result = _invoke(["--json", "a.dev", "teardown", "--confirm"])
     assert result.exit_code == 1
     data = json.loads(result.stdout)
@@ -77,7 +77,7 @@ def test_guarded_command_emits_json_error_envelope_on_stdout() -> None:
 
 
 def test_guarded_command_maps_unknown_exception_to_unexpected() -> None:
-    with patch("hostme.cli.services.run_doctor", side_effect=RuntimeError("boom")):
+    with patch("hostme.commands.doctor.services.run_doctor", side_effect=RuntimeError("boom")):
         result = _invoke(["--json", "doctor"])
     assert result.exit_code == 1
     assert json.loads(result.stdout)["error"]["code"] == "UNEXPECTED"

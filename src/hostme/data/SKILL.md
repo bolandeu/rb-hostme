@@ -2,7 +2,7 @@
 name: hostme
 description: "Deploy static/PHP sites (built landing pages, client sites, previews, artifacts that need a real URL) via `hostme` — a personal surge.sh-alike CLI. Deploys to the user's own VPS (--server, full lifecycle) or a registered third-party ftp/sftp/ssh hosting (--target, file transfer only — needs the user's explicit go-ahead per deploy, see below). Use whenever the user wants a local folder published/hosted/deployed to a real domain, not just previewed locally. Not for anything with a backend process (Node/API servers) — hostme only serves static files and PHP."
 metadata:
-  version: 1.2.0
+  version: 2.0.0
 ---
 
 # hostme
@@ -13,28 +13,44 @@ Webinoly (nginx+php-fpm), with SSL always on. One command, no accounts, no
 platform lock-in — the self-hosted analog of `surge.sh`.
 
 This doc is bundled with the package itself (`src/hostme/data/SKILL.md`), not
-maintained by hand in `~/.claude/skills/` — see "Staying in sync" below for
-why that matters.
+maintained by hand in `~/.claude/skills/` — see "Staying in sync" below.
+
+## Install (if `hostme --version` fails)
+
+```bash
+uv tool install "git+https://github.com/bolandeu/hostme.git"
+```
+
+Same command on macOS and Linux (Windows: the CLI itself installs, but it
+shells out to `ssh`/`rsync`/`lftp`, which you'd need on PATH);
+`uv tool upgrade hostme` updates it. Do not run from source unless asked to
+develop the CLI.
+
+The repository is private. On an auth error (`Authentication failed`,
+`could not read Username`, `Repository not found`) do not ask for a token:
+run `gh auth status`; if it passes, `gh auth setup-git` and retry; if not,
+ask the user to run `gh auth login`. With SSH keys configured this works
+without any of that:
+
+```bash
+uv tool install "git+ssh://git@github.com/bolandeu/hostme.git"
+```
 
 ## First: get the live command reference, don't guess
 
-The command surface evolves; don't hardcode it here. Before doing anything,
-run:
+The command surface evolves; don't hardcode it here. A bare `hostme` prints
+name + version + every command with its **real** invocation form as the
+first line; `hostme <command> --help` prints the rest. For the full
+reference with examples and the list of what's explicitly NOT implemented:
 
 ```
-hostme --json help
+hostme help --json
 ```
 
-(`hostme help --json` works identically — see "`--json` works in either
-position" below.) This returns the authoritative list of commands with usage
-+ description, and notes what's explicitly NOT implemented (e.g. `discard`,
-custom `ssl`, git push-to-deploy). Trust that output over anything below if
-they conflict — this file can go stale, `hostme help` cannot (it's generated
-from the same code that runs the commands).
-
-If you can execute the CLI but can't read files from disk (sandboxed shell,
-remote exec with no filesystem access to this installed skill), run
-`hostme --ai` instead — it prints this exact document to stdout.
+Trust that output over anything below if they conflict — this file can go
+stale, the CLI's own help cannot (it's rendered from the code that runs the
+commands). If you can execute the CLI but can't read files from disk
+(sandboxed shell, remote exec), `hostme --ai` prints this exact document.
 
 ## The one thing that will trip you up: command order
 
@@ -46,15 +62,16 @@ hostme <domain> <subcommand> [...]          # manage — DOMAIN FIRST, not the s
 ```
 
 So it's `hostme mysite.com teardown`, never `hostme teardown mysite.com`. If
-you type the subcommand first, `hostme` silently reinterprets it as a deploy
-whose local path is literally named after the subcommand (e.g. "teardown") —
-it won't error usefully, it'll just do the wrong thing. When in doubt, check
-`hostme --json help` for the exact `usage` string of the command you want.
+you type the subcommand first with other arguments, `hostme` reinterprets it
+as a deploy whose local path is literally named after the subcommand — it
+won't error usefully, it'll just do the wrong thing. (`hostme teardown
+--help` alone is fine — it shows teardown's help.) When in doubt, check the
+`usage` string in `hostme help --json`.
 
 ## Quick path: deploy a build output
 
 ```
-hostme ./dist                    # domain auto-generated from folder name + default base domain
+hostme ./dist                            # domain auto-generated from folder name + default base domain
 hostme ./dist mysite.com --server vps1   # explicit domain, needed the first time for a domain not already known
 ```
 
@@ -65,135 +82,122 @@ user.
 
 Deploy is idempotent and keeps release history (`hostme <domain> revs`,
 `rollback`, `rollfore`) — redeploying the same domain never loses the
-previous version, it's just a symlink swap away.
+previous version, it's just a symlink swap away. The webroot becomes an
+exact mirror of the folder (`rsync --delete`): deploying the wrong/empty
+folder replaces the site's content (recoverable via `rollback`).
 
 ## Always use `--json`
 
+`--json`, `--non-interactive`, `--dry-run`, `--quiet`, `--verbose` work
+**before or after** the command (`hostme --json list` ≡ `hostme list
+--json`), in any order. Under `--json` every command prints exactly one
+single-line JSON object **to stdout** — success and error alike:
+
 ```
-hostme --json <...>
+{"ok": true, ...}
+{"ok": false, "error": {"code": "...", "message": "...", "action": "..."}}
 ```
 
-Every command then prints one JSON object to stdout on success
-(`{"ok": true, ...}`) or to stderr on failure (`{"ok": false, "error":
-{"code": "...", "message": "...", "action": "..."}}` — `action`, when
-present, is the concrete next command to run), with a non-zero exit code on
-failure. Parse the `error.message`/`error.code` fields, not a bare string —
-this is a breaking change from an earlier version of `hostme` that used
-`{"ok": false, "error": "text"}`.
+Parse stdout; stderr is only diagnostics (`--verbose` shows the actual
+`ssh`/`rsync`/`lftp` commands being run). `action`, when present, is the
+concrete next command to run. `--json` implies `--non-interactive`: nothing
+blocks on stdin.
 
-### `--json` works in either position
+### Exit codes and `error.code`
 
-`--json`/`--non-interactive`/`--dry-run` can go **before or after** the
-command (`hostme --json list` and `hostme list --json` are equivalent) —
-you don't need to remember which form a given call needs. They can also mix
-with each other in any order.
+```
+0  ok
+1  ERROR (a known state problem, e.g. "no older release to roll back to"),
+   ABORTED (user answered "no" to the prompt),
+   UNEXPECTED (a bug — re-run with --verbose for the traceback and report it),
+   CREDENTIAL_STORE_UNAVAILABLE (OS keychain unusable → error.action names the env var)
+2  INVALID_ARGUMENTS — bad flags, a server/domain/target/site not in the registry,
+   or a destructive command without --confirm in non-interactive mode
+5  PROVIDER_ERROR — ssh/rsync/lftp/Webinoly failed or isn't installed
+   (error.provider says which); network/timeouts land here too
+```
 
-`--json` implies non-interactive (same as passing `--non-interactive`
-explicitly) — no command blocks on stdin under `--json`. But `--json` does
-**not** skip confirmation on destructive commands (`teardown`/`rollback`/
-`maintenance`, own server or `--target` alike): without `--yes`/`-y` they
-fail with a `CONFIRMATION_REQUIRED` error instead of either prompting or
-silently proceeding. Always get the user's explicit go-ahead for that
-specific domain before adding `--yes` yourself — see the destructive-ops
-section below.
-
-Use `--dry-run` to preview what a destructive command would do (prints the
-same shape of result with `"dry_run": true`, no confirmation needed, nothing
-changes) before actually running it with `--yes`.
-
-`hostme --json doctor` checks environment readiness (required binaries —
-`ssh`/`rsync`/`lftp`/`sshpass` as needed, config file permissions/
-parseability, declared ssh keys present on disk) without contacting any
-remote server — cheap to run first if a command is failing mysteriously.
+Only exit 5 is a candidate for retry, and only after reading `message`
+(a missing binary won't fix itself). `hostme doctor --json` (`healthy` +
+per-check `status`) checks binaries, registry files/permissions and declared
+ssh keys without contacting any server — cheap to run first if a command is
+failing mysteriously.
 
 ## Before deploying: check what's already there
 
 `hostme` manages its own registry (`~/.config/hostme/servers.yaml` /
-`sites.yaml`) — it's not aware of anything deployed outside itself. Useful
-before acting:
+`sites.yaml`) — it's not aware of anything deployed outside itself:
 
 ```
-hostme --json list           # every known site: domain, server, php/html, last deploy
-hostme --json domain list    # registered base (wildcard) domains and which server owns them
-hostme --json server list    # registered servers
+hostme list --json           # every known site: domain, server, php/html, last deploy
+hostme domain list --json    # registered base (wildcard) domains and which server owns them
+hostme server list --json    # registered servers
 ```
 
 If the user's request implies a domain that isn't in `domain list`'s output
 and isn't a subdomain of one that is, you'll need `--server NAME` explicitly
-on the first deploy (see `hostme --json help` for the exact error/flow).
+on the first deploy.
 
-## If commands that should work throw "No such command '<domain>'"
+## Destructive operations — `--dry-run`, then `--confirm` only with sign-off
 
-That specific error means the globally installed `hostme` binary is stale —
-its launcher script still calls the old entry point directly instead of the
-one that rewrites surge-style argv (a real bug hit on 2026-09-09: changing
-`[project.scripts]` in `pyproject.toml` does **not** regenerate the installed
-launcher under an editable install). Fix: from the repo, run
-`uv tool install --editable . --force`, then retry. Not something to silently
-work around — surface it, since it means every domain-first command was
-broken until fixed.
+`teardown`, `rollback`, `maintenance` (own server and `--target` alike) and
+any deploy to a `--target` are gated. The flow is always:
+
+1. `hostme <domain> teardown --dry-run --json` — preview (same result
+   shape with `"dry_run": true`, nothing changes, no confirmation needed).
+2. Show the user what it would do; get their explicit go-ahead **for that
+   domain, right now**.
+3. `hostme <domain> teardown --confirm --json`.
+
+Without `--confirm` (alias `--yes`/`-y`) a gated command under `--json` or
+`--non-interactive` fails with `INVALID_ARGUMENTS` — it never prompts and
+never proceeds silently. Never add `--confirm` on your own initiative; a
+general "yes, go ahead" earlier in the conversation does not cover a
+specific call later.
+
+`teardown` deletes the site on the server (files + revokes SSL) and removes
+it from the registry — irreversible. `rollback`/`maintenance` are reversible
+(a symlink swap on the server, or a target backup restore). `config
+--no-cors` / `--remove-redirect` are also reversible. Reversible doesn't mean
+"skip asking" — it means a mistake is recoverable, not that it's low-stakes.
+
+## `--target`: third-party hosting, NOT the user's own VPS
+
+Besides `--server` (the user's own VPS, Webinoly-managed, full
+SSL/releases/rollback lifecycle), `hostme` can deploy to a registered
+`Target` — someone else's hosting (ftp/sftp/ssh credentials to a
+shared-hosting panel, e.g. Beget). Registered with `hostme target add`,
+listed with `hostme target list`, used with `hostme <path> <domain> --target
+NAME` (domain must be explicit — targets have no base-domain concept).
+Target passwords live in the OS keychain (or `HOSTME_<NAME>_PASSWORD`),
+never in the registry file — nothing an agent needs to handle, and never
+ask the user to paste one into a command line unless it's `target add`.
+
+This is meaningfully higher-stakes than a `--server` deploy: it's
+third-party infrastructure (often someone's live production site), the
+rollback story is weaker (one local pre-deploy backup per deploy, not
+server-side release history), and a wrong domain/target pairing overwrites
+real content on a host you don't own the failure mode for. **Never run a
+`--target` deploy, `target add`/`target remove`, or
+`teardown`/`rollback`/`maintenance` on a target-hosted site on your own
+initiative** — explicit go-ahead for that specific domain/target every time,
+even for a plain deploy.
+
+`auth`/`config`/`ssl`/`debug`/`revs`/`rollfore` don't apply to targets
+(Webinoly-specific) — `hostme` refuses with a clear error, no need to
+pre-filter.
 
 ## Staying in sync
 
 This file lives at `src/hostme/data/SKILL.md` in the repo and is bundled
 into the installed package (`hostme --ai` prints it verbatim). The copy an
 AI tool actually reads (e.g. `~/.claude/skills/hostme/SKILL.md`) is a
-synced-out copy, not the source of truth — after pulling a `hostme` update,
-resync it with:
+synced-out copy — after `uv tool upgrade hostme`, resync it with:
 
 ```
 hostme skill install
 ```
 
-(writes to `~/.claude/skills/hostme/SKILL.md` by default; `--path PATH` for
-somewhere else). If a locally-installed skill copy and `hostme --json help`
-ever disagree, trust `help` and re-run `skill install` — don't hand-edit the
-installed copy, it'll just drift again on the next update.
-
-## `--target`: third-party hosting, NOT the user's own VPS — needs explicit go-ahead every time
-
-Besides `--server` (the user's own VPS, Webinoly-managed, full SSL/releases/
-rollback lifecycle), `hostme` can also deploy to a registered `Target` —
-someone else's hosting (ftp/sftp/ssh credentials to a shared-hosting panel,
-e.g. Beget). Registered with `hostme target add`, listed with
-`hostme target list`, used with `hostme <path> <domain> --target NAME`
-(domain must be explicit — targets have no base-domain/wildcard concept).
-Target passwords are stored in the OS keychain (never in
-`~/.config/hostme/servers.yaml`), resolved transparently — nothing an agent
-needs to handle.
-
-This is meaningfully higher-stakes than a `--server` deploy: it's third-party
-infrastructure (often someone else's live production site, not the user's
-own VPS they fully control), the rollback story is weaker (a single local
-pre-deploy backup snapshot per deploy, not the server-side releases history
-`--server` gets), and a wrong domain/target pairing overwrites real content
-on a host you don't own the failure mode for.
-
-**Never run a `--target` deploy (or `target add`/`target remove`, or
-`teardown`/`rollback`/`maintenance` on a target-hosted site) on your own initiative.**
-Always get the user's explicit go-ahead for that specific domain/target
-right before doing it — a general "yes, set up target deploys" earlier in
-the conversation does not cover a specific deploy call later. This is
-stricter than the general destructive-ops guidance below: even a plain
-`deploy` (not just teardown) needs confirmation here, because the target
-itself represents someone else's hosting account, not infrastructure the
-user has already delegated to you by registering it as a Server.
-
-`auth`/`config`/`ssl`/`debug`/`revs`/`rollfore` don't apply to targets at all
-(Webinoly-specific) — `hostme` itself will refuse with a clear error, no need
-to pre-filter these yourself.
-
-## Destructive operations — confirm scope, don't assume
-
-`teardown`, `rollback`, and `maintenance` all require `--yes`/`-y` (or an
-interactive terminal, where `hostme` prompts) — this applies equally to the
-user's own server and to a `--target`, and `--json` does not bypass it (see
-above). Never pass `--yes` on your own initiative; get the user's go-ahead
-for that specific domain right before the call.
-
-`teardown` deletes the site on the server (files + revokes SSL) and removes
-it from the registry — irreversible. `rollback`/`maintenance` are reversible
-(a symlink swap on the server, or a target backup restore — the previous
-content isn't lost). `config --no-cors` / `--remove-redirect` are also
-reversible. Reversible doesn't mean "skip asking" — it means a mistake here
-is recoverable, not that it's low-stakes to begin with.
+(`--path PATH` for somewhere else). If the installed copy and `hostme help
+--json` ever disagree, trust `help` and re-run `skill install` — don't
+hand-edit the installed copy.

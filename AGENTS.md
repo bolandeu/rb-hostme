@@ -14,7 +14,7 @@
 
 ## Skill для агентов (`~/.claude/skills/hostme/`)
 
-Существует **глобальный** (не в этом репозитории) Claude Code skill `hostme` — `~/.claude/skills/hostme/SKILL.md`. Он не про разработку самого `hostme`, а про его *использование* другими агентами в других проектах, которым нужно задеплоить артефакт (раздел 2 PRD). Если меняется CLI-грамматика (`_translate_argv` в `cli.py`), команды в `hostme help`/`hostme --json help`, или общее поведение `--json`/`--yes`/подтверждений — свериться, не устарел ли skill, и поправить его тоже (он намеренно тонкий: не дублирует список команд, отсылает к `hostme help --json` как источнику правды, только объясняет неочевидную грамматику и предупреждения). Это не часть кодовой базы `hostme` и не отслеживается тестами/CI этого репозитория — трогать вручную.
+Существует **глобальный** (не в этом репозитории) Claude Code skill `hostme` — `~/.claude/skills/hostme/SKILL.md`. Он не про разработку самого `hostme`, а про его *использование* другими агентами в других проектах, которым нужно задеплоить артефакт (раздел 2 PRD). Источник правды — **`src/hostme/data/SKILL.md`** в этом репозитории (bundled в пакет; `hostme --ai` печатает его, `hostme skill install` копирует в `~/.claude/skills/hostme/`). Если меняется CLI-грамматика (`_translate_argv` в `cli.py`), `hostme help --json`, или общее поведение `--json`/`--confirm`/exit-кодов — править bundled-копию и после установки перезапускать `hostme skill install`; глобальную копию руками не редактировать. Skill намеренно тонкий: не дублирует список команд (его даёт голый `hostme` из docstring'ов команд), только конвенции и неочевидную грамматику.
 
 ## Проверенные на практике факты о Webinoly (не гадать, не перепроверять с нуля)
 
@@ -36,6 +36,17 @@
 - `~/.config/hostme/*.yaml` (реестр серверов/сайтов, будущее состояние инструмента) — вне репозитория по дизайну (PRD §8), туда не заглядывать при коммитах.
 - API-ключи (например, попытка авторизации в Beget API) — если появятся рабочие креды, хранить вне репозитория, не в `docs/`.
 - Итоги секьюрити-ревью (права на конфиг, хранение `ssh_key`/пароля, принятые риски) — **PRD.md §9**, не дублировать здесь.
+
+## Архитектура (cli-builder) и проверка
+
+Пакет следует архитектуре [cli-builder](https://github.com/bolandeu/cli-generator) — см. README «Разработка». Коротко, что где:
+- `commands/` — только разбор аргументов → один вызов сервиса → `output.success`/`output.emit_success`. Docstring команды = её `--help`; первая строка показывает реальную surge-форму вызова (`hostme <domain> teardown [--confirm]`).
+- `core/services.py` — бизнес-логика; `core/errors.py` — фиксированная таблица кодов (`INVALID_ARGUMENTS` 2, `PROVIDER_ERROR` 5, `ERROR`/`ABORTED`/`UNEXPECTED` 1); `core/version.py`.
+- `providers/` — ssh/rsync/lftp/Webinoly/HTTP-проба: единственное место с `subprocess`/`urllib`; ошибки наружу только как `ProviderError`.
+- `output/` — human/json-вывод, `guard` (на каждой команде), `group`, `require_confirmation` (гейт `--confirm`, `--yes`/`-y` — алиасы), состояние `--json/--quiet/--verbose/--non-interactive/--dry-run`.
+- `credentials/manager.py` — пароли target'ов в OS keychain / `HOSTME_<NAME>_PASSWORD`; в `servers.yaml` секретов нет. `~/.config/hostme` оставлен намеренно (PRD §8), без `platformdirs` — осознанное отклонение от шаблона.
+
+Перед коммитом — полный цикл из README (`ruff check`, `ruff format --check`, `ty check`, `pytest` с порогом покрытия, `doctor`); запись в `CHANGELOG.md` под `[Unreleased]`, если меняется поведение.
 
 ## Стиль работы над кодом
 

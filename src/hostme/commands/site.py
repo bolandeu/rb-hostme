@@ -61,7 +61,9 @@ def list_() -> None:
             return
         for s in d["sites"]:
             if s["base_domain"]:
-                output.console.print(f"https://{s['domain']}  [служебный домен, без деплоя через hostme]  {s['server']}")
+                output.console.print(
+                    f"https://{s['domain']}  [служебный домен, без деплоя через hostme]  {s['server']}"
+                )
             else:
                 kind = "php" if s["php"] else "html"
                 output.console.print(f"https://{s['domain']}  [{kind}]  {s['server']}  {s['deployed_at'] or ''}")
@@ -70,7 +72,13 @@ def list_() -> None:
     output.emit_success(
         {
             "sites": [
-                {"domain": s.domain, "server": s.server, "php": s.php, "deployed_at": s.deployed_at, "base_domain": False}
+                {
+                    "domain": s.domain,
+                    "server": s.server,
+                    "php": s.php,
+                    "deployed_at": s.deployed_at,
+                    "base_domain": False,
+                }
                 for s in sites
             ]
             + [

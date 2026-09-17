@@ -1,3 +1,4 @@
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -33,13 +34,13 @@ def make_target(**overrides) -> Target:
 
 
 def make_server(**overrides) -> Server:
-    defaults = {"name": "vps1", "host": "host.example", "user": "root", "ssh_key": "/key"}
+    defaults: dict[str, Any] = {"name": "vps1", "host": "host.example", "user": "root", "ssh_key": "/key"}
     defaults.update(overrides)
     return Server(**defaults)
 
 
 def make_site(**overrides) -> Site:
-    defaults = {"domain": "a.dev", "server": "vps1", "local_path": "/real/site/dist"}
+    defaults: dict[str, Any] = {"domain": "a.dev", "server": "vps1", "local_path": "/real/site/dist"}
     defaults.update(overrides)
     return Site(**defaults)
 
@@ -270,9 +271,7 @@ def test_remove_domain_not_registered_raises() -> None:
 
 
 def test_remove_domain_removes_from_server() -> None:
-    server = make_server(
-        base_domains=[BaseDomain(name="a.dev", default=True), BaseDomain(name="b.dev")]
-    )
+    server = make_server(base_domains=[BaseDomain(name="a.dev", default=True), BaseDomain(name="b.dev")])
     with (
         patch("hostme.core.services.config.load_servers", return_value=[server]),
         patch("hostme.core.services.config.save_servers") as mock_save,
@@ -284,9 +283,7 @@ def test_remove_domain_removes_from_server() -> None:
 
 
 def test_remove_domain_promotes_new_default_when_default_removed() -> None:
-    server = make_server(
-        base_domains=[BaseDomain(name="a.dev", default=True), BaseDomain(name="b.dev")]
-    )
+    server = make_server(base_domains=[BaseDomain(name="a.dev", default=True), BaseDomain(name="b.dev")])
     with (
         patch("hostme.core.services.config.load_servers", return_value=[server]),
         patch("hostme.core.services.config.save_servers"),

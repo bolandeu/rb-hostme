@@ -18,7 +18,18 @@ from hostme.data import load_skill_doc
 # Typer/Click умеет только статическое дерево подкоманд, поэтому реальный argv
 # переписывается в explicit-подкоманды (_translate_argv) до того, как его увидит Typer.
 _TOP_LEVEL_COMMANDS = {
-    "server", "domain", "target", "skill", "list", "open", "doctor", "help", "--ai", "--version", "--help", "-h",
+    "server",
+    "domain",
+    "target",
+    "skill",
+    "list",
+    "open",
+    "doctor",
+    "help",
+    "--ai",
+    "--version",
+    "--help",
+    "-h",
 }
 _DOMAIN_SUBCOMMANDS = {"teardown", "config", "auth", "ssl", "debug", "revs", "rollback", "rollfore", "maintenance"}
 # Глобальные флаги — только на уровне root-callback (Typer не даёт их объявить
@@ -40,14 +51,15 @@ def _translate_argv(argv: list[str]) -> list[str]:
 
     if len(args) >= 2 and args[1] in _DOMAIN_SUBCOMMANDS:
         domain, subcmd, *rest = args
-        return prefix + [subcmd, domain, *rest]
+        return [*prefix, subcmd, domain, *rest]
 
     # `hostme teardown --help` — просьба о справке по teardown, а не деплой папки
     # с именем "teardown" (иначе показывалась бы справка деплоя, сбивая с толку).
     if args[0] in _DOMAIN_SUBCOMMANDS and (len(args) == 1 or args[1] in ("-h", "--help")):
         return prefix + args
 
-    return prefix + ["_deploy", *args]
+    return [*prefix, "_deploy", *args]
+
 
 # Голый `hostme` — точка входа для человека и агента: имя + версия + описание,
 # затем команды с первой строкой docstring. Без no_args_is_help (он выходит с

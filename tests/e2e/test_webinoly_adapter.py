@@ -7,6 +7,7 @@ test_webinoly.py мокают run_remote и не ловят реальный в�
   uv run pytest -m e2e tests/e2e/test_webinoly_adapter.py
 """
 
+import contextlib
 import os
 import subprocess
 import time
@@ -32,10 +33,8 @@ def base_domain() -> str:
 def domain(real_server: Server, base_domain: str):
     name = f"e2e-adapter-{uuid.uuid4().hex[:8]}.{base_domain}"
     yield name
-    try:
+    with contextlib.suppress(webinoly.WebinolyError):
         webinoly.delete_site(real_server, name)
-    except webinoly.WebinolyError:
-        pass
 
 
 def test_is_installed_true_on_real_server(real_server: Server) -> None:
@@ -55,9 +54,7 @@ def test_full_static_site_lifecycle(real_server: Server, base_domain: str, domai
     webinoly.enable_ssl(real_server, domain, add_to_wildcard=base_domain)
 
     marker = uuid.uuid4().hex
-    upload = run_remote(
-        real_server, f"echo '{marker}' | sudo tee {webinoly.webroot(domain)}/index.html"
-    )
+    upload = run_remote(real_server, f"echo '{marker}' | sudo tee {webinoly.webroot(domain)}/index.html")
     assert upload.ok
     webinoly.fix_ownership(real_server, domain)
 

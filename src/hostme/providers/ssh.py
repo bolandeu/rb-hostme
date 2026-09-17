@@ -88,9 +88,7 @@ def run_remote(server: Server, command: str, timeout: int = DEFAULT_TIMEOUT) -> 
             check=False,
         )
     except subprocess.TimeoutExpired as exc:
-        raise SshError(
-            f"Команда на {server.name} не завершилась за {timeout}с: {command!r}"
-        ) from exc
+        raise SshError(f"Команда на {server.name} не завершилась за {timeout}с: {command!r}") from exc
     except FileNotFoundError as exc:
         raise SshError("Команда `ssh` не найдена в системе") from exc
 
@@ -153,11 +151,13 @@ def _target_ssh_transport(target: Target) -> tuple[str, dict[str, str] | None]:
     Ключ (как у Server) или пароль через sshpass — частый случай для сторонних
     хостингов, где SSH дают, но ключ туда не загрузить, только тот же логин/
     пароль, что и для FTP/панели."""
-    if not target.ssh_key and not target.password:
-        raise InvalidArgumentsError(f"Target {target.name!r}: для connection=ssh нужен ssh_key или password")
-
     if target.ssh_key:
-        return f"ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -i {target.ssh_key}", None
+        return (
+            f"ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -i {target.ssh_key}",
+            None,
+        )
+    if not target.password:
+        raise InvalidArgumentsError(f"Target {target.name!r}: для connection=ssh нужен ssh_key или password")
 
     # BatchMode=yes НЕЛЬЗЯ здесь (в отличие от ключевой ветки выше) — эта опция
     # отключает у ssh вообще любой запрос пароля, включая тот самый prompt,

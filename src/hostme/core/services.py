@@ -373,11 +373,7 @@ def deploy(path: str, domain: str | None, server_name: str | None, target_name: 
         webinoly.create_site(server, domain, site_type)
 
         base_domain = next(
-            (
-                d.name
-                for d in server.base_domains
-                if domain != d.name and domain.endswith(f".{d.name}")
-            ),
+            (d.name for d in server.base_domains if domain != d.name and domain.endswith(f".{d.name}")),
             None,
         )
         if base_domain is not None:
@@ -429,9 +425,7 @@ def list_sites() -> tuple[list[config.Site], list[tuple[str, str]]]:
     # через hostme <path> <domain>), но домен на сервере реально есть (обычно
     # заглушка «Сайт в разработке» под будущие поддомены) — не показывать их
     # тут молча "как будто их нет", а явно пометить как служебные без деплоя.
-    bare_base_domains = [
-        (d.name, s.name) for s in servers for d in s.base_domains if d.name not in site_domains
-    ]
+    bare_base_domains = [(d.name, s.name) for s in servers for d in s.base_domains if d.name not in site_domains]
     return sites, bare_base_domains
 
 
@@ -623,10 +617,9 @@ def teardown(domain: str, confirm: bool) -> dict:
 
 
 def set_http_auth(domain: str, user: str | None, password: str | None, off: bool) -> dict:
-    require_site_server(domain)  # только валидация — упадёт понятной ошибкой для target'ов
+    _, server = require_site_server(domain)  # упадёт понятной ошибкой для target'ов
     sites = config.load_sites()
     site = next(s for s in sites if s.domain == domain)
-    server = config.find_server(config.load_servers(), site.server)
 
     if off:
         webinoly.disable_http_auth(server, domain)
@@ -690,7 +683,9 @@ def update_site_config(
             raise InvalidArgumentsError(f"{snippet_path} не найден")
         snippet_content = snippet_path.read_text()
 
-    has_changes = bool(cors) or no_cors or bool(redirect) or bool(remove_redirect) or bool(nginx_snippet) or no_nginx_snippet
+    has_changes = (
+        bool(cors) or no_cors or bool(redirect) or bool(remove_redirect) or bool(nginx_snippet) or no_nginx_snippet
+    )
     if not has_changes:
         return {"message": None, "domain": domain, "site": site}
 
@@ -754,7 +749,9 @@ def run_doctor() -> dict:
             )
         )
     else:
-        checks.append(_check("config_dir", "warn", f"{config.CONFIG_DIR} ещё не создан (будет создан при первой команде)"))
+        checks.append(
+            _check("config_dir", "warn", f"{config.CONFIG_DIR} ещё не создан (будет создан при первой команде)")
+        )
 
     try:
         servers = config.load_servers()
@@ -783,13 +780,19 @@ def run_doctor() -> dict:
     needs_lftp = any(t.connection in ("ftp", "sftp") for t in targets)
     if needs_lftp:
         path = shutil.which("lftp")
-        checks.append(_check("lftp", "ok" if path else "fail", path or "`lftp` не найден в PATH (нужен для ftp/sftp target'ов)"))
+        checks.append(
+            _check("lftp", "ok" if path else "fail", path or "`lftp` не найден в PATH (нужен для ftp/sftp target'ов)")
+        )
 
     needs_sshpass = any(t.connection == "ssh" and t.password and not t.ssh_key for t in targets)
     if needs_sshpass:
         path = shutil.which("sshpass")
         checks.append(
-            _check("sshpass", "ok" if path else "fail", path or "`sshpass` не найден в PATH (нужен для password-based SSH target'ов)")
+            _check(
+                "sshpass",
+                "ok" if path else "fail",
+                path or "`sshpass` не найден в PATH (нужен для password-based SSH target'ов)",
+            )
         )
 
     for server in servers:

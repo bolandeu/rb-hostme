@@ -93,10 +93,7 @@ def load_servers() -> list[Server]:
     data = _yaml.load(SERVERS_FILE.read_text()) or {}
     servers = []
     for raw in data.get("servers", []):
-        domains = [
-            BaseDomain(name=d["name"], default=d.get("default", False))
-            for d in raw.get("base_domains", [])
-        ]
+        domains = [BaseDomain(name=d["name"], default=d.get("default", False)) for d in raw.get("base_domains", [])]
         servers.append(
             Server(
                 name=raw["name"],
@@ -126,10 +123,7 @@ def save_servers(servers: list[Server]) -> None:
             "user": s.user,
             "ssh_key": s.ssh_key,
             "default": s.default,
-            "base_domains": [
-                {"name": d.name, **({"default": True} if d.default else {})}
-                for d in s.base_domains
-            ],
+            "base_domains": [{"name": d.name, **({"default": True} if d.default else {})} for d in s.base_domains],
         }
         for s in servers
     ]
@@ -214,9 +208,7 @@ def load_sites() -> list[Site]:
         if not included_path.exists():
             continue
         included_data = _yaml.load(included_path.read_text()) or {}
-        sites.extend(
-            _site_from_raw(raw, source_file=included) for raw in included_data.get("sites", [])
-        )
+        sites.extend(_site_from_raw(raw, source_file=included) for raw in included_data.get("sites", []))
     return sites
 
 

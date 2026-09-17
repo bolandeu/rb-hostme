@@ -221,7 +221,7 @@ def guard(func: Callable) -> Callable:
             return func(*args, **kwargs)
         except HostmeError as exc:
             emit_error(exc)
-        except (typer.Exit, typer.Abort):
+        except typer.Exit, typer.Abort:
             raise  # уже контролируемый выход — не заворачиваем
         except Exception as exc:  # noqa: BLE001 — в этом и смысл guard: агент не должен увидеть трейсбек
             if _verbose:

@@ -15,7 +15,7 @@ def head_status(domain: str, timeout: float = 8.0) -> str:
     """
     req = urllib.request.Request(f"https://{domain}", method="HEAD")
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 — схема фиксирована: https
             return str(resp.status)
     except urllib.error.HTTPError as exc:
         return str(exc.code)

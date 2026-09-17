@@ -33,7 +33,10 @@ _COMMAND_REFERENCE: list[tuple[str, str]] = [
     ("hostme <domain> config --remove-redirect FROM", "убрать redirect"),
     ("hostme <domain> config --cors ORIGIN [--cors ORIGIN ...]", "задать список разрешённых CORS-origin'ов"),
     ("hostme <domain> config --no-cors", "убрать CORS"),
-    ("hostme <domain> config --nginx-snippet PATH", "залить произвольный локальный .conf как кастомный nginx-сниппет сайта"),
+    (
+        "hostme <domain> config --nginx-snippet PATH",
+        "залить произвольный локальный .conf как кастомный nginx-сниппет сайта",
+    ),
     ("hostme <domain> config --no-nginx-snippet", "убрать кастомный nginx-сниппет"),
     ("hostme <domain> auth --user U --pass P", "включить password protection (HTTP Basic Auth)"),
     ("hostme <domain> auth --off", "выключить password protection"),
@@ -80,7 +83,10 @@ _COMMAND_REFERENCE: list[tuple[str, str]] = [
         "деструктивные команды (свой сервер и target одинаково) требуют --confirm (алиас --yes/-y) в неинтерактивном режиме (--json/--non-interactive) — не пропускают молча",
     ),
     ("--json (в любой позиции — до и после команды)", "чистый JSON вместо rich-вывода, без цвета — для агентов"),
-    ("--non-interactive (в любой позиции)", "никогда не спрашивать подтверждение — упасть понятной ошибкой вместо этого, если оно нужно"),
+    (
+        "--non-interactive (в любой позиции)",
+        "никогда не спрашивать подтверждение — упасть понятной ошибкой вместо этого, если оно нужно",
+    ),
     ("--dry-run (в любой позиции)", "показать, что сделала бы деструктивная команда, ничего не меняя"),
 ]
 

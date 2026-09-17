@@ -37,18 +37,24 @@ def test_run_remote_nonzero_exit_returns_result_without_raising():
 
 
 def test_run_remote_connection_failure_raises():
-    with patch(
-        "hostme.providers.ssh.subprocess.run",
-        return_value=fake_completed(returncode=255, stderr="Permission denied"),
-    ), pytest.raises(ssh.SshError, match="Permission denied"):
+    with (
+        patch(
+            "hostme.providers.ssh.subprocess.run",
+            return_value=fake_completed(returncode=255, stderr="Permission denied"),
+        ),
+        pytest.raises(ssh.SshError, match="Permission denied"),
+    ):
         ssh.run_remote(make_server(), "echo hi")
 
 
 def test_run_remote_timeout_raises():
-    with patch(
-        "hostme.providers.ssh.subprocess.run",
-        side_effect=subprocess.TimeoutExpired(cmd="ssh", timeout=10),
-    ), pytest.raises(ssh.SshError, match="не завершилась"):
+    with (
+        patch(
+            "hostme.providers.ssh.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="ssh", timeout=10),
+        ),
+        pytest.raises(ssh.SshError, match="не завершилась"),
+    ):
         ssh.run_remote(make_server(), "echo hi", timeout=10)
 
 
@@ -92,10 +98,13 @@ def test_rsync_to_failure_raises():
 
 
 def test_rsync_to_timeout_raises():
-    with patch(
-        "hostme.providers.ssh.subprocess.run",
-        side_effect=subprocess.TimeoutExpired(cmd="rsync", timeout=5),
-    ), pytest.raises(ssh.SshError, match="не завершился"):
+    with (
+        patch(
+            "hostme.providers.ssh.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="rsync", timeout=5),
+        ),
+        pytest.raises(ssh.SshError, match="не завершился"),
+    ):
         ssh.rsync_to("/local/path", make_server(), "/remote/path", timeout=5)
 
 

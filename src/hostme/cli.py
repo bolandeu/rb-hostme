@@ -145,14 +145,19 @@ def root(
 
 
 def main() -> None:
+    output.force_utf8_streams()
     # Команды уже под output.guard; это страховка для ошибок в самом
     # root-callback (например, не прочитался bundled SKILL.md для --ai).
+    # Здесь мы уже вне Typer — typer.Exit никто не поймает, поэтому sys.exit.
     try:
         app(args=_translate_argv(sys.argv[1:]))
     except HostmeError as exc:
-        output.emit_error(exc)
+        output.render_error(exc)
+        sys.exit(exc.exit_code)
     except Exception as exc:  # noqa: BLE001 — не даём агенту голый трейсбек
-        output.emit_error(UnexpectedError(exc))
+        error = UnexpectedError(exc)
+        output.render_error(error)
+        sys.exit(error.exit_code)
 
 
 if __name__ == "__main__":

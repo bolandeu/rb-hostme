@@ -171,7 +171,7 @@ def vecho(message: str) -> None:
         err_console.print(f"[dim]{rich_escape(message)}[/dim]")
 
 
-def emit_error(exc: HostmeError) -> NoReturn:
+def render_error(exc: HostmeError) -> None:
     """Ошибка наружу: JSON-конверт в stdout под --json (один поток для парсинга,
     `ok: false` + exit-код говорят, что это ошибка), иначе человеку в stderr."""
     if _json_mode:
@@ -180,7 +180,28 @@ def emit_error(exc: HostmeError) -> NoReturn:
         err_console.print(f"[red]✖[/red] {rich_escape(exc.message)}")
         if exc.action:
             err_console.print(f"  [dim]→ {rich_escape(exc.action)}[/dim]")
+
+
+def emit_error(exc: HostmeError) -> NoReturn:
+    """render_error + выход с кодом ошибки — для кода внутри Typer-команды
+    (typer.Exit там перехватывает сам Typer). Вне приложения — cli.main —
+    зовёт render_error и sys.exit сам."""
+    render_error(exc)
     raise typer.Exit(code=exc.exit_code)
+
+
+def force_utf8_streams() -> None:
+    """stdout/stderr → UTF-8, если ОС выбрала что-то другое.
+
+    Поймано CI на Windows: при перенаправлении вывода в pipe (ровно случай агента,
+    который парсит --json) Python берёт локальную кодировку (cp1252), и первый же
+    символ вне неё («≡», кириллица) роняет команду с UnicodeEncodeError. В
+    интерактивной консоли Windows и на POSIX это no-op.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None and (stream.encoding or "").lower().replace("-", "") != "utf8":
+            reconfigure(encoding="utf-8")
 
 
 # --- гейт деструктивных команд ------------------------------------------------

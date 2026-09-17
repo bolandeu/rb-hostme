@@ -1,6 +1,7 @@
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
+import typer
 from typer.testing import CliRunner
 
 from hostme import output
@@ -8,6 +9,15 @@ from hostme.cli import _translate_argv, app, main, root
 from hostme.errors import HostmeError
 
 runner = CliRunner()
+
+
+def _ctx_with_subcommand() -> MagicMock:
+    # root() возвращается раньше (ctx.invoked_subcommand is None -> exit 2)
+    # только когда подкоманда не была вызвана — юнит-тесты зовут root()
+    # напрямую как раз ради самого callback'а, так что подкоманда есть.
+    ctx = MagicMock()
+    ctx.invoked_subcommand = "some-command"
+    return ctx
 
 
 def test_help_exits_zero() -> None:
@@ -23,17 +33,31 @@ def test_no_command_exits_nonzero() -> None:
 
 def test_root_callback_sets_json_mode() -> None:
     output.set_json_mode(False)
-    root(json_output=True, non_interactive=False, dry_run=False)
+    root(_ctx_with_subcommand(), ai=False, json_output=True, non_interactive=False, dry_run=False)
     assert output.is_json_mode() is True
     output.set_json_mode(False)
 
 
 def test_root_callback_sets_non_interactive_and_dry_run() -> None:
-    root(json_output=False, non_interactive=True, dry_run=True)
+    root(_ctx_with_subcommand(), ai=False, json_output=False, non_interactive=True, dry_run=True)
     assert output.is_non_interactive() is True
     assert output.is_dry_run() is True
     output.set_non_interactive(False)
     output.set_dry_run(False)
+
+
+def test_root_callback_ai_prints_bundled_skill_and_exits() -> None:
+    with pytest.raises(typer.Exit) as exc_info:
+        root(_ctx_with_subcommand(), ai=True, json_output=False, non_interactive=False, dry_run=False)
+    assert exc_info.value.exit_code == 0
+
+
+def test_root_callback_no_subcommand_exits_nonzero() -> None:
+    ctx = MagicMock()
+    ctx.invoked_subcommand = None
+    with pytest.raises(typer.Exit) as exc_info:
+        root(ctx, ai=False, json_output=False, non_interactive=False, dry_run=False)
+    assert exc_info.value.exit_code != 0
 
 
 def test_main_catches_hostme_error_and_exits_with_its_code() -> None:
@@ -72,6 +96,14 @@ def test_main_catches_hostme_error_and_exits_with_its_code() -> None:
             ["--json", "--non-interactive", "mydomain.com", "teardown", "--yes"],
             ["--json", "--non-interactive", "teardown", "mydomain.com", "--yes"],
         ),
+        # --json/--non-interactive/--dry-run должны работать и ПОСЛЕ команды
+        # (conventions.md cli-builder: агент не обязан знать, что это позиционный
+        # флаг) — вынимаются из любой позиции и переносятся в префикс.
+        (["doctor", "--json"], ["--json", "doctor"]),
+        (["help", "--json"], ["--json", "help"]),
+        (["server", "list", "--json"], ["--json", "server", "list"]),
+        (["mydomain.com", "teardown", "--yes", "--json"], ["--json", "teardown", "mydomain.com", "--yes"]),
+        (["./dist", "--json"], ["--json", "_deploy", "./dist"]),
     ],
 )
 def test_translate_argv(argv: list[str], expected: list[str]) -> None:

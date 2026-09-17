@@ -9,24 +9,30 @@ from rich.markup import escape as rich_escape
 
 from hostme import config, output
 from hostme.core import services
+from hostme.data import load_skill_doc
 from hostme.errors import HostmeError
 
 # Форма команд копирует surge.sh (AGENTS.md): `hostme <path> [domain]` для деплоя,
 # `hostme <domain> <subcommand>` для управления — без промежуточных слов вроде "deploy".
 # Typer/Click умеет только статическое дерево подкоманд, поэтому реальный argv
 # переписывается в explicit-подкоманды (_translate_argv) до того, как его увидит Typer.
-_TOP_LEVEL_COMMANDS = {"server", "domain", "target", "list", "open", "doctor", "help", "--help", "-h"}
+_TOP_LEVEL_COMMANDS = {
+    "server", "domain", "target", "skill", "list", "open", "doctor", "help", "--ai", "--help", "-h",
+}
 _DOMAIN_SUBCOMMANDS = {"teardown", "config", "auth", "ssl", "debug", "revs", "rollback", "rollfore", "maintenance"}
-# Глобальные флаги-префиксы — допустимы и до, и вперемешку между собой перед
-# реальной командой; должны пережить переписывание argv в explicit-подкоманды.
+# Глобальные флаги — только на уровне root-callback (Typer не даёт их объявить
+# и там, и на каждой команде одновременно без дублирования на 15+ функций), но
+# агент не обязан помнить, что они идут именно ДО команды — conventions.md
+# (cli-builder) требует, чтобы `<cli> <command> --json` работало наравне с
+# `<cli> --json <command>`. Раз argv и так целиком переписывается под
+# surge-грамматику ниже, тут же вынимаем эти флаги из ЛЮБОЙ позиции и
+# перекладываем в префикс — не только с начала, как раньше.
 _GLOBAL_PREFIX_FLAGS = {"--json", "--non-interactive", "--dry-run"}
 
 
 def _translate_argv(argv: list[str]) -> list[str]:
-    args = list(argv)
-    prefix: list[str] = []
-    while args and args[0] in _GLOBAL_PREFIX_FLAGS:
-        prefix.append(args.pop(0))
+    prefix: list[str] = [a for a in argv if a in _GLOBAL_PREFIX_FLAGS]
+    args = [a for a in argv if a not in _GLOBAL_PREFIX_FLAGS]
 
     if not args or args[0] in _TOP_LEVEL_COMMANDS:
         return prefix + args
@@ -54,6 +60,10 @@ app = typer.Typer(
     help="Личный аналог surge.sh — деплой сайтов на свои VPS.",
     epilog=rich_escape(_GRAMMAR_NOTE),
     no_args_is_help=True,
+    # invoke_without_command: --ai — самостоятельный флаг без подкоманды
+    # (`hostme --ai`), должен отработать и выйти в самом root(), а не упасть
+    # на "Missing command" до того, как callback вообще получит управление.
+    invoke_without_command=True,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
 
@@ -62,9 +72,13 @@ domain_app = typer.Typer(help="Управление служебными дом�
 target_app = typer.Typer(
     help="Управление сторонними хостингами (ftp/sftp/ssh, без Webinoly).", no_args_is_help=True
 )
+skill_app = typer.Typer(
+    help="Синхронизация bundled SKILL.md туда, откуда его читают AI-агенты.", no_args_is_help=True
+)
 app.add_typer(server_app, name="server")
 app.add_typer(domain_app, name="domain")
 app.add_typer(target_app, name="target")
+app.add_typer(skill_app, name="skill")
 
 # Полный справочник — источник и для `hostme help` (человеку/агенту без доступа к
 # репозиторию), и для README/будущего Claude Code skill'а поверх hostme (PRD раздел
@@ -109,6 +123,11 @@ _COMMAND_REFERENCE: list[tuple[str, str]] = [
     ("hostme target list", "таблица target'ов"),
     ("hostme target remove <name> [--force]", "убрать target из реестра"),
     (
+        "hostme skill install [--path PATH]",
+        "записать bundled SKILL.md туда, откуда его читает AI-агент (по умолчанию ~/.claude/skills/hostme/SKILL.md)",
+    ),
+    ("hostme --ai", "напечатать bundled SKILL.md в stdout (для агента без доступа к файлам на диске) и выйти"),
+    (
         "hostme <path> <domain> --target NAME [--yes]",
         (
             "деплой на target вместо Webinoly-сервера (домен обязателен явно, нет base-доменов у target'ов); "
@@ -119,9 +138,9 @@ _COMMAND_REFERENCE: list[tuple[str, str]] = [
         "hostme <domain> teardown --yes / rollback --yes / maintenance --yes",
         "деструктивные команды (свой сервер и target одинаково) требуют --yes в неинтерактивном режиме (--json/--non-interactive) — не пропускают молча",
     ),
-    ("--json (глобальный флаг, до остальных)", "чистый JSON вместо rich-вывода, без цвета — для агентов"),
-    ("--non-interactive (глобальный флаг)", "никогда не спрашивать подтверждение — упасть понятной ошибкой вместо этого, если оно нужно"),
-    ("--dry-run (глобальный флаг)", "показать, что сделала бы деструктивная команда, ничего не меняя"),
+    ("--json (в любой позиции — до и после команды)", "чистый JSON вместо rich-вывода, без цвета — для агентов"),
+    ("--non-interactive (в любой позиции)", "никогда не спрашивать подтверждение — упасть понятной ошибкой вместо этого, если оно нужно"),
+    ("--dry-run (в любой позиции)", "показать, что сделала бы деструктивная команда, ничего не меняя"),
 ]
 
 _NOT_IMPLEMENTED_NOTE = (
@@ -141,6 +160,13 @@ _NOT_IMPLEMENTED_NOTE = (
 
 @app.callback()
 def root(
+    ctx: typer.Context,
+    ai: Annotated[
+        bool,
+        typer.Option(
+            "--ai", help="Напечатать встроенный SKILL.md (для агента без доступа к файлам на диске) и выйти."
+        ),
+    ] = False,
     json_output: Annotated[bool, typer.Option("--json", help="Машиночитаемый вывод (для агентов).")] = False,
     non_interactive: Annotated[
         bool, typer.Option("--non-interactive", help="Никогда не спрашивать подтверждение интерактивно.")
@@ -149,6 +175,14 @@ def root(
         bool, typer.Option("--dry-run", help="Показать, что сделала бы деструктивная команда, ничего не меняя.")
     ] = False,
 ) -> None:
+    if ai:
+        print(load_skill_doc())
+        raise typer.Exit(code=0)
+    # invoke_without_command=True (нужен только для --ai без подкоманды) иначе
+    # молча завершился бы кодом 0 без подкоманды вместо справки/ошибки.
+    if ctx.invoked_subcommand is None:
+        print(ctx.get_help())
+        raise typer.Exit(code=2)
     output.set_json_mode(json_output)
     output.set_non_interactive(non_interactive)
     output.set_dry_run(dry_run)
@@ -306,6 +340,23 @@ def target_remove(
     force: Annotated[bool, typer.Option("--force")] = False,
 ) -> None:
     result = services.remove_target(name, force)
+    output.success(result.pop("message"), **result)
+
+
+# --- skill (bundled SKILL.md для AI-агентов) --------------------------------
+
+
+@skill_app.command("install")
+def skill_install(
+    path: Annotated[
+        str | None,
+        typer.Option("--path", help="Куда записать (по умолчанию — ~/.claude/skills/hostme/SKILL.md)."),
+    ] = None,
+) -> None:
+    """Вызов: hostme skill install [--path PATH] — записать встроенный
+    SKILL.md туда, откуда его читает AI-агент, чтобы документация не
+    расходилась с реальным CLI (см. `hostme --ai`)."""
+    result = services.install_skill(path)
     output.success(result.pop("message"), **result)
 
 

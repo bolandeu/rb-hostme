@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 
 class HostmeError(Exception):
     """Базовый класс ошибок hostme — ловится централизованно в cli.py.
@@ -34,3 +36,20 @@ class ConfirmationRequiredError(HostmeError):
 
     code = "CONFIRMATION_REQUIRED"
     exit_code = 2
+
+
+class CredentialStoreUnavailableError(HostmeError):
+    """Не удалось обратиться к OS keychain — см. credentials/manager.py."""
+
+    code = "CREDENTIAL_STORE_UNAVAILABLE"
+    exit_code = 1
+
+    def __init__(self, provider: str, reason: str) -> None:
+        # Env var name должен совпадать с credentials.manager._env_var_name —
+        # provider обычно домен/хостнейм target'а, "." и "-" в нём не валидны
+        # в имени переменной окружения.
+        safe_provider = re.sub(r"[^A-Za-z0-9]", "_", provider).upper()
+        super().__init__(
+            f"Не удалось обратиться к хранилищу учётных данных ОС для target {provider!r}: {reason}",
+            action=f"Задай пароль через переменную окружения HOSTME_{safe_provider}_PASSWORD вместо хранения в keychain.",
+        )

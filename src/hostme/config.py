@@ -6,6 +6,7 @@ from typing import Literal
 
 from ruamel.yaml import YAML
 
+from hostme.credentials import manager as credentials
 from hostme.errors import HostmeError
 
 CONFIG_DIR = Path.home() / ".config" / "hostme"
@@ -145,22 +146,39 @@ def load_targets() -> list[Target]:
     if not SERVERS_FILE.exists():
         return []
     data = _yaml.load(SERVERS_FILE.read_text()) or {}
-    return [
-        Target(
-            name=raw["name"],
-            connection=raw["connection"],
-            host=raw["host"],
-            user=raw["user"],
-            remote_path=raw.get("remote_path", "/"),
-            password=raw.get("password"),
-            ssh_key=raw.get("ssh_key"),
+    targets = []
+    has_legacy_password = False
+    for raw in data.get("targets", []):
+        name = raw["name"]
+        legacy_password = raw.get("password")
+        if legacy_password:
+            # Миграция со старой версии, где password лежал открытым текстом в
+            # servers.yaml — save_targets() ниже перенесёт его в OS keychain и
+            # перепишет файл уже без поля password.
+            has_legacy_password = True
+            password = legacy_password
+        else:
+            password = credentials.get_secret(name)
+        targets.append(
+            Target(
+                name=name,
+                connection=raw["connection"],
+                host=raw["host"],
+                user=raw["user"],
+                remote_path=raw.get("remote_path", "/"),
+                password=password,
+                ssh_key=raw.get("ssh_key"),
+            )
         )
-        for raw in data.get("targets", [])
-    ]
+    if has_legacy_password:
+        save_targets(targets)
+    return targets
 
 
 def save_targets(targets: list[Target]) -> None:
     # servers: живёт в том же файле (см. save_servers) — та же логика "не затереть".
+    # password НЕ пишем в servers.yaml — секрет уходит только в OS keychain
+    # (credentials/manager.py), сюда — только не-секретные поля подключения.
     _ensure_config_dir()
     data = {}
     if SERVERS_FILE.exists():
@@ -174,7 +192,6 @@ def save_targets(targets: list[Target]) -> None:
             "host": t.host,
             "user": t.user,
             "remote_path": t.remote_path,
-            "password": t.password,
             "ssh_key": t.ssh_key,
         }
         for t in targets
@@ -182,6 +199,9 @@ def save_targets(targets: list[Target]) -> None:
     with SERVERS_FILE.open("w") as f:
         _yaml.dump(data, f)
     SERVERS_FILE.chmod(0o600)
+    for t in targets:
+        if t.password:
+            credentials.store_secret(t.name, t.password)
 
 
 def find_target(targets: list[Target], name: str) -> Target | None:

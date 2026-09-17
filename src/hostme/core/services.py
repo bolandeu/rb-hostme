@@ -11,7 +11,8 @@ import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
-from hostme import config, ftp, output, webinoly
+from hostme import config, data, ftp, output, webinoly
+from hostme.credentials import manager as credentials
 from hostme.errors import HostmeError, InvalidArgumentsError
 from hostme.ssh import rsync_from_target, rsync_to, rsync_to_target
 
@@ -201,6 +202,7 @@ def remove_target(name: str, force: bool) -> dict:
 
     targets.remove(target)
     config.save_targets(targets)
+    credentials.delete_secret(name)
     return {"message": f"Target {name} удалён из реестра", "target": name}
 
 
@@ -825,3 +827,19 @@ def run_doctor() -> dict:
 
     ok = not any(c["status"] == "fail" for c in checks)
     return {"ok": ok, "checks": checks}
+
+
+# --- skill (bundled SKILL.md для AI-агентов, см. hostme --ai) --------------
+
+DEFAULT_SKILL_INSTALL_PATH = Path.home() / ".claude" / "skills" / "hostme" / "SKILL.md"
+
+
+def install_skill(path: str | None) -> dict:
+    """Синхронизирует bundled `src/hostme/data/SKILL.md` (единственный источник
+    правды, см. `hostme --ai`) туда, откуда его читает AI-агент — по умолчанию
+    Claude Code skill, чтобы документация не расходилась с реальным CLI, как
+    это уже случалось (раздел «Staying in sync» в самом SKILL.md)."""
+    dest = Path(path).expanduser() if path else DEFAULT_SKILL_INSTALL_PATH
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(data.load_skill_doc(), encoding="utf-8")
+    return {"message": f"SKILL.md записан в {dest}", "path": str(dest)}

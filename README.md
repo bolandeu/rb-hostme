@@ -6,11 +6,35 @@
 
 ## Установка
 
+На любой другой машине (репозиторий приватный — нужен `gh auth login`,
+который настраивает git credential helper; на машине без интерактивного
+логина — `gh auth setup-git`, или SSH-форма ниже):
+
+```
+uv tool install "git+https://github.com/bolandeu/hostme.git"
+```
+
+Обновление после новых коммитов: `uv tool upgrade hostme`. Через SSH (если
+HTTPS отказывает в авторизации):
+
+```
+uv tool install "git+ssh://git@github.com/bolandeu/hostme.git"
+```
+
+При разработке самого `hostme` (в этом репозитории) — editable-режим, чтобы
+изменения в коде подхватывались без переустановки:
+
 ```
 uv tool install --editable .
 ```
 
-После этого `hostme` доступен как обычная команда в PATH из любой директории.
+**После изменения `[project.scripts]` в `pyproject.toml`** editable-режим
+не перегенерирует уже установленный launcher-скрипт сам — обязательно
+`uv tool install --editable . --force`, иначе `hostme` из PATH продолжит
+звать старый entry point (см. AGENTS.md).
+
+После любого из вариантов `hostme` доступен как обычная команда в PATH из
+любой директории.
 
 ## Требования к серверу перед `server add`/`server init`
 

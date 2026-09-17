@@ -1,6 +1,6 @@
 [project]
 name = "hostme"
-version = "0.1.0"
+version = "0.2.0"
 description = "Личный аналог surge.sh — CLI-деплой статических сайтов и PHP на свои VPS через Webinoly"
 authors = [
     { name = "Roman Bolandau", email = "r.bolandau@gmail.com" }

@@ -9,8 +9,8 @@ from rich.markup import escape as rich_escape
 
 from hostme import config, output
 from hostme.core import services
+from hostme.core.errors import HostmeError
 from hostme.data import load_skill_doc
-from hostme.errors import HostmeError
 
 # Форма команд копирует surge.sh (AGENTS.md): `hostme <path> [domain]` для деплоя,
 # `hostme <domain> <subcommand>` для управления — без промежуточных слов вроде "deploy".

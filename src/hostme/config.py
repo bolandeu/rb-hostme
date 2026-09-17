@@ -6,8 +6,8 @@ from typing import Literal
 
 from ruamel.yaml import YAML
 
+from hostme.core.errors import InvalidArgumentsError
 from hostme.credentials import manager as credentials
-from hostme.errors import HostmeError
 
 CONFIG_DIR = Path.home() / ".config" / "hostme"
 SERVERS_FILE = CONFIG_DIR / "servers.yaml"
@@ -21,10 +21,6 @@ TARGET_BACKUPS_DIR = CONFIG_DIR / "target-backups"
 _yaml = YAML()
 _yaml.preserve_quotes = True
 _yaml.indent(mapping=2, sequence=4, offset=2)
-
-
-class ConfigError(HostmeError):
-    pass
 
 
 @dataclass
@@ -344,7 +340,7 @@ def normalize_domain(domain: str) -> str:
     try:
         return domain.encode("idna").decode("ascii")
     except UnicodeError as exc:
-        raise ConfigError(f"Не удалось привести домен {domain!r} к ASCII/punycode: {exc}") from exc
+        raise InvalidArgumentsError(f"Не удалось привести домен {domain!r} к ASCII/punycode: {exc}") from exc
 
 
 def slugify(name: str) -> str:
@@ -380,7 +376,7 @@ def check_collision(sites: list[Site], domain: str, local_path: str) -> None:
     existing_path = str(Path(existing.local_path).resolve())
     new_path = str(Path(local_path).resolve())
     if existing_path != new_path:
-        raise ConfigError(
+        raise InvalidArgumentsError(
             f"Домен {domain} уже используется другим сайтом "
             f"(local_path={existing.local_path}). "
             f"Укажи другой домен или удали существующий сайт (teardown)."

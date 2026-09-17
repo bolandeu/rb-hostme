@@ -7,7 +7,7 @@ import re
 import keyring
 import keyring.errors
 
-from hostme.errors import CredentialStoreUnavailableError
+from hostme.core.errors import CredentialStoreUnavailableError
 
 _PACKAGE_NAME = "hostme"
 

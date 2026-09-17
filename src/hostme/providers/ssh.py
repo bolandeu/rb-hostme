@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from hostme.config import Server, Target
-from hostme.errors import HostmeError
+from hostme.core.errors import InvalidArgumentsError, ProviderError
 
 DEFAULT_TIMEOUT = 30
 LONG_TIMEOUT = 300  # server init / webinoly install
@@ -21,7 +21,9 @@ _CONTROL_DIR = Path.home() / ".cache" / "hostme" / "ssh-control"
 _CONTROL_PERSIST = "60s"  # держим сокет после последней команды — не оставлять сессию навечно
 
 
-class SshError(HostmeError):
+class SshError(ProviderError):
+    provider = "ssh"
+
     def __init__(self, message: str, result: RemoteResult | None = None) -> None:
         super().__init__(message)
         self.result = result
@@ -147,7 +149,7 @@ def _target_ssh_transport(target: Target) -> tuple[str, dict[str, str] | None]:
     хостингов, где SSH дают, но ключ туда не загрузить, только тот же логин/
     пароль, что и для FTP/панели."""
     if not target.ssh_key and not target.password:
-        raise SshError(f"Target {target.name!r}: для connection=ssh нужен ssh_key или password")
+        raise InvalidArgumentsError(f"Target {target.name!r}: для connection=ssh нужен ssh_key или password")
 
     if target.ssh_key:
         return f"ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -i {target.ssh_key}", None

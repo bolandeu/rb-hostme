@@ -1,12 +1,11 @@
 from unittest.mock import patch
 
 import pytest
-import typer
 
 from hostme import output
 from hostme.config import BaseDomain, Server, Site, Target
 from hostme.core import services
-from hostme.errors import ConfirmationRequiredError, HostmeError
+from hostme.core.errors import AbortedError, HostmeError, InvalidArgumentsError
 
 
 @pytest.fixture(autouse=True)
@@ -59,7 +58,7 @@ def test_confirm_target_action_yes_flag_skips_prompt() -> None:
 
 def test_confirm_target_action_json_without_yes_raises_instead_of_bypassing() -> None:
     output.set_json_mode(True)
-    with pytest.raises(ConfirmationRequiredError, match="--yes"):
+    with pytest.raises(InvalidArgumentsError, match="--yes"):
         services.confirm_target_action("Деплой x", make_target(), yes=False)
 
 
@@ -69,10 +68,10 @@ def test_confirm_target_action_interactive_confirmed_proceeds() -> None:
     mock_confirm.assert_called_once()
 
 
-def test_confirm_target_action_interactive_declined_exits() -> None:
+def test_confirm_target_action_interactive_declined_raises_aborted() -> None:
     with (
         patch("hostme.output.typer.confirm", return_value=False),
-        pytest.raises(typer.Exit),
+        pytest.raises(AbortedError),
     ):
         services.confirm_target_action("Деплой x", make_target(), yes=False)
 
@@ -121,7 +120,7 @@ def test_maintenance_server_site_without_yes_requires_confirmation() -> None:
         patch("hostme.core.services.config.load_servers", return_value=[server]),
         patch("hostme.core.services.config.find_server", return_value=server),
         patch("hostme.core.services.webinoly.ensure_releases_layout") as mock_ensure,
-        pytest.raises(ConfirmationRequiredError, match="--yes"),
+        pytest.raises(InvalidArgumentsError, match="--yes"),
     ):
         services.set_maintenance("a.dev", yes=False)
     mock_ensure.assert_not_called()
@@ -140,7 +139,7 @@ def test_maintenance_target_site_requires_confirmation_and_backs_up_first() -> N
         patch("hostme.output.typer.confirm", return_value=False),
         patch("hostme.core.services._backup_target_before_deploy") as mock_backup,
         patch("hostme.core.services.rsync_to_target") as mock_rsync_target,
-        pytest.raises(typer.Exit),
+        pytest.raises(AbortedError),
     ):
         services.set_maintenance("a.dev", yes=False)
 
@@ -218,7 +217,7 @@ def test_teardown_own_server_json_without_yes_raises_instead_of_bypassing() -> N
         patch("hostme.core.services.config.load_servers", return_value=[server]),
         patch("hostme.core.services.config.find_server", return_value=server),
         patch("hostme.core.services.webinoly.delete_site") as mock_delete,
-        pytest.raises(ConfirmationRequiredError, match="--yes"),
+        pytest.raises(InvalidArgumentsError, match="--yes"),
     ):
         services.teardown("a.dev", yes=False)
     mock_delete.assert_not_called()
@@ -252,7 +251,7 @@ def test_rollback_own_server_without_yes_requires_confirmation() -> None:
         patch("hostme.core.services.webinoly.list_releases", return_value=["r0", "r1"]),
         patch("hostme.core.services.webinoly.current_release", return_value="r1"),
         patch("hostme.core.services.webinoly.switch_release") as mock_switch,
-        pytest.raises(ConfirmationRequiredError, match="--yes"),
+        pytest.raises(InvalidArgumentsError, match="--yes"),
     ):
         services.rollback("a.dev", yes=False)
     mock_switch.assert_not_called()

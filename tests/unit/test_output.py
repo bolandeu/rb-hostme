@@ -2,10 +2,9 @@ import json
 from unittest.mock import patch
 
 import pytest
-import typer
 
 from hostme import output
-from hostme.errors import ConfirmationRequiredError, HostmeError, InvalidArgumentsError
+from hostme.core.errors import AbortedError, HostmeError, InvalidArgumentsError
 
 
 @pytest.fixture(autouse=True)
@@ -119,13 +118,13 @@ def test_require_confirmation_yes_skips_prompt():
 
 def test_require_confirmation_json_without_yes_raises_instead_of_bypassing():
     output.set_json_mode(True)
-    with pytest.raises(ConfirmationRequiredError, match="--yes"):
+    with pytest.raises(InvalidArgumentsError, match="--yes"):
         output.require_confirmation("Снести сайт a.dev", yes=False)
 
 
 def test_require_confirmation_non_interactive_without_yes_raises():
     output.set_non_interactive(True)
-    with pytest.raises(ConfirmationRequiredError, match="--yes"):
+    with pytest.raises(InvalidArgumentsError, match="--yes"):
         output.require_confirmation("Снести сайт a.dev", yes=False)
 
 
@@ -135,9 +134,9 @@ def test_require_confirmation_interactive_confirmed_proceeds():
     mock_confirm.assert_called_once()
 
 
-def test_require_confirmation_interactive_declined_exits():
+def test_require_confirmation_interactive_declined_raises_aborted():
     with (
         patch("hostme.output.typer.confirm", return_value=False),
-        pytest.raises(typer.Exit),
+        pytest.raises(AbortedError),
     ):
         output.require_confirmation("Снести сайт a.dev", yes=False)

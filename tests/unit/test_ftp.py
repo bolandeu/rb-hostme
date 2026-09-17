@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pytest
 
 from hostme.config import Target
-from hostme.errors import HostmeError
+from hostme.core.errors import HostmeError
 from hostme.providers import ftp
 
 

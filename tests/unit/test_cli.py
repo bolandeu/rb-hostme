@@ -6,7 +6,7 @@ from typer.testing import CliRunner
 
 from hostme import output
 from hostme.cli import _translate_argv, app, main, root
-from hostme.errors import HostmeError
+from hostme.core.errors import HostmeError
 
 runner = CliRunner()
 

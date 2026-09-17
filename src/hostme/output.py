@@ -8,7 +8,7 @@ import typer
 from rich.console import Console
 from rich.markup import escape as rich_escape
 
-from hostme.errors import ConfirmationRequiredError, HostmeError
+from hostme.core.errors import AbortedError, HostmeError, InvalidArgumentsError
 
 console = Console()
 err_console = Console(stderr=True)
@@ -97,9 +97,9 @@ def require_confirmation(description: str, yes: bool) -> None:
     if yes:
         return
     if is_non_interactive():
-        raise ConfirmationRequiredError(
+        raise InvalidArgumentsError(
             f"{description} требует явного --yes в неинтерактивном режиме (--json/--non-interactive)",
             action="Повтори с --yes, если это осознанное решение.",
         )
     if not typer.confirm(f"{description}. Продолжить?"):
-        raise typer.Exit(code=1)
+        raise AbortedError(description)

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from hostme.config import Server
-from hostme.errors import HostmeError
+from hostme.core.errors import ProviderError
 from hostme.providers.ssh import RemoteResult, run_remote
 
 SiteType = Literal["html", "php"]
@@ -20,7 +20,9 @@ _LIST_LINE_RE = re.compile(r"^\s*\+\s+(\S+)\s+((?:\([^)]*\))+)\s*$", re.MULTILIN
 _TAG_RE = re.compile(r"\(([^)]*)\)")
 
 
-class WebinolyError(HostmeError):
+class WebinolyError(ProviderError):
+    provider = "webinoly"
+
     def __init__(self, message: str, result: RemoteResult | None = None) -> None:
         super().__init__(message)
         self.result = result

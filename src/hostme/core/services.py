@@ -12,8 +12,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from hostme import config, data, output
+from hostme.core.errors import HostmeError, InvalidArgumentsError
 from hostme.credentials import manager as credentials
-from hostme.errors import HostmeError, InvalidArgumentsError
 from hostme.providers import ftp, http, webinoly
 from hostme.providers.ssh import rsync_from_target, rsync_to, rsync_to_target
 
@@ -27,9 +27,9 @@ def require_unique_name(name: str) -> None:
     резолвится в любой из них по имени без квалификатора) — нельзя допустить
     коллизию между `hostme server add` и `hostme target add`."""
     if config.find_server(config.load_servers(), name) is not None:
-        raise HostmeError(f"Имя {name!r} уже занято сервером (hostme server list)")
+        raise InvalidArgumentsError(f"Имя {name!r} уже занято сервером (hostme server list)")
     if config.find_target(config.load_targets(), name) is not None:
-        raise HostmeError(f"Имя {name!r} уже занято target'ом (hostme target list)")
+        raise InvalidArgumentsError(f"Имя {name!r} уже занято target'ом (hostme target list)")
 
 
 def add_server(name: str, host: str, user: str, key: str, default: bool) -> dict:
@@ -49,7 +49,7 @@ def init_server(name: str) -> dict:
     servers = config.load_servers()
     server = config.find_server(servers, name)
     if server is None:
-        raise HostmeError(f"Сервер {name!r} не найден. Сначала `hostme server add`.")
+        raise InvalidArgumentsError(f"Сервер {name!r} не найден. Сначала `hostme server add`.")
     output.info(f"Устанавливаю Webinoly на {server.name}...")
     webinoly.install(server)
     webinoly.enable_sftp(server)
@@ -62,7 +62,7 @@ def update_server(name: str) -> dict:
     servers = config.load_servers()
     server = config.find_server(servers, name)
     if server is None:
-        raise HostmeError(f"Сервер {name!r} не найден")
+        raise InvalidArgumentsError(f"Сервер {name!r} не найден")
     output.info(f"Обновляю Webinoly на {server.name}...")
     webinoly.update_webinoly(server)
     return {"message": f"Webinoly на {name} обновлён", "server": name}
@@ -72,13 +72,13 @@ def remove_server(name: str, force: bool) -> dict:
     servers = config.load_servers()
     server = config.find_server(servers, name)
     if server is None:
-        raise HostmeError(f"Сервер {name!r} не найден")
+        raise InvalidArgumentsError(f"Сервер {name!r} не найден")
 
     sites = config.load_sites()
     remaining = [s for s in sites if s.server == name]
     if remaining and not force:
         domains = ", ".join(s.domain for s in remaining)
-        raise HostmeError(
+        raise InvalidArgumentsError(
             f"На сервере {name} остались сайты в реестре ({domains}). "
             f"Сначала `hostme <domain> teardown` их, либо повтори с --force."
         )
@@ -96,10 +96,10 @@ def add_domain(server_name: str, domain: str, default: bool) -> dict:
     servers = config.load_servers()
     server = config.find_server(servers, server_name)
     if server is None:
-        raise HostmeError(f"Сервер {server_name!r} не найден")
+        raise InvalidArgumentsError(f"Сервер {server_name!r} не найден")
 
     if any(d.name == domain for s in servers for d in s.base_domains):
-        raise HostmeError(f"Домен {domain} уже зарегистрирован")
+        raise InvalidArgumentsError(f"Домен {domain} уже зарегистрирован")
 
     has_default = config.default_base_domain(servers) is not None
     if default:
@@ -116,7 +116,7 @@ def set_default_domain(domain: str) -> dict:
     servers = config.load_servers()
     target = next((d for s in servers for d in s.base_domains if d.name == domain), None)
     if target is None:
-        raise HostmeError(f"Домен {domain!r} не зарегистрирован. Сначала `hostme domain add`.")
+        raise InvalidArgumentsError(f"Домен {domain!r} не зарегистрирован. Сначала `hostme domain add`.")
 
     for s in servers:
         for d in s.base_domains:
@@ -135,7 +135,7 @@ def remove_domain(domain: str) -> dict:
     servers = config.load_servers()
     server = next((s for s in servers if any(d.name == domain for d in s.base_domains)), None)
     if server is None:
-        raise HostmeError(f"Домен {domain!r} не зарегистрирован")
+        raise InvalidArgumentsError(f"Домен {domain!r} не зарегистрирован")
 
     target = next(d for d in server.base_domains if d.name == domain)
     was_default = target.default
@@ -190,13 +190,13 @@ def remove_target(name: str, force: bool) -> dict:
     targets = config.load_targets()
     target = config.find_target(targets, name)
     if target is None:
-        raise HostmeError(f"Target {name!r} не найден")
+        raise InvalidArgumentsError(f"Target {name!r} не найден")
 
     sites = config.load_sites()
     remaining = [s for s in sites if s.server == name]
     if remaining and not force:
         domains = ", ".join(s.domain for s in remaining)
-        raise HostmeError(
+        raise InvalidArgumentsError(
             f"На target {name} остались сайты в реестре ({domains}). "
             f"Сначала `hostme <domain> teardown` их, либо повтори с --force."
         )
@@ -276,7 +276,7 @@ def deploy_to_target(local_path: Path, domain: str | None, target_name: str, yes
 
     target = config.find_target(config.load_targets(), target_name)
     if target is None:
-        raise HostmeError(f"Target {target_name!r} не найден. Сначала `hostme target add`.")
+        raise InvalidArgumentsError(f"Target {target_name!r} не найден. Сначала `hostme target add`.")
 
     if output.is_dry_run():
         return {
@@ -334,7 +334,7 @@ def teardown_target(target: config.Target) -> None:
 def deploy(path: str, domain: str | None, server_name: str | None, target_name: str | None, yes: bool) -> dict:
     local_path = Path(path).expanduser().resolve()
     if not local_path.is_dir():
-        raise HostmeError(f"{local_path} не является директорией")
+        raise InvalidArgumentsError(f"{local_path} не является директорией")
 
     if target_name is not None:
         return deploy_to_target(local_path, domain, target_name, yes)
@@ -345,7 +345,7 @@ def deploy(path: str, domain: str | None, server_name: str | None, target_name: 
     if domain is None:
         domain = config.default_domain(str(local_path), servers)
         if domain is None:
-            raise HostmeError(
+            raise InvalidArgumentsError(
                 "Домен не указан, и нет ни одного служебного домена по умолчанию. "
                 "Укажи домен явно или сначала `hostme domain add`."
             )
@@ -354,7 +354,7 @@ def deploy(path: str, domain: str | None, server_name: str | None, target_name: 
 
     server = config.resolve_server(servers, sites, domain, explicit_server=server_name)
     if server is None:
-        raise HostmeError(f"Не удалось определить сервер для домена {domain}. Укажи --server явно.")
+        raise InvalidArgumentsError(f"Не удалось определить сервер для домена {domain}. Укажи --server явно.")
 
     config.check_collision(sites, domain, str(local_path))
 
@@ -438,7 +438,7 @@ def list_sites() -> tuple[list[config.Site], list[tuple[str, str]]]:
 def find_site(domain: str) -> config.Site:
     site = next((s for s in config.load_sites() if s.domain == domain), None)
     if site is None:
-        raise HostmeError(f"Сайт {domain} не найден в реестре")
+        raise InvalidArgumentsError(f"Сайт {domain} не найден в реестре")
     return site
 
 
@@ -454,12 +454,12 @@ def require_site_server(domain: str) -> tuple[config.Site, config.Server]:
         return site, server
     target = config.find_target(config.load_targets(), site.server)
     if target is not None:
-        raise HostmeError(
+        raise InvalidArgumentsError(
             f"{domain} задеплоен на target {site.server!r} (сторонний хостинг, "
             f"connection={target.connection}) — эта команда Webinoly-специфична, "
             f"для target'ов не поддерживается"
         )
-    raise HostmeError(f"Сервер {site.server!r} для сайта {domain} не найден в конфиге")
+    raise InvalidArgumentsError(f"Сервер {site.server!r} для сайта {domain} не найден в конфиге")
 
 
 def get_revisions(domain: str) -> dict:
@@ -511,7 +511,7 @@ def rollback(domain: str, yes: bool) -> dict:
 
     site_target = config.find_target(config.load_targets(), site.server)
     if site_target is None:
-        raise HostmeError(f"Сервер/target {site.server!r} для сайта {domain} не найден в конфиге")
+        raise InvalidArgumentsError(f"Сервер/target {site.server!r} для сайта {domain} не найден в конфиге")
 
     if output.is_dry_run():
         return {
@@ -572,7 +572,7 @@ def set_maintenance(domain: str, yes: bool) -> dict:
 
     target = config.find_target(config.load_targets(), site.server)
     if target is None:
-        raise HostmeError(f"Сервер/target {site.server!r} для сайта {domain} не найден в конфиге")
+        raise InvalidArgumentsError(f"Сервер/target {site.server!r} для сайта {domain} не найден в конфиге")
 
     if output.is_dry_run():
         return {
@@ -613,7 +613,7 @@ def teardown(domain: str, yes: bool) -> dict:
         webinoly.delete_site(server, domain)
     else:
         if target is None:
-            raise HostmeError(f"Сервер/target {site.server!r} для сайта {domain} не найден в конфиге")
+            raise InvalidArgumentsError(f"Сервер/target {site.server!r} для сайта {domain} не найден в конфиге")
         teardown_target(target)
 
     sites = config.load_sites()
@@ -668,7 +668,7 @@ def update_site_config(
     sites = config.load_sites()
     site = next((s for s in sites if s.domain == domain), None)
     if site is None:
-        raise HostmeError(f"Сайт {domain} не найден в реестре")
+        raise InvalidArgumentsError(f"Сайт {domain} не найден в реестре")
 
     if force_https and not (cors or no_cors or redirect or remove_redirect):
         return {
@@ -687,7 +687,7 @@ def update_site_config(
     if nginx_snippet:
         snippet_path = Path(nginx_snippet).expanduser()
         if not snippet_path.is_file():
-            raise HostmeError(f"{snippet_path} не найден")
+            raise InvalidArgumentsError(f"{snippet_path} не найден")
         snippet_content = snippet_path.read_text()
 
     has_changes = bool(cors) or no_cors or bool(redirect) or bool(remove_redirect) or bool(nginx_snippet) or no_nginx_snippet

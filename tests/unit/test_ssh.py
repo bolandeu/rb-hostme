@@ -4,6 +4,7 @@ from unittest.mock import patch
 import pytest
 
 from hostme.config import Server
+from hostme.core.errors import InvalidArgumentsError
 from hostme.providers import ssh
 
 
@@ -132,7 +133,7 @@ def test_rsync_to_target_with_password_uses_sshpass_env_not_argv():
 
 
 def test_rsync_to_target_without_key_or_password_raises():
-    with pytest.raises(ssh.SshError, match="ssh_key или password"):
+    with pytest.raises(InvalidArgumentsError, match="ssh_key или password"):
         ssh.rsync_to_target("/local/path", make_target())
 
 

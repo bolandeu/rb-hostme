@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
+import shlex
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,6 +12,7 @@ from hostme.config import Server, Target
 from hostme.core.errors import InvalidArgumentsError, ProviderError
 
 DEFAULT_TIMEOUT = 30
+_log = logging.getLogger(__name__)
 LONG_TIMEOUT = 300  # server init / webinoly install
 
 # Много коротких SSH-подключений подряд (site_exists → create_site → enable_ssl →
@@ -75,6 +78,7 @@ def _ssh_command_string(server: Server) -> str:
 
 
 def run_remote(server: Server, command: str, timeout: int = DEFAULT_TIMEOUT) -> RemoteResult:
+    _log.debug("ssh %s: %s", server.ssh_target, command)
     try:
         proc = subprocess.run(
             [*_ssh_base_args(server), command],
@@ -118,6 +122,7 @@ def rsync_to(
         local,
         f"{server.ssh_target}:{remote}",
     ]
+    _log.debug("%s", shlex.join(args))
     try:
         proc = subprocess.run(args, capture_output=True, text=True, timeout=timeout, check=False)
     except subprocess.TimeoutExpired as exc:
@@ -168,6 +173,7 @@ def _target_ssh_transport(target: Target) -> tuple[str, dict[str, str] | None]:
 
 
 def _run_target_rsync(args: list[str], target: Target, timeout: int, env: dict[str, str] | None) -> RemoteResult:
+    _log.debug("%s", shlex.join(args))  # пароль сюда не попадает — он в env SSHPASS, не в argv
     try:
         proc = subprocess.run(args, capture_output=True, text=True, timeout=timeout, env=env, check=False)
     except subprocess.TimeoutExpired as exc:

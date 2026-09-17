@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
 import subprocess
 
 from hostme.config import Target
 from hostme.core.errors import InvalidArgumentsError, ProviderError
 
 DEFAULT_TIMEOUT = 300
+_log = logging.getLogger(__name__)
 
 
 class FtpError(ProviderError):
@@ -27,6 +29,8 @@ def _remote_path(target: Target) -> str:
 
 
 def _run_lftp(script: str, target: Target, timeout: int) -> None:
+    # Скрипт целиком не логируем — в нём `open -u user,password`.
+    _log.debug("lftp %s@%s (%s), %d строк скрипта", target.user, target.host, target.connection, script.count("\n"))
     try:
         proc = subprocess.run(["lftp"], input=script, capture_output=True, text=True, timeout=timeout, check=False)
     except subprocess.TimeoutExpired as exc:

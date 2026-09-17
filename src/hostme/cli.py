@@ -9,7 +9,8 @@ from rich.markup import escape as rich_escape
 
 from hostme import config, output
 from hostme.core import services
-from hostme.core.errors import HostmeError
+from hostme.core.errors import HostmeError, UnexpectedError
+from hostme.core.version import DEV_VERSION, installed_version, package_summary
 from hostme.data import load_skill_doc
 
 # Форма команд копирует surge.sh (AGENTS.md): `hostme <path> [domain]` для деплоя,
@@ -17,7 +18,7 @@ from hostme.data import load_skill_doc
 # Typer/Click умеет только статическое дерево подкоманд, поэтому реальный argv
 # переписывается в explicit-подкоманды (_translate_argv) до того, как его увидит Typer.
 _TOP_LEVEL_COMMANDS = {
-    "server", "domain", "target", "skill", "list", "open", "doctor", "help", "--ai", "--help", "-h",
+    "server", "domain", "target", "skill", "list", "open", "doctor", "help", "--ai", "--version", "--help", "-h",
 }
 _DOMAIN_SUBCOMMANDS = {"teardown", "config", "auth", "ssl", "debug", "revs", "rollback", "rollfore", "maintenance"}
 # Глобальные флаги — только на уровне root-callback (Typer не даёт их объявить
@@ -27,7 +28,7 @@ _DOMAIN_SUBCOMMANDS = {"teardown", "config", "auth", "ssl", "debug", "revs", "ro
 # `<cli> --json <command>`. Раз argv и так целиком переписывается под
 # surge-грамматику ниже, тут же вынимаем эти флаги из ЛЮБОЙ позиции и
 # перекладываем в префикс — не только с начала, как раньше.
-_GLOBAL_PREFIX_FLAGS = {"--json", "--non-interactive", "--dry-run"}
+_GLOBAL_PREFIX_FLAGS = {"--json", "--non-interactive", "--dry-run", "--quiet", "--verbose"}
 
 
 def _translate_argv(argv: list[str]) -> list[str]:
@@ -40,6 +41,11 @@ def _translate_argv(argv: list[str]) -> list[str]:
     if len(args) >= 2 and args[1] in _DOMAIN_SUBCOMMANDS:
         domain, subcmd, *rest = args
         return prefix + [subcmd, domain, *rest]
+
+    # `hostme teardown --help` — просьба о справке по teardown, а не деплой папки
+    # с именем "teardown" (иначе показывалась бы справка деплоя, сбивая с толку).
+    if args[0] in _DOMAIN_SUBCOMMANDS and (len(args) == 1 or args[1] in ("-h", "--help")):
+        return prefix + args
 
     return prefix + ["_deploy", *args]
 
@@ -55,26 +61,21 @@ _GRAMMAR_NOTE = """
 полного справочника с примерами (или README.md/PRD.md в репозитории).
 """
 
+# Голый `hostme` — точка входа для человека и агента: имя + версия + описание,
+# затем команды с первой строкой docstring. Без no_args_is_help (он выходит с
+# кодом 2) — root() ниже печатает справку и выходит с 0 (conventions.md).
 app = typer.Typer(
     name="hostme",
-    help="Личный аналог surge.sh — деплой сайтов на свои VPS.",
+    help=f"hostme {installed_version() or DEV_VERSION} — {package_summary() or 'деплой сайтов на свои VPS.'}",
     epilog=rich_escape(_GRAMMAR_NOTE),
-    no_args_is_help=True,
-    # invoke_without_command: --ai — самостоятельный флаг без подкоманды
-    # (`hostme --ai`), должен отработать и выйти в самом root(), а не упасть
-    # на "Missing command" до того, как callback вообще получит управление.
     invoke_without_command=True,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
 
-server_app = typer.Typer(help="Управление серверами.", no_args_is_help=True)
-domain_app = typer.Typer(help="Управление служебными доменами.", no_args_is_help=True)
-target_app = typer.Typer(
-    help="Управление сторонними хостингами (ftp/sftp/ssh, без Webinoly).", no_args_is_help=True
-)
-skill_app = typer.Typer(
-    help="Синхронизация bundled SKILL.md туда, откуда его читают AI-агенты.", no_args_is_help=True
-)
+server_app = output.group("Управление серверами.")
+domain_app = output.group("Управление служебными доменами.")
+target_app = output.group("Управление сторонними хостингами (ftp/sftp/ssh, без Webinoly).")
+skill_app = output.group("Синхронизация bundled SKILL.md туда, откуда его читают AI-агенты.")
 app.add_typer(server_app, name="server")
 app.add_typer(domain_app, name="domain")
 app.add_typer(target_app, name="target")
@@ -86,7 +87,7 @@ app.add_typer(skill_app, name="skill")
 # — если команда здесь есть, она должна работать; чего нет в MVP, помечено явно.
 _COMMAND_REFERENCE: list[tuple[str, str]] = [
     ("hostme <path> [domain] [--server NAME]", "деплой/обновление сайта (без слова deploy)"),
-    ("hostme <domain> teardown [--yes]", "снести сайт на сервере и убрать из реестра"),
+    ("hostme <domain> teardown [--confirm]", "снести сайт на сервере и убрать из реестра"),
     ("hostme <domain> config", "показать настройки сайта"),
     ("hostme <domain> config --redirect FROM=TO", "добавить/обновить redirect"),
     ("hostme <domain> config --remove-redirect FROM", "убрать redirect"),
@@ -98,10 +99,10 @@ _COMMAND_REFERENCE: list[tuple[str, str]] = [
     ("hostme <domain> auth --off", "выключить password protection"),
     ("hostme <domain> debug [--error] [--lines N]", "HTTP-статус + хвост access/error-лога"),
     ("hostme <domain> revs", "список релизов сайта (для rollback/rollfore)"),
-    ("hostme <domain> rollback [--yes]", "откатить сайт на предыдущий релиз"),
+    ("hostme <domain> rollback [--confirm]", "откатить сайт на предыдущий релиз"),
     ("hostme <domain> rollfore", "вернуть сайт на следующий (после rollback) релиз"),
     (
-        "hostme <domain> maintenance [--yes]",
+        "hostme <domain> maintenance [--confirm]",
         "очистить сайт, оставив встроенный плейсхолдер «в разработке»; старое содержимое не теряется — откат через rollback",
     ),
     ("hostme list", "таблица сайтов из реестра + служебные домены без деплоя через hostme (помечены отдельно)"),
@@ -128,15 +129,15 @@ _COMMAND_REFERENCE: list[tuple[str, str]] = [
     ),
     ("hostme --ai", "напечатать bundled SKILL.md в stdout (для агента без доступа к файлам на диске) и выйти"),
     (
-        "hostme <path> <domain> --target NAME [--yes]",
+        "hostme <path> <domain> --target NAME [--confirm]",
         (
             "деплой на target вместо Webinoly-сервера (домен обязателен явно, нет base-доменов у target'ов); "
-            "требует --yes или интерактивного подтверждения — сторонний хостинг, --json НЕ пропускает молча"
+            "требует --confirm или интерактивного подтверждения — сторонний хостинг, --json НЕ пропускает молча"
         ),
     ),
     (
-        "hostme <domain> teardown --yes / rollback --yes / maintenance --yes",
-        "деструктивные команды (свой сервер и target одинаково) требуют --yes в неинтерактивном режиме (--json/--non-interactive) — не пропускают молча",
+        "hostme <domain> teardown --confirm / rollback --confirm / maintenance --confirm",
+        "деструктивные команды (свой сервер и target одинаково) требуют --confirm (алиас --yes/-y) в неинтерактивном режиме (--json/--non-interactive) — не пропускают молча",
     ),
     ("--json (в любой позиции — до и после команды)", "чистый JSON вместо rich-вывода, без цвета — для агентов"),
     ("--non-interactive (в любой позиции)", "никогда не спрашивать подтверждение — упасть понятной ошибкой вместо этого, если оно нужно"),
@@ -151,47 +152,70 @@ _NOT_IMPLEMENTED_NOTE = (
     "Для сайтов на target (сторонний хостинг): `auth`/`config`/`ssl`/`debug`/`revs`/`rollfore` "
     "не поддерживаются вовсе (Webinoly-специфичны) — только deploy/list/open/teardown/rollback. "
     "ВАЖНО для агентов: deploy/teardown/rollback на target — это чужая/стороннняя инфраструктура, "
-    "не собственный VPS пользователя. Такое действие требует явного --yes (или интерактивного "
+    "не собственный VPS пользователя. Такое действие требует явного --confirm (или интерактивного "
     "подтверждения) НА КАЖДЫЙ конкретный вызов; --json НЕ пропускает это подтверждение молча "
-    "(в отличие от teardown на своём сервере) — агент не должен передавать --yes сам по себе, "
+    "(в отличие от teardown на своём сервере) — агент не должен передавать --confirm сам по себе, "
     "не получив явного «да» от человека на именно это действие прямо сейчас."
 )
+
+
+def _version_callback(value: bool) -> None:
+    if not value:
+        return
+    typer.echo(installed_version() or DEV_VERSION)
+    raise typer.Exit()
+
+
+def _ai_callback(value: bool) -> None:
+    """Встроенный SKILL.md в stdout — для агента, который может запускать CLI,
+    но не может читать файлы с диска (sandbox, remote exec)."""
+    if not value:
+        return
+    typer.echo(load_skill_doc())
+    raise typer.Exit()
 
 
 @app.callback()
 def root(
     ctx: typer.Context,
-    ai: Annotated[
-        bool,
-        typer.Option(
-            "--ai", help="Напечатать встроенный SKILL.md (для агента без доступа к файлам на диске) и выйти."
-        ),
-    ] = False,
     json_output: Annotated[bool, typer.Option("--json", help="Машиночитаемый вывод (для агентов).")] = False,
+    quiet: Annotated[bool, typer.Option("--quiet", help="Не печатать необязательный человеческий вывод.")] = False,
+    verbose: Annotated[
+        bool, typer.Option("--verbose", help="Диагностика в stderr: какие ssh/rsync/lftp-команды реально запускаются.")
+    ] = False,
     non_interactive: Annotated[
         bool, typer.Option("--non-interactive", help="Никогда не спрашивать подтверждение интерактивно.")
     ] = False,
     dry_run: Annotated[
         bool, typer.Option("--dry-run", help="Показать, что сделала бы деструктивная команда, ничего не меняя.")
     ] = False,
+    version: Annotated[
+        bool, typer.Option("--version", callback=_version_callback, is_eager=True, help="Показать версию и выйти.")
+    ] = False,
+    ai: Annotated[
+        bool,
+        typer.Option(
+            "--ai",
+            callback=_ai_callback,
+            is_eager=True,
+            help="Напечатать встроенный SKILL.md (для агента без доступа к файлам на диске) и выйти.",
+        ),
+    ] = False,
 ) -> None:
-    if ai:
-        print(load_skill_doc())
-        raise typer.Exit(code=0)
-    # invoke_without_command=True (нужен только для --ai без подкоманды) иначе
-    # молча завершился бы кодом 0 без подкоманды вместо справки/ошибки.
-    if ctx.invoked_subcommand is None:
-        print(ctx.get_help())
-        raise typer.Exit(code=2)
     output.set_json_mode(json_output)
+    output.set_quiet(quiet)
+    output.set_verbose(verbose)
     output.set_non_interactive(non_interactive)
     output.set_dry_run(dry_run)
+    output.configure_logging(verbose)
+    output.help_if_no_command(ctx)
 
 
 # --- server ---------------------------------------------------------------
 
 
 @server_app.command("add")
+@output.guard
 def server_add(
     name: Annotated[str, typer.Option("--name")],
     host: Annotated[str, typer.Option("--host")],
@@ -204,18 +228,21 @@ def server_add(
 
 
 @server_app.command("init")
+@output.guard
 def server_init(name: Annotated[str, typer.Argument()]) -> None:
     result = services.init_server(name)
     output.success(result.pop("message"), **result)
 
 
 @server_app.command("update")
+@output.guard
 def server_update(name: Annotated[str, typer.Argument()]) -> None:
     result = services.update_server(name)
     output.success(result.pop("message"), **result)
 
 
 @server_app.command("list")
+@output.guard
 def server_list_cmd() -> None:
     servers = config.load_servers()
     if output.is_json_mode():
@@ -236,6 +263,7 @@ def server_list_cmd() -> None:
 
 
 @server_app.command("remove")
+@output.guard
 def server_remove(
     name: Annotated[str, typer.Argument()],
     force: Annotated[bool, typer.Option("--force")] = False,
@@ -248,6 +276,7 @@ def server_remove(
 
 
 @domain_app.command("add")
+@output.guard
 def domain_add(
     server_name: Annotated[str, typer.Argument()],
     domain: Annotated[str, typer.Argument()],
@@ -258,18 +287,21 @@ def domain_add(
 
 
 @domain_app.command("default")
+@output.guard
 def domain_default(domain: Annotated[str, typer.Argument()]) -> None:
     result = services.set_default_domain(domain)
     output.success(result.pop("message"), **result)
 
 
 @domain_app.command("remove")
+@output.guard
 def domain_remove(domain: Annotated[str, typer.Argument()]) -> None:
     result = services.remove_domain(domain)
     output.success(result.pop("message"), **result)
 
 
 @domain_app.command("list")
+@output.guard
 def domain_list_cmd() -> None:
     rows = services.list_domains()
     if output.is_json_mode():
@@ -293,6 +325,7 @@ def domain_list_cmd() -> None:
 
 
 @target_app.command("add")
+@output.guard
 def target_add(
     name: Annotated[str, typer.Option("--name")],
     connection: Annotated[str, typer.Option("--connection")],
@@ -307,6 +340,7 @@ def target_add(
 
 
 @target_app.command("list")
+@output.guard
 def target_list_cmd() -> None:
     targets = config.load_targets()
     if output.is_json_mode():
@@ -335,6 +369,7 @@ def target_list_cmd() -> None:
 
 
 @target_app.command("remove")
+@output.guard
 def target_remove(
     name: Annotated[str, typer.Argument()],
     force: Annotated[bool, typer.Option("--force")] = False,
@@ -347,6 +382,7 @@ def target_remove(
 
 
 @skill_app.command("install")
+@output.guard
 def skill_install(
     path: Annotated[
         str | None,
@@ -364,18 +400,23 @@ def skill_install(
 
 
 @app.command("_deploy", hidden=True)
+@output.guard
 def deploy(
     path: Annotated[str, typer.Argument()],
     domain: Annotated[str | None, typer.Argument()] = None,
     server_name: Annotated[str | None, typer.Option("--server")] = None,
     target_name: Annotated[str | None, typer.Option("--target")] = None,
-    yes: Annotated[bool, typer.Option("--yes", "-y")] = False,
+    confirm: Annotated[
+        bool,
+        typer.Option("--confirm", "--yes", "-y", help="Подтвердить деструктивное действие без вопроса (обязателен вместе с --non-interactive/--json)."),
+    ] = False,
 ) -> None:
-    result = services.deploy(path, domain, server_name, target_name, yes)
+    result = services.deploy(path, domain, server_name, target_name, confirm)
     output.success(result.pop("message"), **result)
 
 
 @app.command("list")
+@output.guard
 def list_sites_cmd() -> None:
     sites, bare_base_domains = services.list_sites()
     if output.is_json_mode():
@@ -408,12 +449,14 @@ def list_sites_cmd() -> None:
 
 
 @app.command("open")
+@output.guard
 def open_site(domain: Annotated[str, typer.Argument()]) -> None:
     webbrowser.open(f"https://{domain}")
     output.success(f"Открываю https://{domain}")
 
 
 @app.command("revs")
+@output.guard
 def revs(domain: Annotated[str, typer.Argument()]) -> None:
     """Вызов: hostme <domain> revs — список релизов сайта."""
     domain = config.normalize_domain(domain)
@@ -430,18 +473,23 @@ def revs(domain: Annotated[str, typer.Argument()]) -> None:
 
 
 @app.command("rollback")
+@output.guard
 def rollback(
     domain: Annotated[str, typer.Argument()],
-    yes: Annotated[bool, typer.Option("--yes", "-y")] = False,
+    confirm: Annotated[
+        bool,
+        typer.Option("--confirm", "--yes", "-y", help="Подтвердить деструктивное действие без вопроса (обязателен вместе с --non-interactive/--json)."),
+    ] = False,
 ) -> None:
-    """Вызов: hostme <domain> rollback [--yes] — откатить на предыдущий релиз
+    """Вызов: hostme <domain> rollback [--confirm] — откатить на предыдущий релиз
     (сервер) или последний локальный бэкап (target)."""
     domain = config.normalize_domain(domain)
-    result = services.rollback(domain, yes)
+    result = services.rollback(domain, confirm)
     output.success(result.pop("message"), **result)
 
 
 @app.command("rollfore")
+@output.guard
 def rollfore(domain: Annotated[str, typer.Argument()]) -> None:
     """Вызов: hostme <domain> rollfore — вернуть на следующий (после rollback) релиз."""
     domain = config.normalize_domain(domain)
@@ -450,29 +498,38 @@ def rollfore(domain: Annotated[str, typer.Argument()]) -> None:
 
 
 @app.command("maintenance")
+@output.guard
 def maintenance(
     domain: Annotated[str, typer.Argument()],
-    yes: Annotated[bool, typer.Option("--yes", "-y")] = False,
+    confirm: Annotated[
+        bool,
+        typer.Option("--confirm", "--yes", "-y", help="Подтвердить деструктивное действие без вопроса (обязателен вместе с --non-interactive/--json)."),
+    ] = False,
 ) -> None:
-    """Вызов: hostme <domain> maintenance [--yes] — очистить сайт, оставив
+    """Вызов: hostme <domain> maintenance [--confirm] — очистить сайт, оставив
     встроенный плейсхолдер "в разработке". Откат — через `rollback`."""
     domain = config.normalize_domain(domain)
-    result = services.set_maintenance(domain, yes)
+    result = services.set_maintenance(domain, confirm)
     output.success(result.pop("message"), **result)
 
 
 @app.command("teardown")
+@output.guard
 def teardown(
     domain: Annotated[str, typer.Argument()],
-    yes: Annotated[bool, typer.Option("--yes", "-y")] = False,
+    confirm: Annotated[
+        bool,
+        typer.Option("--confirm", "--yes", "-y", help="Подтвердить деструктивное действие без вопроса (обязателен вместе с --non-interactive/--json)."),
+    ] = False,
 ) -> None:
-    """Вызов: hostme <domain> teardown [--yes] — снести сайт и убрать из реестра."""
+    """Вызов: hostme <domain> teardown [--confirm] — снести сайт и убрать из реестра."""
     domain = config.normalize_domain(domain)
-    result = services.teardown(domain, yes)
+    result = services.teardown(domain, confirm)
     output.success(result.pop("message"), **result)
 
 
 @app.command("auth")
+@output.guard
 def auth(
     domain: Annotated[str, typer.Argument()],
     user: Annotated[str | None, typer.Option("--user")] = None,
@@ -513,6 +570,7 @@ def _print_site_config(site: config.Site) -> None:
 
 
 @app.command("config")
+@output.guard
 def site_config(
     domain: Annotated[str, typer.Argument()],
     cors: Annotated[list[str], typer.Option("--cors")] = [],  # noqa: B006
@@ -536,6 +594,7 @@ def site_config(
 
 
 @app.command("debug")
+@output.guard
 def debug(
     domain: Annotated[str, typer.Argument()],
     error: Annotated[bool, typer.Option("--error")] = False,
@@ -553,6 +612,7 @@ def debug(
 
 
 @app.command("doctor")
+@output.guard
 def doctor() -> None:
     """Вызов: hostme doctor — проверка окружения/конфига (бинари, права,
     читаемость реестров, локальные ssh-ключи) без обращения к серверам."""
@@ -563,11 +623,10 @@ def doctor() -> None:
         for check in result["checks"]:
             icon = {"ok": "[green]✔[/green]", "warn": "[yellow]![/yellow]", "fail": "[red]✖[/red]"}[check["status"]]
             output.console.print(f"{icon} {check['name']}: {check['detail']}")
-    if not result["ok"]:
-        raise typer.Exit(code=1)
 
 
 @app.command("help")
+@output.guard
 def help_cmd() -> None:
     """Полный справочник команд (для человека и для агентов — см. --json)."""
     if output.is_json_mode():
@@ -589,12 +648,14 @@ def help_cmd() -> None:
 
 
 def main() -> None:
+    # Команды уже под output.guard; это страховка для ошибок в самом
+    # root-callback (например, не прочитался bundled SKILL.md для --ai).
     try:
         app(args=_translate_argv(sys.argv[1:]))
     except HostmeError as exc:
-        output.error(exc)
+        output.emit_error(exc)
     except Exception as exc:  # noqa: BLE001 — не даём агенту голый трейсбек
-        output.error(f"Неожиданная ошибка: {exc}")
+        output.emit_error(UnexpectedError(exc))
 
 
 if __name__ == "__main__":

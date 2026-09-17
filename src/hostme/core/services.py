@@ -214,10 +214,10 @@ def detect_site_type(local_path: Path) -> webinoly.SiteType:
     return "php" if any(local_path.rglob("*.php")) else "html"
 
 
-def confirm_target_action(action: str, target: config.Target, yes: bool) -> None:
+def confirm_target_action(action: str, target: config.Target, confirm: bool) -> None:
     """Target — сторонний хостинг (не наш VPS), часто чужая/клиентская
     инфраструктура — заметно более строгий гейт, чем у своих серверов."""
-    output.require_confirmation(f"{action} на target {target.name!r} ({target.connection}, сторонний хостинг)", yes)
+    output.require_confirmation(f"{action} на target {target.name!r} ({target.connection}, сторонний хостинг)", confirm)
 
 
 _KEEP_TARGET_BACKUPS = 5
@@ -264,7 +264,7 @@ def _backup_target_before_deploy(target: config.Target) -> None:
     _prune_target_backups(target.name)
 
 
-def deploy_to_target(local_path: Path, domain: str | None, target_name: str, yes: bool) -> dict:
+def deploy_to_target(local_path: Path, domain: str | None, target_name: str, confirm: bool) -> dict:
     """Деплой на сторонний хостинг (ftp/sftp/ssh, без Webinoly) — просто залить
     файлы, никакого create_site/SSL/releases (хостер уже сам всё настроил)."""
     if domain is None:
@@ -286,7 +286,7 @@ def deploy_to_target(local_path: Path, domain: str | None, target_name: str, yes
             "dry_run": True,
         }
 
-    confirm_target_action(f"Деплой {domain}", target, yes)
+    confirm_target_action(f"Деплой {domain}", target, confirm)
 
     sites = config.load_sites()
     config.check_collision(sites, domain, str(local_path))
@@ -331,13 +331,13 @@ def teardown_target(target: config.Target) -> None:
         os.rmdir(empty_dir)
 
 
-def deploy(path: str, domain: str | None, server_name: str | None, target_name: str | None, yes: bool) -> dict:
+def deploy(path: str, domain: str | None, server_name: str | None, target_name: str | None, confirm: bool) -> dict:
     local_path = Path(path).expanduser().resolve()
     if not local_path.is_dir():
         raise InvalidArgumentsError(f"{local_path} не является директорией")
 
     if target_name is not None:
-        return deploy_to_target(local_path, domain, target_name, yes)
+        return deploy_to_target(local_path, domain, target_name, confirm)
 
     servers = config.load_servers()
     sites = config.load_sites()
@@ -483,7 +483,7 @@ def rollback_target(target: config.Target) -> None:
         ftp.mirror_to(str(snapshot), target)
 
 
-def rollback(domain: str, yes: bool) -> dict:
+def rollback(domain: str, confirm: bool) -> dict:
     site = find_site(domain)
 
     server = config.find_server(config.load_servers(), site.server)
@@ -505,7 +505,7 @@ def rollback(domain: str, yes: bool) -> dict:
                 "dry_run": True,
             }
 
-        output.require_confirmation(f"Rollback {domain} на релиз {release}", yes)
+        output.require_confirmation(f"Rollback {domain} на релиз {release}", confirm)
         webinoly.switch_release(server, domain, release)
         return {"message": f"{domain} откачен на релиз {release}", "domain": domain, "release": release}
 
@@ -521,7 +521,7 @@ def rollback(domain: str, yes: bool) -> dict:
             "dry_run": True,
         }
 
-    confirm_target_action(f"Rollback {domain}", site_target, yes)
+    confirm_target_action(f"Rollback {domain}", site_target, confirm)
     rollback_target(site_target)
     return {"message": f"{domain} откачен на предыдущий бэкап", "domain": domain, "target": site_target.name}
 
@@ -540,7 +540,7 @@ def rollfore(domain: str) -> dict:
     return {"message": f"{domain} переключён на релиз {release}", "domain": domain, "release": release}
 
 
-def set_maintenance(domain: str, yes: bool) -> dict:
+def set_maintenance(domain: str, confirm: bool) -> dict:
     """Очистить сайт, оставив встроенный плейсхолдер "в разработке". Реестр
     (local_path) не трогаем — редеплой реальной сборки продолжает работать
     как раньше. Старое содержимое не теряется: для сервера это обычный новый
@@ -556,7 +556,7 @@ def set_maintenance(domain: str, yes: bool) -> dict:
                 "domain": domain,
                 "dry_run": True,
             }
-        output.require_confirmation(f"Maintenance {domain}", yes)
+        output.require_confirmation(f"Maintenance {domain}", confirm)
         webinoly.ensure_releases_layout(server, domain)
         ts = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
         release = webinoly.release_path(domain, ts)
@@ -582,7 +582,7 @@ def set_maintenance(domain: str, yes: bool) -> dict:
             "dry_run": True,
         }
 
-    confirm_target_action(f"Maintenance {domain}", target, yes)
+    confirm_target_action(f"Maintenance {domain}", target, confirm)
     _backup_target_before_deploy(target)
     if target.connection == "ssh":
         rsync_to_target(str(MAINTENANCE_TEMPLATE_DIR), target)
@@ -595,7 +595,7 @@ def set_maintenance(domain: str, yes: bool) -> dict:
     }
 
 
-def teardown(domain: str, yes: bool) -> dict:
+def teardown(domain: str, confirm: bool) -> dict:
     site = find_site(domain)
 
     server = config.find_server(config.load_servers(), site.server)
@@ -605,9 +605,9 @@ def teardown(domain: str, yes: bool) -> dict:
         return {"message": f"(dry-run) Снёс бы сайт {domain}, изменений не внесено", "domain": domain, "dry_run": True}
 
     if target is not None:
-        confirm_target_action(f"Teardown {domain}", target, yes)
+        confirm_target_action(f"Teardown {domain}", target, confirm)
     else:
-        output.require_confirmation(f"Снести сайт {domain} и убрать из реестра", yes)
+        output.require_confirmation(f"Снести сайт {domain} и убрать из реестра", confirm)
 
     if server is not None:
         webinoly.delete_site(server, domain)

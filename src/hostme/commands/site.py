@@ -46,6 +46,8 @@ def deploy(
     На --target: только заливка файлов (rsync или lftp mirror) с локальным
     бэкапом перед ней; сторонний хостинг — требует --confirm на каждый вызов.
     Webroot становится точным зеркалом папки: лишние файлы на сервере удаляются.
+
+    Example: hostme ./dist landing.example.com
     """
     result = services.deploy(path, domain, server_name, target_name, confirm)
     output.success(result.pop("message"), **result)
@@ -53,7 +55,10 @@ def deploy(
 
 @output.guard
 def list_() -> None:
-    """hostme list — все сайты из реестра (+ служебные домены без деплоя, помечены отдельно)."""
+    """hostme list — все сайты из реестра (+ служебные домены без деплоя, помечены отдельно).
+
+    Example: hostme list --json
+    """
 
     def render(d: dict) -> None:
         if not d["sites"]:
@@ -92,14 +97,20 @@ def list_() -> None:
 
 @output.guard
 def open_(domain: DomainArg) -> None:
-    """hostme open <domain> — открыть https://<domain> в браузере по умолчанию."""
+    """hostme open <domain> — открыть https://<domain> в браузере по умолчанию.
+
+    Example: hostme open landing.example.com
+    """
     webbrowser.open(f"https://{domain}")
     output.success(f"Открываю https://{domain}", domain=domain)
 
 
 @output.guard
 def revs(domain: DomainArg) -> None:
-    """hostme <domain> revs — список релизов сайта на сервере (для rollback/rollfore)."""
+    """hostme <domain> revs — список релизов сайта на сервере (для rollback/rollfore).
+
+    Example: hostme landing.example.com revs
+    """
 
     def render(d: dict) -> None:
         if not d["releases"]:
@@ -119,6 +130,8 @@ def rollback(domain: DomainArg, confirm: ConfirmOption = False) -> None:
     Обратимо: на сервере это переключение symlink (`rollfore` вернёт обратно),
     на target — восстановление снепшота, снятого перед последним деплоем.
     --dry-run показывает, на какой релиз откатился бы.
+
+    Example: hostme landing.example.com rollback --confirm
     """
     domain = config.normalize_domain(domain)
     result = services.rollback(domain, confirm)
@@ -127,7 +140,10 @@ def rollback(domain: DomainArg, confirm: ConfirmOption = False) -> None:
 
 @output.guard
 def rollfore(domain: DomainArg) -> None:
-    """hostme <domain> rollfore — вернуть сайт на следующий (после rollback) релиз. Только для своих серверов."""
+    """hostme <domain> rollfore — вернуть сайт на следующий (после rollback) релиз. Только для своих серверов.
+
+    Example: hostme landing.example.com rollfore
+    """
     domain = config.normalize_domain(domain)
     result = services.rollfore(domain)
     output.success(result.pop("message"), **result)
@@ -139,6 +155,8 @@ def maintenance(domain: DomainArg, confirm: ConfirmOption = False) -> None:
 
     Содержимое не теряется: на сервере это новый релиз (откат — `rollback`),
     на target — снимается бэкап перед заливкой. --dry-run показывает план.
+
+    Example: hostme landing.example.com maintenance --confirm
     """
     domain = config.normalize_domain(domain)
     result = services.set_maintenance(domain, confirm)
@@ -151,6 +169,8 @@ def teardown(domain: DomainArg, confirm: ConfirmOption = False) -> None:
 
     На сервере удаляет сайт из Webinoly со всеми релизами; на target — файлы
     в remote_path. --dry-run показывает, что было бы удалено.
+
+    Example: hostme landing.example.com teardown --confirm
     """
     domain = config.normalize_domain(domain)
     result = services.teardown(domain, confirm)
@@ -164,7 +184,10 @@ def auth(
     password: Annotated[str | None, typer.Option("--pass", help="Пароль (локально не хранится).")] = None,
     off: Annotated[bool, typer.Option("--off", help="Снять защиту паролем.")] = False,
 ) -> None:
-    """hostme <domain> auth --user U --pass P | --off — password protection (HTTP Basic Auth). Только свои серверы."""
+    """hostme <domain> auth --user U --pass P | --off — password protection (HTTP Basic Auth). Только свои серверы.
+
+    Example: hostme landing.example.com auth --user admin --pass s3cret
+    """
     domain = config.normalize_domain(domain)
     result = services.set_http_auth(domain, user, password, off)
     output.success(result.pop("message"), **result)
@@ -191,8 +214,12 @@ def site_config(
     no_cors: Annotated[bool, typer.Option("--no-cors", help="Убрать CORS.")] = False,
     redirect: Annotated[list[str], typer.Option("--redirect", help="Редирект FROM=TO (повторяемый).")] = [],  # noqa: B006
     remove_redirect: Annotated[list[str], typer.Option("--remove-redirect", help="Убрать редирект FROM.")] = [],  # noqa: B006
-    force_https: Annotated[bool, typer.Option("--force-https")] = False,
-    no_force_https: Annotated[bool, typer.Option("--no-force-https")] = False,
+    force_https: Annotated[
+        bool, typer.Option("--force-https", help="Принудительный HTTPS — у Webinoly и так всегда включён с SSL.")
+    ] = False,
+    no_force_https: Annotated[
+        bool, typer.Option("--no-force-https", help="Не поддерживается: Webinoly не отключает редирект на HTTPS.")
+    ] = False,
     nginx_snippet: Annotated[
         str | None, typer.Option("--nginx-snippet", help="Локальный .conf → кастомный nginx-сниппет сайта.")
     ] = None,
@@ -202,6 +229,8 @@ def site_config(
 
     Только свои серверы (Webinoly). Все изменения обратимы соответствующим
     --no-*/--remove-* флагом.
+
+    Example: hostme landing.example.com config --redirect /old=/new
     """
     domain = config.normalize_domain(domain)
     result = services.update_site_config(
@@ -232,7 +261,10 @@ def debug(
     error: Annotated[bool, typer.Option("--error", help="Хвост error-лога вместо access-лога.")] = False,
     lines: Annotated[int, typer.Option("--lines", help="Сколько строк лога.")] = 10,
 ) -> None:
-    """hostme <domain> debug [--error] [--lines N] — HTTP-статус сайта + хвост nginx-лога с сервера."""
+    """hostme <domain> debug [--error] [--lines N] — HTTP-статус сайта + хвост nginx-лога с сервера.
+
+    Example: hostme landing.example.com debug --error --lines 50
+    """
 
     def render(d: dict) -> None:
         output.console.print(f"https://{d['domain']} -> {d['http_status']}")

@@ -1,0 +1,26 @@
+
+ Usage: hostme config [OPTIONS] {domain}
+
+ hostme <domain> config [--cors ORIGIN ...] [--redirect FROM=TO] [--nginx-snippet PATH] ... —
+ настройки сайта; без флагов печатает текущие.
+
+ Только свои серверы (Webinoly). Все изменения обратимы соответствующим
+ --no-*/--remove-* флагом.
+
+ Example: hostme landing.example.com config --redirect /old=/new
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    domain      <str>  Домен сайта из `hostme list`. [required]                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --cors                      <str>  Разрешённый CORS-origin (повторяемый).                        │
+│ --no-cors                          Убрать CORS.                                                  │
+│ --redirect                  <str>  Редирект FROM=TO (повторяемый).                               │
+│ --remove-redirect           <str>  Убрать редирект FROM.                                         │
+│ --force-https                      Принудительный HTTPS — у Webinoly и так всегда включён с SSL. │
+│ --no-force-https                   Не поддерживается: Webinoly не отключает редирект на HTTPS.   │
+│ --nginx-snippet             <str>  Локальный .conf → кастомный nginx-сниппет сайта.              │
+│ --no-nginx-snippet                 Убрать кастомный сниппет.                                     │
+│ --help              -h             Show this message and exit.                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+

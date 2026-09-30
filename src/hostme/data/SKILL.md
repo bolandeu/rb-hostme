@@ -2,7 +2,7 @@
 name: hostme
 description: "Deploy static/PHP sites (built landing pages, client sites, previews, artifacts that need a real URL) via `hostme` — a personal surge.sh-alike CLI. Deploys to the user's own VPS (--server, full lifecycle) or a registered third-party ftp/sftp/ssh hosting (--target, file transfer only — needs the user's explicit go-ahead per deploy, see below). Use whenever the user wants a local folder published/hosted/deployed to a real domain, not just previewed locally. Not for anything with a backend process (Node/API servers) — hostme only serves static files and PHP."
 metadata:
-  version: 2.0.0
+  version: 2.1.0
 ---
 
 # hostme
@@ -18,12 +18,14 @@ maintained by hand in `~/.claude/skills/` — see "Staying in sync" below.
 ## Install (if `hostme --version` fails)
 
 ```bash
-uv tool install "git+https://github.com/bolandeu/hostme.git"
+uv tool install "rb-hostme @ git+https://github.com/bolandeu/hostme.git@vX.Y.Z"
 ```
 
+Replace `vX.Y.Z` with the latest release tag (install from a tag, never a
+branch). The distribution is `rb-hostme`, the command stays `hostme`; an old
+install under the name `hostme` goes first: `uv tool uninstall hostme`.
 Same command on macOS and Linux (Windows: the CLI itself installs, but it
-shells out to `ssh`/`rsync`/`lftp`, which you'd need on PATH);
-`uv tool upgrade hostme` updates it. Do not run from source unless asked to
+shells out to `ssh`/`rsync`/`lftp`, which you'd need on PATH). Do not run from source unless asked to
 develop the CLI.
 
 The repository is private. On an auth error (`Authentication failed`,
@@ -33,7 +35,7 @@ ask the user to run `gh auth login`. With SSH keys configured this works
 without any of that:
 
 ```bash
-uv tool install "git+ssh://git@github.com/bolandeu/hostme.git"
+uv tool install "rb-hostme @ git+ssh://git@github.com/bolandeu/hostme.git@vX.Y.Z"
 ```
 
 ## First: get the live command reference, don't guess
@@ -112,7 +114,10 @@ blocks on stdin.
    UNEXPECTED (a bug — re-run with --verbose for the traceback and report it),
    CREDENTIAL_STORE_UNAVAILABLE (OS keychain unusable → error.action names the env var)
 2  INVALID_ARGUMENTS — bad flags, a server/domain/target/site not in the registry,
-   or a destructive command without --confirm in non-interactive mode
+   or a destructive command without --confirm in non-interactive mode (--json,
+   --non-interactive, or no TTY on stdin)
+3  CREDENTIALS_UNHEALTHY — `hostme auth status`: a server key or target password
+   is missing/invalid/unreachable (the full report is still in the output)
 5  PROVIDER_ERROR — ssh/rsync/lftp/Webinoly failed or isn't installed
    (error.provider says which); network/timeouts land here too
 ```
@@ -169,8 +174,9 @@ SSL/releases/rollback lifecycle), `hostme` can deploy to a registered
 shared-hosting panel, e.g. Beget). Registered with `hostme target add`,
 listed with `hostme target list`, used with `hostme <path> <domain> --target
 NAME` (domain must be explicit — targets have no base-domain concept).
-Target passwords live in the OS keychain (or `HOSTME_<NAME>_PASSWORD`),
-never in the registry file — nothing an agent needs to handle, and never
+Target passwords come from `HOSTME_<NAME>_PASSWORD` first, else the OS
+keychain (`hostme:<name>`), never from the registry file; `hostme auth status
+--check --json` shows where each comes from and whether it works — nothing an agent needs to handle, and never
 ask the user to paste one into a command line unless it's `target add`.
 
 This is meaningfully higher-stakes than a `--server` deploy: it's
@@ -192,7 +198,7 @@ pre-filter.
 This file lives at `src/hostme/data/SKILL.md` in the repo and is bundled
 into the installed package (`hostme --ai` prints it verbatim). The copy an
 AI tool actually reads (e.g. `~/.claude/skills/hostme/SKILL.md`) is a
-synced-out copy — after `uv tool upgrade hostme`, resync it with:
+synced-out copy — after reinstalling a newer tag, resync it with:
 
 ```
 hostme skill install

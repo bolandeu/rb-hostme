@@ -12,6 +12,7 @@ from __future__ import annotations
 import functools
 import logging
 import sys
+import weakref
 from collections.abc import Callable
 from typing import NoReturn
 
@@ -28,6 +29,7 @@ from hostme.output import human
 from hostme.output import json as json_output
 
 console = human.console
+_GUARDED: weakref.WeakSet[Callable] = weakref.WeakSet()
 err_console = human.err_console
 
 _json_mode = False
@@ -144,6 +146,23 @@ def emit_success(payload: dict, render_human: Callable[[dict], None]) -> None:
         render_human(payload)
 
 
+def emit_report(payload: dict, render_human: Callable[[dict], None], problem: HostmeError | None) -> None:
+    """Отчёт, который остаётся данными и при найденной проблеме (`auth status`).
+
+    Без проблемы — ровно emit_success. С проблемой — тот же payload целиком плюс
+    `ok: false` и стандартный объект `error`, и выход с кодом ошибки.
+    """
+    if problem is None:
+        emit_success(payload, render_human)
+        return
+    if _json_mode:
+        json_output.emit({"ok": False, **payload, "error": problem.to_dict()})
+        raise typer.Exit(code=problem.exit_code)
+    if not _quiet:
+        render_human(payload)
+    emit_error(problem)
+
+
 def success(message: str, **fields: object) -> None:
     """Частый случай: команда сделала одно действие и сообщает об этом строкой."""
     # rich_escape — message может быть динамическим (домен, путь, чужой вывод)
@@ -207,21 +226,27 @@ def force_utf8_streams() -> None:
 # --- гейт деструктивных команд ------------------------------------------------
 
 
+def _stdin_is_tty() -> bool:
+    # Без TTY (cron, systemd, `doppler run` на сервере) спрашивать некого —
+    # typer.confirm() там либо упал бы на EOF, либо повис на открытом pipe.
+    return sys.stdin is not None and sys.stdin.isatty()
+
+
 def require_confirmation(description: str, confirm: bool) -> None:
     """Единый гейт подтверждения для деструктивных команд (teardown/rollback/
     maintenance — свой сервер и target одинаково, раздел 10 architecture.md).
 
     Вызывать непосредственно перед самим действием — после dry-run-ветки, не до.
     --confirm (алиас --yes/-y) закрывает вопрос сразу. Иначе в неинтерактивном
-    режиме (--json и/или --non-interactive) требуем явный --confirm отдельной
+    режиме (--json и/или --non-interactive, или stdin не терминал) требуем явный --confirm отдельной
     ошибкой — не проходим молча и не зависаем на typer.confirm() без stdin.
     В интерактивном терминале — обычный запрос да/нет; «нет» → ABORTED.
     """
     if confirm:
         return
-    if is_non_interactive():
+    if is_non_interactive() or not _stdin_is_tty():
         raise InvalidArgumentsError(
-            f"{description} требует явного --confirm в неинтерактивном режиме (--json/--non-interactive)",
+            f"{description} требует явного --confirm в неинтерактивном режиме (--json/--non-interactive/без TTY)",
             action="Повтори с --confirm (или --yes), если это осознанное решение.",
         )
     if not typer.confirm(f"{description}. Продолжить?"):
@@ -249,4 +274,13 @@ def guard(func: Callable) -> Callable:
                 err_console.print_exception()
             emit_error(UnexpectedError(exc))
 
+    # Docstring = --help (стандарт §7). Typer рендерит его как rich-markup, а тот
+    # молча съедает всё в квадратных скобках — `[domain]`, `[--confirm]`.
+    wrapper.__doc__ = rich_escape(func.__doc__ or "") or None
+    _GUARDED.add(wrapper)
     return wrapper
+
+
+def is_guarded(func: Callable) -> bool:
+    """Обёрнута ли функция в `output.guard` — tests/test_help.py требует этого от каждой команды."""
+    return func in _GUARDED

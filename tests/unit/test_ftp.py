@@ -72,3 +72,15 @@ def test_mirror_to_missing_lftp_raises():
         pytest.raises(ftp.FtpError, match="lftp"),
     ):
         ftp.mirror_to("/local/path", make_target())
+
+
+def test_check_target_maps_login_failure_to_invalid_and_keeps_password_off_argv():
+    failed = fake_completed(1, stderr="ls: Login failed: 530 Login incorrect.")
+    with patch("hostme.providers.ftp.subprocess.run", return_value=failed) as mock_run:
+        assert ftp.check_target(make_target(), 10)[0] == "invalid"
+    assert mock_run.call_args.args[0] == ["lftp"]
+    assert "cls" in mock_run.call_args.kwargs["input"]
+    with patch("hostme.providers.ftp.subprocess.run", return_value=fake_completed(0)):
+        assert ftp.check_target(make_target(), 10) == ("ok", None)
+    with patch("hostme.providers.ftp.subprocess.run", side_effect=subprocess.TimeoutExpired("lftp", 10)):
+        assert ftp.check_target(make_target(), 10)[0] == "unreachable"

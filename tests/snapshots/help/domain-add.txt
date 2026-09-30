@@ -1,0 +1,19 @@
+
+ Usage: hostme domain add [OPTIONS] {server_name} {domain}
+
+ hostme domain add <server> <domain> [--default] — зарегистрировать служебный домен.
+
+ После этого `hostme ./dist` без домена получает `<slug-папки>.<default-домен>`.
+ DNS (wildcard A-запись) и wildcard-SSL настраиваются вручную — WILDCARD-SSL.md.
+
+ Example: hostme domain add sites-first example.com --default
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    server_name      <str>  Имя сервера из `hostme server list`. [required]                     │
+│ *    domain           <str>  Домен, чей wildcard (*.domain) указывает на этот сервер. [required] │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --default            Использовать для деплоя без явного домена.                                  │
+│ --help     -h        Show this message and exit.                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+

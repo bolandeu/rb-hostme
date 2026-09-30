@@ -14,6 +14,8 @@ def doctor() -> None:
     серверам и target'ам), права и читаемость реестров в ~/.config/hostme, наличие
     объявленных ssh-ключей на диске. Всегда exit 0 — сам отчёт и есть результат,
     `ok` говорит, все ли проверки прошли.
+
+    Example: hostme doctor --json
     """
 
     def render(d: dict) -> None:

@@ -44,9 +44,26 @@
 - `core/services.py` — бизнес-логика; `core/errors.py` — фиксированная таблица кодов (`INVALID_ARGUMENTS` 2, `PROVIDER_ERROR` 5, `ERROR`/`ABORTED`/`UNEXPECTED` 1); `core/version.py`.
 - `providers/` — ssh/rsync/lftp/Webinoly/HTTP-проба: единственное место с `subprocess`/`urllib`; ошибки наружу только как `ProviderError`.
 - `output/` — human/json-вывод, `guard` (на каждой команде), `group`, `require_confirmation` (гейт `--confirm`, `--yes`/`-y` — алиасы), состояние `--json/--quiet/--verbose/--non-interactive/--dry-run`.
-- `credentials/manager.py` — пароли target'ов в OS keychain / `HOSTME_<NAME>_PASSWORD`; в `servers.yaml` секретов нет. `~/.config/hostme` оставлен намеренно (PRD §8), без `platformdirs` — осознанное отклонение от шаблона.
+- `credentials/manager.py` — пароли target'ов: сначала env `HOSTME_<NAME>_PASSWORD`, потом OS keychain `hostme:<name>` (keychain необязателен — на headless-сервере его нет, это не ошибка); в `servers.yaml` секретов нет. `credentials/health.py` — `hostme auth status` (стандарт §8): запись `server:<имя>` (ssh-ключ, файл) и `target:<имя>` на каждый объект реестра; проверки `--check` — в `providers/ssh.py`/`ftp.py` (`check_*`, 10 с).
+- `~/.config/hostme` оставлен намеренно (PRD §8), без `platformdirs` — осознанное отклонение от шаблона (путь одинаков на macOS и Linux).
+- `hostme <domain> auth` (HTTP Basic Auth сайта) внутри называется `http-auth` — имя `auth` занято группой `auth status`; перевод — `_DOMAIN_SUBCOMMAND_TARGETS` в `cli.py`.
 
-Перед коммитом — полный цикл из README (`ruff check`, `ruff format --check`, `ty check`, `pytest` с порогом покрытия, `doctor`); запись в `CHANGELOG.md` под `[Unreleased]`, если меняется поведение.
+## Проверка и релиз (`~/Projects/tools/docs/standard-release.md`)
+
+- Перед коммитом — `uv run scripts/release.py --check` (единственный гейт: lock, ruff, ty, pytest с порогом покрытия и снапшотами `--help`, `[[tool.rb.external]]`, фрагмент, сборка колеса, osv-scanner).
+- Версия — только из git-тега `vX.Y.Z` (uv-dynamic-versioning); `version =` в pyproject не добавлять. Дистрибутив `rb-hostme`, команда `hostme`.
+- Изменение с видимым эффектом — фрагмент `changelog.d/+<slug>.<type>.md` (`uv run towncrier create …`), `CHANGELOG.md` руками не править.
+- Docstring команды = её `--help`: меняешь поведение — меняй docstring в том же коммите (pre-commit блокирует), строка `Example: hostme …` обязательна (проверяется по реальному переводу argv). Потом `uv run pytest --snapshot-update` и прочитать diff `tests/snapshots/help/`.
+- Новая внешняя программа (`subprocess`/`shutil.which` литералом) — запись в `[[tool.rb.external]]` в pyproject.
+- **Каждое видимое изменение выходит релизом**: серверы и Mac ставят только из тегов. Merge в `main` → `uv run scripts/release.py patch|minor|major` → push с `--follow-tags` (с подтверждения) → тег в отчёте.
+
+## Внутри системы tools
+
+Корневой агент `~/Projects/tools/` деплоит hostme на серверы, держит доступы (Doppler) и бэкапит данные; правила — стандарт §13.
+
+- **Сообщать корневому агенту** (в отчёте, рядом с тегом): новые/переименованные env-переменные и доступы, новые файлы данных или смена путей, зависимость от других tools, breaking-релиз.
+- **Headless Linux**: env первым, keychain необязателен; без TTY никаких вопросов (`require_confirmation` падает с подсказкой про `--confirm`); никаких Mac-only путей.
+- Данные: `~/.config/hostme/` (servers.yaml, sites.yaml, sites.d/, target-backups/) и `~/.cache/hostme/ssh-control/` — вне репозитория; сам hostme ничего никуда не синхронизирует.
 
 ## Стиль работы над кодом
 

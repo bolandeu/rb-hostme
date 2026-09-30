@@ -217,3 +217,47 @@ def rsync_from_target(target: Target, local_dir: str, timeout: int = LONG_TIMEOU
     source = f"{target.user}@{target.host}:{_target_remote_path(target)}"
     args = ["rsync", "-az", "-e", rsh, source, local]
     return _run_target_rsync(args, target, timeout, env)
+
+
+# --- health check для `hostme auth status --check` (стандарт §8) --------------------
+
+
+def _auth_probe(args: list[str], env: dict[str, str] | None, timeout: float) -> tuple[str, str | None]:
+    """Один `ssh ... true` — дешёвая read-only проверка доступа. (status, message)."""
+    _log.debug("%s", shlex.join(args))
+    try:
+        proc = subprocess.run(args, capture_output=True, text=True, timeout=timeout, env=env, check=False)
+    except subprocess.TimeoutExpired:
+        return "unreachable", f"нет ответа за {timeout:.0f}с"
+    except FileNotFoundError as exc:
+        return "unreachable", f"`{exc.filename or args[0]}` не найден в PATH"
+    if proc.returncode == 0:
+        return "ok", None
+    stderr = proc.stderr.strip()
+    if "permission denied" in stderr.lower() or "authentication failed" in stderr.lower():
+        return "invalid", stderr.splitlines()[-1] if stderr else "доступ отклонён"
+    return "unreachable", (stderr.splitlines()[-1] if stderr else f"ssh завершился с кодом {proc.returncode}")
+
+
+def check_server(server: Server, timeout: float) -> tuple[str, str | None]:
+    """Пускает ли сервер по ключу (без ControlMaster — проверяем сам ключ, а не живой сокет)."""
+    args = [
+        "ssh",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        f"ConnectTimeout={int(timeout)}",
+        "-o",
+        "ControlPath=none",
+        "-i",
+        server.ssh_key,
+        server.ssh_target,
+        "true",
+    ]
+    return _auth_probe(args, None, timeout)
+
+
+def check_target(target: Target, timeout: float) -> tuple[str, str | None]:
+    """ssh-target: тот же транспорт, что у rsync (ключ или sshpass), команда `true`."""
+    rsh, env = _target_ssh_transport(target)
+    return _auth_probe([*shlex.split(rsh), f"{target.user}@{target.host}", "true"], env, timeout)

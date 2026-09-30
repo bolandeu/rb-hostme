@@ -134,7 +134,7 @@ def test_force_utf8_streams_reconfigures_non_utf8_stream() -> None:
         # <domain> <subcommand> -> <subcommand> <domain> (домен первым в реальном вводе)
         (["mydomain.com", "teardown"], ["teardown", "mydomain.com"]),
         (["mydomain.com", "teardown", "--yes"], ["teardown", "mydomain.com", "--yes"]),
-        (["mydomain.com", "auth", "--off"], ["auth", "mydomain.com", "--off"]),
+        (["mydomain.com", "auth", "--off"], ["http-auth", "mydomain.com", "--off"]),
         # `hostme teardown --help` — справка по teardown, не деплой папки "teardown"
         (["teardown", "--help"], ["teardown", "--help"]),
         (["rollback", "-h"], ["rollback", "-h"]),

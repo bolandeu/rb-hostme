@@ -163,8 +163,10 @@ def add_target(
 ) -> dict:
     if connection not in ("ssh", "ftp", "sftp"):
         raise InvalidArgumentsError(f"--connection должен быть ssh/ftp/sftp, получено {connection!r}")
+    # Без --password — пароль, уже заданный в HOSTME_<NAME>_PASSWORD (сервер под doppler) или в keychain.
+    password = password or credentials.get_secret(name)
     if not password and not ssh_key:
-        raise InvalidArgumentsError("Укажи --password или --ssh-key")
+        raise InvalidArgumentsError(f"Укажи --password (или {credentials.env_var_name(name)}) либо --ssh-key")
     if connection in ("ftp", "sftp") and not password:
         raise InvalidArgumentsError(
             f"--connection={connection} требует --password (ssh_key не подходит для {connection})"
@@ -773,8 +775,8 @@ def run_doctor() -> dict:
     except Exception as exc:  # noqa: BLE001
         checks.append(_check("sites_yaml", "fail", str(exc)))
 
-    for binary in ("ssh", "rsync"):
-        path = shutil.which(binary)
+    # Имена литералами — release.py сверяет их с [[tool.rb.external]] (стандарт §12).
+    for binary, path in (("ssh", shutil.which("ssh")), ("rsync", shutil.which("rsync"))):
         checks.append(_check(binary, "ok" if path else "fail", path or f"`{binary}` не найден в PATH"))
 
     needs_lftp = any(t.connection in ("ftp", "sftp") for t in targets)

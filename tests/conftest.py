@@ -3,6 +3,7 @@ import os
 import keyring.errors
 import pytest
 
+from hostme import output
 from hostme.credentials import manager as credentials
 
 
@@ -30,6 +31,13 @@ class _FakeKeyring:
         if (service, username) not in self.store:
             raise keyring.errors.PasswordDeleteError(f"{service}/{username} not found")
         del self.store[(service, username)]
+
+
+@pytest.fixture(autouse=True)
+def tty_stdin(monkeypatch: pytest.MonkeyPatch) -> None:
+    # pytest подменяет stdin не-терминалом; интерактивные ветки тестируются с «как будто TTY»,
+    # ветка без TTY — отдельным тестом, который возвращает False.
+    monkeypatch.setattr(output, "_stdin_is_tty", lambda: True)
 
 
 @pytest.fixture(autouse=True)

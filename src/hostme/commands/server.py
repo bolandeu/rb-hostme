@@ -24,6 +24,8 @@ def add(
     Только запись в реестр (~/.config/hostme/servers.yaml): сервер не трогается.
     Требования к серверу (Ubuntu LTS, порты 22/80/443, ключ + passwordless sudo)
     — README.md. Дальше `hostme server init <name>` ставит Webinoly.
+
+    Example: hostme server add --name vps1 --host 203.0.113.10 --key ~/.ssh/id_ed25519 --default
     """
     result = services.add_server(name, host, user, key, default)
     output.success(result.pop("message"), **result)
@@ -36,6 +38,8 @@ def init(name: Annotated[str, typer.Argument(help="Имя сервера из `h
 
     Идемпотентно: на сервере с уже установленным Webinoly ничего не переустанавливает.
     Сама ОС должна быть подготовлена заранее (apt upgrade, reboot) — README.md.
+
+    Example: hostme server init vps1
     """
     result = services.init_server(name)
     output.success(result.pop("message"), **result)
@@ -44,7 +48,10 @@ def init(name: Annotated[str, typer.Argument(help="Имя сервера из `h
 @app.command("update")
 @output.guard
 def update(name: Annotated[str, typer.Argument(help="Имя сервера из `hostme server list`.")]) -> None:
-    """hostme server update <name> — обновить сам Webinoly на сервере (не системные пакеты)."""
+    """hostme server update <name> — обновить сам Webinoly на сервере (не системные пакеты).
+
+    Example: hostme server update vps1
+    """
     result = services.update_server(name)
     output.success(result.pop("message"), **result)
 
@@ -52,7 +59,10 @@ def update(name: Annotated[str, typer.Argument(help="Имя сервера из 
 @app.command("list")
 @output.guard
 def list_() -> None:
-    """hostme server list — все зарегистрированные серверы (имя, user@host, default)."""
+    """hostme server list — все зарегистрированные серверы (имя, user@host, default).
+
+    Example: hostme server list --json
+    """
 
     def render(d: dict) -> None:
         if not d["servers"]:
@@ -79,6 +89,8 @@ def remove(
 
     Сервер и сайты на нём не трогаются — только запись в ~/.config/hostme.
     Без --force отказывается, пока за сервером числятся сайты (сначала teardown).
+
+    Example: hostme server remove vps1
     """
     result = services.remove_server(name, force)
     output.success(result.pop("message"), **result)

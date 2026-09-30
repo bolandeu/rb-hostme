@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pytest
 
-from hostme.config import Server
+from hostme.config import Server, Target
 from hostme.core.errors import InvalidArgumentsError
 from hostme.providers import ssh
 
@@ -155,3 +155,32 @@ def test_rsync_to_target_keeps_relative_remote_path():
         ssh.rsync_to_target("/local/path", make_target(remote_path="top-ved.ru/public_html", password="x"))
     destination = mock_run.call_args[0][0][-1]
     assert destination == "u12345@host.example:top-ved.ru/public_html/"
+
+
+# --- health check для auth status --check ---
+
+
+def test_check_server_ok_and_invalid():
+    from hostme.providers.ssh import check_server
+
+    server = Server(name="s", host="h", user="root", ssh_key="~/.ssh/id")
+    with patch("hostme.providers.ssh.subprocess.run", return_value=fake_completed(0)) as run:
+        assert check_server(server, 10) == ("ok", None)
+    args = run.call_args.args[0]
+    assert args[0] == "ssh" and args[-1] == "true" and "ControlPath=none" in args
+    denied = fake_completed(255, stderr="root@h: Permission denied (publickey).")
+    with patch("hostme.providers.ssh.subprocess.run", return_value=denied):
+        assert check_server(server, 10)[0] == "invalid"
+    with patch("hostme.providers.ssh.subprocess.run", side_effect=subprocess.TimeoutExpired("ssh", 10)):
+        assert check_server(server, 10)[0] == "unreachable"
+
+
+def test_check_target_password_uses_sshpass_env():
+    from hostme.providers.ssh import check_target
+
+    target = Target(name="t", connection="ssh", host="h", user="u", password="pw")
+    with patch("hostme.providers.ssh.subprocess.run", return_value=fake_completed(0)) as run:
+        assert check_target(target, 10) == ("ok", None)
+    assert run.call_args.args[0][:3] == ["sshpass", "-e", "ssh"]
+    assert "pw" not in run.call_args.args[0]
+    assert run.call_args.kwargs["env"]["SSHPASS"] == "pw"

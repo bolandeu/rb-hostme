@@ -51,6 +51,10 @@ _COMMAND_REFERENCE: list[tuple[str, str]] = [
     ("hostme list", "таблица сайтов из реестра + служебные домены без деплоя через hostme (помечены отдельно)"),
     ("hostme open <domain>", "открыть сайт в браузере"),
     ("hostme doctor", "проверка окружения/конфига (бинари, права, ключи) без обращения к серверам"),
+    (
+        "hostme auth status [--check] [--provider server:N|target:N]",
+        "откуда берутся доступы к серверам/target'ам и работают ли (exit 3 — проблема); значения не печатаются",
+    ),
     ("hostme server add --name N --host H --user U [--key PATH] [--default]", "зарегистрировать сервер"),
     ("hostme server init <name>", "поставить/проверить Webinoly на сервере"),
     ("hostme server update <name>", "обновить сам Webinoly на сервере (не пакеты)"),
@@ -107,7 +111,10 @@ _NOT_IMPLEMENTED_NOTE = (
 
 @output.guard
 def help_cmd() -> None:
-    """hostme help — полный справочник команд с реальным порядком аргументов (--json для агентов)."""
+    """hostme help — полный справочник команд с реальным порядком аргументов (--json для агентов).
+
+    Example: hostme help --json
+    """
 
     def render(d: dict) -> None:
         # markup=False обязателен: в usage-строках полно "[domain]"/"[--server NAME]" —

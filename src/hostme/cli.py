@@ -7,7 +7,7 @@ import typer
 from rich.markup import escape as rich_escape
 
 from hostme import output
-from hostme.commands import doctor, domain, server, site, skill, target
+from hostme.commands import auth, doctor, domain, server, site, skill, target
 from hostme.commands import help as help_cmd
 from hostme.core.errors import HostmeError, UnexpectedError
 from hostme.core.version import DEV_VERSION, installed_version, package_summary
@@ -18,6 +18,7 @@ from hostme.data import load_skill_doc
 # Typer/Click умеет только статическое дерево подкоманд, поэтому реальный argv
 # переписывается в explicit-подкоманды (_translate_argv) до того, как его увидит Typer.
 _TOP_LEVEL_COMMANDS = {
+    "auth",
     "server",
     "domain",
     "target",
@@ -32,6 +33,10 @@ _TOP_LEVEL_COMMANDS = {
     "-h",
 }
 _DOMAIN_SUBCOMMANDS = {"teardown", "config", "auth", "ssl", "debug", "revs", "rollback", "rollfore", "maintenance"}
+# `auth` занят дважды: `hostme auth status` — отчёт о доступах (стандарт §8, одинаковый
+# у всех tools), `hostme <domain> auth` — HTTP Basic Auth сайта. Доменная форма
+# уходит во внутреннее имя команды.
+_DOMAIN_SUBCOMMAND_TARGETS = {"auth": "http-auth"}
 # Глобальные флаги — только на уровне root-callback (Typer не даёт их объявить
 # и там, и на каждой команде одновременно без дублирования на 15+ функций), но
 # агент не обязан помнить, что они идут именно ДО команды — conventions.md
@@ -51,7 +56,7 @@ def _translate_argv(argv: list[str]) -> list[str]:
 
     if len(args) >= 2 and args[1] in _DOMAIN_SUBCOMMANDS:
         domain, subcmd, *rest = args
-        return [*prefix, subcmd, domain, *rest]
+        return [*prefix, _DOMAIN_SUBCOMMAND_TARGETS.get(subcmd, subcmd), domain, *rest]
 
     # `hostme teardown --help` — просьба о справке по teardown, а не деплой папки
     # с именем "teardown" (иначе показывалась бы справка деплоя, сбивая с толку).
@@ -76,6 +81,7 @@ app.add_typer(server.app, name="server")
 app.add_typer(domain.app, name="domain")
 app.add_typer(target.app, name="target")
 app.add_typer(skill.app, name="skill")
+app.add_typer(auth.app, name="auth")
 
 app.command("_deploy", hidden=True)(site.deploy)
 app.command("list")(site.list_)
@@ -85,7 +91,7 @@ app.command("rollback")(site.rollback)
 app.command("rollfore")(site.rollfore)
 app.command("maintenance")(site.maintenance)
 app.command("teardown")(site.teardown)
-app.command("auth")(site.auth)
+app.command("http-auth")(site.auth)
 app.command("config")(site.site_config)
 app.command("debug")(site.debug)
 app.command("doctor")(doctor.doctor)

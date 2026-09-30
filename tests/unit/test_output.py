@@ -196,6 +196,14 @@ def test_require_confirmation_non_interactive_without_yes_raises():
         output.require_confirmation("Снести сайт a.dev", confirm=False)
 
 
+def test_require_confirmation_without_tty_raises_instead_of_prompting(monkeypatch):
+    # Сервер: cron/systemd/doppler run — stdin не терминал, спрашивать некого.
+    monkeypatch.setattr(output, "_stdin_is_tty", lambda: False)
+    with patch("hostme.output.typer.confirm") as mock_confirm, pytest.raises(InvalidArgumentsError, match="без TTY"):
+        output.require_confirmation("Снести сайт a.dev", confirm=False)
+    mock_confirm.assert_not_called()
+
+
 def test_require_confirmation_interactive_confirmed_proceeds():
     with patch("hostme.output.typer.confirm", return_value=True) as mock_confirm:
         output.require_confirmation("Снести сайт a.dev", confirm=False)

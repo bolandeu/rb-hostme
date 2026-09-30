@@ -76,6 +76,21 @@ class CredentialStoreUnavailableError(HostmeError):
         )
 
 
+class CredentialsUnhealthyError(HostmeError):
+    """`hostme auth status`: обязательный доступ не в порядке или какой-то неверен/истёк (стандарт §8)."""
+
+    code = "CREDENTIALS_UNHEALTHY"
+    exit_code = 3
+
+    def __init__(self, problems: dict[str, str]) -> None:
+        listed = ", ".join(f"{name}: {status}" for name, status in problems.items())
+        super().__init__(
+            f"Проблемы с доступами: {listed}",
+            action="Подробности — в `credentials[].message`; пароль target'а — HOSTME_<TARGET>_PASSWORD или "
+            "keychain `hostme:<target>`, ключ сервера — файл ssh_key из `hostme server list`.",
+        )
+
+
 class AbortedError(HostmeError):
     """Пользователь ответил «нет» на интерактивное подтверждение."""
 

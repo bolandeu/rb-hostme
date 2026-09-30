@@ -1,0 +1,18 @@
+
+ Usage: hostme http-auth [OPTIONS] {domain}
+
+ hostme <domain> auth --user U --pass P | --off — password protection (HTTP Basic Auth). Только
+ свои серверы.
+
+ Example: hostme landing.example.com auth --user admin --pass s3cret
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    domain      <str>  Домен сайта из `hostme list`. [required]                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --user          <str>  Логин для HTTP Basic Auth.                                                │
+│ --pass          <str>  Пароль (локально не хранится).                                            │
+│ --off                  Снять защиту паролем.                                                     │
+│ --help  -h             Show this message and exit.                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+

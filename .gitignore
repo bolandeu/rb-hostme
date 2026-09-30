@@ -12,3 +12,5 @@ build/
 vps.txt
 *.env
 .env*
+.ruff_cache/
+htmlcov/

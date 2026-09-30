@@ -1,0 +1,1 @@
+`hostme auth status [--check] [--provider server:N|target:N] --json` — отчёт о доступах по общему для tools контракту: запись на каждый сервер (ssh-ключ) и target (пароль), откуда он берётся и работает ли (`--check` — один read-only вход за 10 с); exit 3 при проблеме. `hostme <domain> auth` (HTTP Basic Auth) работает как раньше.

@@ -1,13 +1,11 @@
 # Changelog
 
 Формат — [Keep a Changelog](https://keepachangelog.com/), версии — [SemVer](https://semver.org/).
-`scripts/release.py patch|minor|major` переносит секцию Unreleased под новый
-номер версии, коммитит, ставит тег `v<version>` и пушит — записи сюда
-добавляются по ходу работы, а не в момент релиза. `version =` в
-pyproject.toml руками не править.
+Руками не править: каждое изменение — фрагмент в `changelog.d/`
+(`uv run towncrier create +<slug>.<type>.md -c "…"`), `scripts/release.py
+patch|minor|major` собирает их в секцию версии. Версия — из git-тега.
 
-## [Unreleased]
-
+<!-- towncrier release notes start -->
 ## [0.2.0] - 2026-09-17
 
 ### Changed — рефакторинг на архитектуру cli-builder (breaking для агентов)

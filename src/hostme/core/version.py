@@ -1,17 +1,27 @@
 from __future__ import annotations
 
-from importlib.metadata import PackageNotFoundError, metadata
-from importlib.metadata import version as pkg_version
+from importlib.metadata import Distribution, PackageNotFoundError, distribution
 
-_PACKAGE_NAME = "hostme"
+from hostme._distribution import DIST_NAME, DIST_NAME_LEGACY
 
 DEV_VERSION = "0.0.0-dev"
+
+
+def _distribution() -> Distribution:
+    """Установленный дистрибутив: по DIST_NAME, иначе по DIST_NAME_LEGACY (переименование в процессе, стандарт §10)."""
+    for name in (DIST_NAME, DIST_NAME_LEGACY):
+        if name:
+            try:
+                return distribution(name)
+            except PackageNotFoundError:
+                continue
+    raise PackageNotFoundError(DIST_NAME)
 
 
 def package_summary() -> str:
     """Однострочный `description` из pyproject.toml — как установлен."""
     try:
-        return metadata(_PACKAGE_NAME)["Summary"] or ""
+        return _distribution().metadata["Summary"] or ""
     except PackageNotFoundError:
         return ""
 
@@ -20,6 +30,6 @@ def installed_version() -> str | None:
     """Версия установленного пакета, или None, если пакет не установлен вовсе
     (запуск из исходников без даже editable-установки) — «dev-сборка»."""
     try:
-        return pkg_version(_PACKAGE_NAME)
+        return _distribution().version
     except PackageNotFoundError:
         return None

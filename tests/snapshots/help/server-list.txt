@@ -1,0 +1,11 @@
+
+ Usage: hostme server list [OPTIONS]
+
+ hostme server list — все зарегистрированные серверы (имя, user@host, default).
+
+ Example: hostme server list --json
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --help  -h        Show this message and exit.                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+

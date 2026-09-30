@@ -23,6 +23,8 @@ def install(
     Источник правды — копия внутри установленного пакета (`hostme --ai` печатает
     её же); после обновления hostme перезапусти, чтобы установленный skill не
     расходился с реальным CLI.
+
+    Example: hostme skill install
     """
     result = services.install_skill(path)
     output.success(result.pop("message"), **result)

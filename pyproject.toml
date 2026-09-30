@@ -1,6 +1,7 @@
 [project]
-name = "hostme"
-version = "0.2.0"
+name = "rb-hostme"
+# Version comes from the git tag vX.Y.Z (uv-dynamic-versioning) — never add `version =`.
+dynamic = ["version"]
 description = "Личный аналог surge.sh — CLI-деплой статических сайтов и PHP на свои VPS через Webinoly"
 authors = [
     { name = "Roman Bolandau", email = "r.bolandau@gmail.com" }
@@ -20,20 +21,114 @@ hostme = "hostme.cli:main"
 Repository = "https://github.com/bolandeu/hostme"
 
 [build-system]
-requires = ["uv_build>=0.10.2,<0.13.0"]
-build-backend = "uv_build"
+requires = ["hatchling", "uv-dynamic-versioning"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+[tool.uv-dynamic-versioning]
+vcs = "git"
+style = "pep440"
+fallback-version = "0.0.0"
+
+[tool.uv]
+# Rebuild the editable install when a commit or tag moves, so `--version` follows the tag.
+cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hostme"]
+
+[tool.hatch.build.targets.wheel.force-include]
+# Установленный CLI читает [[tool.rb.external]] отсюда (стандарт §12).
+"pyproject.toml" = "hostme/_pyproject.toml"
 
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
     "ruff>=0.16.6",
+    "syrupy>=4.8",
+    "towncrier>=24.8",
     "ty>=0.0.80",
 ]
+
+# Changelog from fragments: each change adds changelog.d/+<slug>.<type>.md
+# (`uv run towncrier create +<slug>.<type>.md -c "..."`); scripts/release.py assembles them.
+[tool.towncrier]
+filename = "CHANGELOG.md"
+directory = "changelog.d"
+start_string = "<!-- towncrier release notes start -->\n"
+title_format = "## [{version}] - {project_date}"
+issue_format = "#{issue}"
+
+[[tool.towncrier.type]]
+directory = "added"
+name = "Added"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "changed"
+name = "Changed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "deprecated"
+name = "Deprecated"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "removed"
+name = "Removed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "fixed"
+name = "Fixed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "security"
+name = "Security"
+showcontent = true
+
+# External (non-Python) dependencies — every program this tool runs. The gate
+# checks this list against src/ both ways; the tools/ root builds
+# docs/external-deps.md from it (standard §12).
+[[tool.rb.external]]
+name = "ssh"
+required = true
+check = "ssh -V"
+why = "команды Webinoly на своих серверах, проверка доступа в auth status --check"
+
+[[tool.rb.external]]
+name = "rsync"
+required = true
+why = "заливка сайтов на свои серверы и на ssh-target'ы, бэкап target'а перед деплоем"
+
+[[tool.rb.external]]
+name = "lftp"
+required = false
+why = "заливка на ftp/sftp-target'ы (нужен, только если такие target'ы зарегистрированы)"
+
+[[tool.rb.external]]
+name = "sshpass"
+required = false
+check = "sshpass -V"
+why = "ssh-target'ы с паролем вместо ключа (пароль через SSHPASS, не в argv)"
+
+[tool.cli-generator]
+# Where scripts/check_command_docstrings.py (git pre-commit + Claude Code hooks)
+# looks for commands: a glob or a list of globs, relative to the repo root.
+commands = ["src/hostme/commands/*.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov --cov-report=term-missing:skip-covered"
+# tests/test_help.py keeps help snapshots at tests/snapshots/help/<command>.txt
+# (standard §7), not in syrupy's own layout, so syrupy warns it "can not relate"
+# each file to its test. It can — by name.
+filterwarnings = ["ignore:(?s).*Can not relate snapshot:UserWarning"]
 markers = [
     "e2e: реальный сервер по SSH (HOSTME_E2E_HOST), по умолчанию пропускается",
 ]
@@ -63,3 +158,11 @@ ignore = ["RUF001", "RUF002", "RUF003"]
 # providers/ — весь смысл слоя в запуске ssh/rsync/lftp: argv-списком, без shell;
 # бинарь ищется в PATH намеренно (уважаем окружение пользователя, кроссплатформенно)
 "src/hostme/providers/*" = ["S603", "S607"]
+
+[tool.ruff.lint.flake8-bugbear]
+# Typer's `param: T = typer.Option(...)` style is a call in a default on purpose.
+extend-immutable-calls = ["typer.Option", "typer.Argument"]
+
+[tool.ty.terminal]
+# Only errors fail the gate; recent ty (>= 0.0.84) otherwise exits 1 on warnings too.
+error-on-warning = false

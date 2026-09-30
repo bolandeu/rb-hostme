@@ -11,14 +11,16 @@
 логина — `gh auth setup-git`, или SSH-форма ниже):
 
 ```
-uv tool install "git+https://github.com/bolandeu/hostme.git"
+uv tool install "rb-hostme @ git+https://github.com/bolandeu/hostme.git@vX.Y.Z"
 ```
 
-Обновление после новых коммитов: `uv tool upgrade hostme`. Через SSH (если
-HTTPS отказывает в авторизации):
+`vX.Y.Z` — последний тег релиза (только из тега, не из ветки). Дистрибутив
+называется `rb-hostme`, команда — `hostme`. Копию, поставленную под старым
+именем `hostme`, сначала удалить: `uv tool uninstall hostme`, иначе два
+пакета дерутся за одну команду. Через SSH (если HTTPS отказывает в авторизации):
 
 ```
-uv tool install "git+ssh://git@github.com/bolandeu/hostme.git"
+uv tool install "rb-hostme @ git+ssh://git@github.com/bolandeu/hostme.git@vX.Y.Z"
 ```
 
 При разработке самого `hostme` (в этом репозитории) — editable-режим, чтобы
@@ -63,21 +65,23 @@ hostme <path> [domain] [--server NAME]
 Архитектура — по [cli-builder](https://github.com/bolandeu/cli-generator):
 `commands/` (только разбор аргументов) → `core/` (сервисы, ошибки) →
 `providers/` (ssh/rsync/lftp/Webinoly — всё, что выходит за пределы процесса),
-`output/` (human/json, guard), `credentials/` (пароли target'ов в OS keychain).
+`output/` (human/json, guard), `credentials/` (пароли target'ов: env
+`HOSTME_<TARGET>_PASSWORD`, иначе OS keychain `hostme:<target>`; `auth status`).
 
-Полный цикл проверки — тот же, что в CI, в том же порядке:
+Проверка — один гейт (`~/Projects/tools/docs/standard-release.md` §3):
 
 ```
-uv sync && uv run ruff check . && uv run ruff format --check . \
-  && uv run ty check && uv run pytest && uv run hostme doctor
+uv run scripts/release.py --check
 ```
 
-`pytest` держит порог покрытия (`fail_under` в `pyproject.toml`) — поднимать,
-не опускать. После клонирования один раз `scripts/install_hooks.sh` — ставит
-pre-commit-предупреждение о docstring команды, отставшем от её кода
-(docstring — это `--help`, который читают агенты).
+(lock, ruff, ty, pytest с порогом покрытия и снапшотами `--help`, сверка
+`[[tool.rb.external]]` с кодом, changelog-фрагмент, сборка+установка колеса,
+osv-scanner). После клонирования один раз `scripts/install_hooks.sh`
+(`core.hooksPath=.githooks`: pre-commit блокирует команду, чей код поменялся
+без docstring = `--help`; pre-push сообщает корневому агенту о тегах).
 
-Релиз: записи в `CHANGELOG.md` под `## [Unreleased]` по ходу работы, затем
-`uv run scripts/release.py patch|minor|major` (с чистого `main`) — бампит
-версию, датирует changelog, ставит тег `v<version>` и пушит. `version =`
-руками не править.
+Изменение с видимым эффектом — фрагмент `changelog.d/+<slug>.<type>.md`
+(`uv run towncrier create +<slug>.<type>.md -c "…"`). Релиз:
+`uv run scripts/release.py patch|minor|major` на чистом `main` — собирает
+changelog, коммитит, ставит тег; push — `git push --follow-tags`. Версия
+только из git-тега, `version =` в pyproject нет.

@@ -1,0 +1,22 @@
+
+ Usage: hostme auth status [OPTIONS]
+
+ hostme auth status [--check] [--provider server:N|target:N] — здоровье доступов (стандарт §8).
+
+ Запись на каждый сервер (`server:<имя>`, ssh-ключ — файл) и target
+ (`target:<имя>`: пароль из HOSTME_<TARGET>_PASSWORD, иначе keychain
+ `hostme:<target>`; или ssh-ключ). Без --check — только наличие (`unchecked`/
+ `missing`). Exit 0 — всё в порядке, 3 — что-то missing/invalid/unreachable,
+ 2 — неизвестный --provider. Форма --json — контракт для tools-watch:
+ `tool`, `version`, `checked_at`, `credentials[]` с `provider`, `required`,
+ `fields`, `source`, `source_ref`, `status`, `expires_at`, `quota`, `message`.
+
+ Example: hostme auth status --check --json
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ --check                    Ещё и проверить каждый доступ одним read-only входом (ssh true / lftp │
+│                            cls), 10 с.                                                           │
+│ --provider          <str>  Только этот доступ: server:<имя> или target:<имя>.                    │
+│ --help      -h             Show this message and exit.                                           │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+

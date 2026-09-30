@@ -88,3 +88,28 @@ def mirror_from(target: Target, local_dir: str, timeout: int = DEFAULT_TIMEOUT) 
         + "quit\n"
     )
     _run_lftp(script, target, timeout)
+
+
+def check_target(target: Target, timeout: float) -> tuple[str, str | None]:
+    """Логин + листинг remote_path — дешёвая read-only проверка для `hostme auth status --check`."""
+    if not target.password:
+        return "invalid", f"для connection={target.connection} нужен password"
+    script = (
+        f"set net:timeout {int(timeout)}\nset net:max-retries 1\nset net:reconnect-interval-base 1\n"
+        + _open_script(target)
+        + f"cls -1 {_lftp_quote(_remote_path(target))}\nquit\n"
+    )
+    _log.debug("lftp %s@%s (%s): проверка доступа", target.user, target.host, target.connection)
+    try:
+        proc = subprocess.run(["lftp"], input=script, capture_output=True, text=True, timeout=timeout, check=False)
+    except subprocess.TimeoutExpired:
+        return "unreachable", f"нет ответа за {timeout:.0f}с"
+    except FileNotFoundError:
+        return "unreachable", "`lftp` не найден в PATH"
+    if proc.returncode == 0:
+        return "ok", None
+    text = (proc.stderr or proc.stdout).strip()
+    last = text.splitlines()[-1] if text else f"lftp завершился с кодом {proc.returncode}"
+    if any(marker in text.lower() for marker in ("login failed", "login incorrect", "530", "authentication failed")):
+        return "invalid", last
+    return "unreachable", last

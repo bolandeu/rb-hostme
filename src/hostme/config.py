@@ -169,6 +169,13 @@ def save_targets(targets: list[Target]) -> None:
     # servers: живёт в том же файле (см. save_servers) — та же логика "не затереть".
     # password НЕ пишем в servers.yaml — секрет уходит только в OS keychain
     # (credentials/manager.py), сюда — только не-секретные поля подключения.
+    # Секрет — до записи yaml: без keychain (headless) store_secret падает с
+    # подсказкой про HOSTME_<TARGET>_PASSWORD, и реестр не получает target без пароля.
+    # Пароль, который уже и так отдаёт env/keychain, не переписываем — иначе
+    # пароль из env (сервер под doppler) каждый раз копировался бы в keychain.
+    for t in targets:
+        if t.password and credentials.get_secret(t.name) != t.password:
+            credentials.store_secret(t.name, t.password)
     _ensure_config_dir()
     data = {}
     if SERVERS_FILE.exists():
@@ -189,9 +196,6 @@ def save_targets(targets: list[Target]) -> None:
     with SERVERS_FILE.open("w") as f:
         _yaml.dump(data, f)
     SERVERS_FILE.chmod(0o600)
-    for t in targets:
-        if t.password:
-            credentials.store_secret(t.name, t.password)
 
 
 def find_target(targets: list[Target], name: str) -> Target | None:

@@ -21,6 +21,8 @@ def add(
 
     После этого `hostme ./dist` без домена получает `<slug-папки>.<default-домен>`.
     DNS (wildcard A-запись) и wildcard-SSL настраиваются вручную — WILDCARD-SSL.md.
+
+    Example: hostme domain add sites-first example.com --default
     """
     result = services.add_domain(server_name, domain, default)
     output.success(result.pop("message"), **result)
@@ -29,7 +31,10 @@ def add(
 @app.command("default")
 @output.guard
 def default(domain: Annotated[str, typer.Argument(help="Уже зарегистрированный служебный домен.")]) -> None:
-    """hostme domain default <domain> — сделать служебный домен дефолтным."""
+    """hostme domain default <domain> — сделать служебный домен дефолтным.
+
+    Example: hostme domain default example.com
+    """
     result = services.set_default_domain(domain)
     output.success(result.pop("message"), **result)
 
@@ -37,7 +42,10 @@ def default(domain: Annotated[str, typer.Argument(help="Уже зарегист�
 @app.command("remove")
 @output.guard
 def remove(domain: Annotated[str, typer.Argument(help="Служебный домен из `hostme domain list`.")]) -> None:
-    """hostme domain remove <domain> — убрать служебный домен из реестра (сайты на нём не трогаются)."""
+    """hostme domain remove <domain> — убрать служебный домен из реестра (сайты на нём не трогаются).
+
+    Example: hostme domain remove example.com
+    """
     result = services.remove_domain(domain)
     output.success(result.pop("message"), **result)
 
@@ -45,7 +53,10 @@ def remove(domain: Annotated[str, typer.Argument(help="Служебный дом
 @app.command("list")
 @output.guard
 def list_() -> None:
-    """hostme domain list — служебные домены и какой сервер за каждым стоит."""
+    """hostme domain list — служебные домены и какой сервер за каждым стоит.
+
+    Example: hostme domain list
+    """
 
     def render(d: dict) -> None:
         if not d["domains"]:

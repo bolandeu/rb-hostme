@@ -1,0 +1,20 @@
+
+ Usage: hostme server add [OPTIONS]
+
+ hostme server add --name N --host H [--user U] [--key PATH] [--default] — зарегистрировать сервер.
+
+ Только запись в реестр (~/.config/hostme/servers.yaml): сервер не трогается.
+ Требования к серверу (Ubuntu LTS, порты 22/80/443, ключ + passwordless sudo)
+ — README.md. Дальше `hostme server init <name>` ставит Webinoly.
+
+ Example: hostme server add --name vps1 --host 203.0.113.10 --key ~/.ssh/id_ed25519 --default
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --name             <str>  Имя сервера в реестре hostme (любое короткое). [required]           │
+│ *  --host             <str>  Хост или IP для SSH. [required]                                     │
+│    --user             <str>  SSH-пользователь с passwordless sudo. [default: root]               │
+│    --key              <str>  Путь к приватному SSH-ключу. [default: ~/.ssh/id_ed25519]           │
+│    --default                 Сделать сервером по умолчанию для деплоя.                           │
+│    --help     -h             Show this message and exit.                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+

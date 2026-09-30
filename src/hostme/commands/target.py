@@ -18,7 +18,10 @@ def add(
     host: Annotated[str, typer.Option("--host", help="Хост хостинга.")],
     user: Annotated[str, typer.Option("--user", help="Логин.")],
     password: Annotated[
-        str | None, typer.Option("--password", help="Пароль — уходит в OS keychain, не в servers.yaml.")
+        str | None,
+        typer.Option(
+            "--password", help="Пароль — уходит в OS keychain, не в servers.yaml; без него — из HOSTME_<NAME>_PASSWORD."
+        ),
     ] = None,
     ssh_key: Annotated[str | None, typer.Option("--ssh-key", help="Путь к ключу (только для ssh).")] = None,
     remote_path: Annotated[
@@ -28,8 +31,11 @@ def add(
     """hostme target add --name N --connection ssh|ftp|sftp --host H --user U [--password P] [--ssh-key PATH] [--path REMOTE] — зарегистрировать сторонний хостинг.
 
     Target — чужая инфраструктура (shared-хостинг клиента и т.п.): hostme тут только
-    транспорт, без SSL/релизов/nginx. Пароль хранится в OS keychain (или в
-    HOSTME_<NAME>_PASSWORD), в реестре — только has_password.
+    транспорт, без SSL/релизов/nginx. Пароль: сначала переменная окружения
+    HOSTME_<NAME>_PASSWORD (тогда --password не нужен), иначе OS keychain
+    `hostme:<name>`; в реестре — только has_password.
+
+    Example: hostme target add --name client.ru --connection sftp --host sftp.host.ru --user u123 --path www
     """
     result = services.add_target(name, connection, host, user, password, ssh_key, remote_path)
     output.success(result.pop("message"), **result)
@@ -38,7 +44,10 @@ def add(
 @app.command("list")
 @output.guard
 def list_() -> None:
-    """hostme target list — зарегистрированные target'ы (без паролей — только факт их наличия)."""
+    """hostme target list — зарегистрированные target'ы (без паролей — только факт их наличия).
+
+    Example: hostme target list --json
+    """
 
     def render(d: dict) -> None:
         if not d["targets"]:
@@ -78,6 +87,8 @@ def remove(
 
     Файлы на хостинге не трогаются. Без --force отказывается, пока за target'ом
     числятся сайты.
+
+    Example: hostme target remove client.ru
     """
     result = services.remove_target(name, force)
     output.success(result.pop("message"), **result)

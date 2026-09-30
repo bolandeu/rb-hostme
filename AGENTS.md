@@ -48,7 +48,7 @@
 - `~/.config/hostme` оставлен намеренно (PRD §8), без `platformdirs` — осознанное отклонение от шаблона (путь одинаков на macOS и Linux).
 - `hostme <domain> auth` (HTTP Basic Auth сайта) внутри называется `http-auth` — имя `auth` занято группой `auth status`; перевод — `_DOMAIN_SUBCOMMAND_TARGETS` в `cli.py`.
 
-## Проверка и релиз (`~/Projects/tools/docs/standard-release.md`)
+## Проверка и релиз (`~/Work/tools/docs/standard-release.md`)
 
 - Перед коммитом — `uv run scripts/release.py --check` (единственный гейт: lock, ruff, ty, pytest с порогом покрытия и снапшотами `--help`, `[[tool.rb.external]]`, фрагмент, сборка колеса, osv-scanner).
 - Версия — только из git-тега `vX.Y.Z` (uv-dynamic-versioning); `version =` в pyproject не добавлять. Дистрибутив `rb-hostme`, команда `hostme`.
@@ -59,7 +59,7 @@
 
 ## Внутри системы tools
 
-Корневой агент `~/Projects/tools/` деплоит hostme на серверы, держит доступы (Doppler) и бэкапит данные; правила — стандарт §13.
+Корневой агент `~/Work/tools/` деплоит hostme на серверы, держит доступы (Doppler) и бэкапит данные; правила — стандарт §13.
 
 - **Сообщать корневому агенту** (в отчёте, рядом с тегом): новые/переименованные env-переменные и доступы, новые файлы данных или смена путей, зависимость от других tools, breaking-релиз.
 - **Headless Linux**: env первым, keychain необязателен; без TTY никаких вопросов (`require_confirmation` падает с подсказкой про `--confirm`); никаких Mac-only путей.

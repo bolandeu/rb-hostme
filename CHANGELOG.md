@@ -7,6 +7,17 @@ patch|minor|major` собирает их в секцию версии. Верс�
 
 <!-- towncrier release notes start -->
 
+## [0.4.0] - 2026-09-30
+
+### Added
+
+- Политика хранения бэкапов target'ов: `~/.config/hostme/settings.yaml` → `target_backups: {keep: N, max_age_days: X}` (по умолчанию последние 5 без срока; самый свежий снепшот не удаляется). `hostme doctor` показывает путь, размер, число снепшотов и политику (`--json`: `data_dir`, `target_backups`).
+
+### Changed
+
+- Состояние переехало в `platformdirs.user_data_dir("hostme")` (стандарт tools §13): `sites.yaml`, `sites.d/` и `target-backups/`. При первом запуске hostme сам переносит их из `~/.config/hostme` и сообщает об этом в stderr; `servers.yaml` остаётся в `~/.config/hostme`.
+
+
 ## [0.3.0] - 2026-09-30
 
 ### Added

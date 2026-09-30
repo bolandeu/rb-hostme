@@ -1,1 +1,0 @@
-Состояние переехало в `platformdirs.user_data_dir("hostme")` (стандарт tools §13): `sites.yaml`, `sites.d/` и `target-backups/`. При первом запуске hostme сам переносит их из `~/.config/hostme` и сообщает об этом в stderr; `servers.yaml` остаётся в `~/.config/hostme`.

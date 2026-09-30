@@ -45,7 +45,7 @@
 - `providers/` — ssh/rsync/lftp/Webinoly/HTTP-проба: единственное место с `subprocess`/`urllib`; ошибки наружу только как `ProviderError`.
 - `output/` — human/json-вывод, `guard` (на каждой команде), `group`, `require_confirmation` (гейт `--confirm`, `--yes`/`-y` — алиасы), состояние `--json/--quiet/--verbose/--non-interactive/--dry-run`.
 - `credentials/manager.py` — пароли target'ов: сначала env `HOSTME_<NAME>_PASSWORD`, потом OS keychain `hostme:<name>` (keychain необязателен — на headless-сервере его нет, это не ошибка); в `servers.yaml` секретов нет. `credentials/health.py` — `hostme auth status` (стандарт §8): запись `server:<имя>` (ssh-ключ, файл) и `target:<имя>` на каждый объект реестра; проверки `--check` — в `providers/ssh.py`/`ftp.py` (`check_*`, 10 с).
-- `~/.config/hostme` оставлен намеренно (PRD §8), без `platformdirs` — осознанное отклонение от шаблона (путь одинаков на macOS и Linux).
+- Настройки — `~/.config/hostme` (PRD §8, путь одинаков на macOS и Linux); состояние (`sites.yaml`, `sites.d/`, `target-backups/`) — `platformdirs.user_data_dir("hostme")` (стандарт §13). Перенос со старого места — `config.migrate_legacy_data()` в root-callback.
 - `hostme <domain> auth` (HTTP Basic Auth сайта) внутри называется `http-auth` — имя `auth` занято группой `auth status`; перевод — `_DOMAIN_SUBCOMMAND_TARGETS` в `cli.py`.
 
 ## Проверка и релиз (`~/Work/tools/docs/standard-release.md`)
@@ -63,7 +63,7 @@
 
 - **Сообщать корневому агенту** (в отчёте, рядом с тегом): новые/переименованные env-переменные и доступы, новые файлы данных или смена путей, зависимость от других tools, breaking-релиз.
 - **Headless Linux**: env первым, keychain необязателен; без TTY никаких вопросов (`require_confirmation` падает с подсказкой про `--confirm`); никаких Mac-only путей.
-- Данные: `~/.config/hostme/` (servers.yaml, sites.yaml, sites.d/, target-backups/) и `~/.cache/hostme/ssh-control/` — вне репозитория; сам hostme ничего никуда не синхронизирует.
+- Настройки: `~/.config/hostme/` (servers.yaml, settings.yaml). Данные: `user_data_dir("hostme")` (macOS `~/Library/Application Support/hostme`, Linux `~/.local/share/hostme`: sites.yaml, sites.d/, target-backups/) и `~/.cache/hostme/ssh-control/` — вне репозитория; сам hostme ничего никуда не синхронизирует.
 
 ## Стиль работы над кодом
 

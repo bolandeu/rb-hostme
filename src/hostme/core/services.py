@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from hostme import config, data, output
@@ -222,9 +222,6 @@ def confirm_target_action(action: str, target: config.Target, confirm: bool) -> 
     output.require_confirmation(f"{action} на target {target.name!r} ({target.connection}, сторонний хостинг)", confirm)
 
 
-_KEEP_TARGET_BACKUPS = 5
-
-
 def _target_backup_dir(target_name: str) -> Path:
     return config.TARGET_BACKUPS_DIR / target_name
 
@@ -236,10 +233,38 @@ def _target_backup_snapshots(target_name: str) -> list[Path]:
     return sorted(p for p in backups_dir.iterdir() if p.is_dir())
 
 
-def _prune_target_backups(target_name: str, keep: int = _KEEP_TARGET_BACKUPS) -> None:
+def _snapshot_time(snapshot: Path) -> datetime:
+    try:
+        return datetime.strptime(snapshot.name, "%Y%m%d%H%M%S").replace(tzinfo=UTC)
+    except ValueError:
+        return datetime.fromtimestamp(snapshot.stat().st_mtime, UTC)
+
+
+def _prune_target_backups(target_name: str, policy: config.BackupPolicy | None = None) -> list[Path]:
+    """Политика config.BackupPolicy; самый свежий снепшот не трогаем никогда."""
+    policy = policy or config.load_backup_policy()
     snapshots = _target_backup_snapshots(target_name)
-    for old in snapshots[:-keep]:
+    older = snapshots[:-1]
+    expired = set(snapshots[: -policy.keep])
+    if policy.max_age_days is not None:
+        cutoff = datetime.now(UTC) - timedelta(days=policy.max_age_days)
+        expired.update(p for p in older if _snapshot_time(p) < cutoff)
+    removed = sorted(expired)
+    for old in removed:
         shutil.rmtree(old, ignore_errors=True)
+    return removed
+
+
+def _dir_size(path: Path) -> int:
+    return sum(f.stat().st_size for f in path.rglob("*") if f.is_file() and not f.is_symlink())
+
+
+def _human_size(size: float) -> str:
+    for unit in ("Б", "КБ", "МБ"):
+        if size < 1024:
+            return f"{size:.0f} {unit}" if unit == "Б" else f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} ГБ"
 
 
 def _backup_target_before_deploy(target: config.Target) -> None:
@@ -771,9 +796,12 @@ def run_doctor() -> dict:
 
     try:
         sites = config.load_sites()
-        checks.append(_check("sites_yaml", "ok", f"{len(sites)} сайтов"))
+        checks.append(_check("sites_yaml", "ok", f"{len(sites)} сайтов ({config.SITES_FILE})"))
     except Exception as exc:  # noqa: BLE001
         checks.append(_check("sites_yaml", "fail", str(exc)))
+
+    backups_check, backups_info = _target_backups_report()
+    checks.append(backups_check)
 
     # Имена литералами — release.py сверяет их с [[tool.rb.external]] (стандарт §12).
     for binary, path in (("ssh", shutil.which("ssh")), ("rsync", shutil.which("rsync"))):
@@ -818,7 +846,29 @@ def run_doctor() -> dict:
             )
 
     ok = not any(c["status"] == "fail" for c in checks)
-    return {"healthy": ok, "checks": checks}
+    return {"healthy": ok, "checks": checks, "data_dir": str(config.DATA_DIR), "target_backups": backups_info}
+
+
+def _target_backups_report() -> tuple[dict, dict]:
+    """(check для doctor, сводка для JSON: путь, байты, снепшоты, политика)."""
+    backups_dir = config.TARGET_BACKUPS_DIR
+    snapshots = (
+        sum(len(_target_backup_snapshots(t.name)) for t in backups_dir.iterdir() if t.is_dir())
+        if backups_dir.is_dir()
+        else 0
+    )
+    size = _dir_size(backups_dir) if backups_dir.is_dir() else 0
+    info: dict = {"path": str(backups_dir), "bytes": size, "snapshots": snapshots}
+    try:
+        policy = config.load_backup_policy()
+    except InvalidArgumentsError as exc:
+        return _check("target_backups", "fail", str(exc)), info
+    info["policy"] = {"keep": policy.keep, "max_age_days": policy.max_age_days}
+    policy_text = f"храним последние {policy.keep}" + (
+        f", не старше {policy.max_age_days} дн." if policy.max_age_days else ""
+    )
+    detail = f"{backups_dir} — {_human_size(size)}, снепшотов: {snapshots}; {policy_text}"
+    return _check("target_backups", "ok", detail), info
 
 
 # --- skill (bundled SKILL.md для AI-агентов, см. hostme --ai) --------------

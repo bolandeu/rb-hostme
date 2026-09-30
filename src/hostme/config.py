@@ -1,22 +1,28 @@
 from __future__ import annotations
 
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+from platformdirs import user_data_dir
 from ruamel.yaml import YAML
 
 from hostme.core.errors import InvalidArgumentsError
 from hostme.credentials import manager as credentials
 
+# Настройки (что пишет человек): реестр серверов/targets и settings.yaml.
 CONFIG_DIR = Path.home() / ".config" / "hostme"
 SERVERS_FILE = CONFIG_DIR / "servers.yaml"
-SITES_FILE = CONFIG_DIR / "sites.yaml"
-# Локальные снепшоты "состояние на сервере перед деплоем" для Target-сайтов
-# (сторонний хостинг, без Webinoly-releases) — см. cli._backup_target_before_deploy.
-# Вне git-репозитория проекта по тому же принципу, что servers.yaml/sites.yaml
-# (PRD §8) — это runtime-состояние конкретной машины, не исходный код hostme.
-TARGET_BACKUPS_DIR = CONFIG_DIR / "target-backups"
+SETTINGS_FILE = CONFIG_DIR / "settings.yaml"
+# Состояние (что пишет сам hostme при деплое) — стандарт §13, user_data_dir:
+# sites.yaml (+ sites.d/) с deployed_at и снепшоты Target-сайтов перед деплоем
+# (services._backup_target_before_deploy). Вне git-репозитория (PRD §8).
+DATA_DIR = Path(user_data_dir("hostme", appauthor=False))
+SITES_FILE = DATA_DIR / "sites.yaml"
+TARGET_BACKUPS_DIR = DATA_DIR / "target-backups"
+
+DEFAULT_BACKUPS_KEEP = 5
 
 _yaml = YAML()
 _yaml.preserve_quotes = True
@@ -85,6 +91,76 @@ class Site:
 
 def _ensure_config_dir() -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+
+
+def _ensure_data_dir() -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+
+
+@dataclass
+class BackupPolicy:
+    """Хранение снепшотов Target-сайтов (settings.yaml → target_backups).
+    Снепшот удаляется, если он не среди последних `keep` ИЛИ старше
+    `max_age_days`; самый свежий не удаляется никогда — он нужен rollback."""
+
+    keep: int = DEFAULT_BACKUPS_KEEP
+    max_age_days: int | None = None
+
+
+def load_backup_policy() -> BackupPolicy:
+    if not SETTINGS_FILE.exists():
+        return BackupPolicy()
+    raw = (_yaml.load(SETTINGS_FILE.read_text()) or {}).get("target_backups") or {}
+    keep = raw.get("keep", DEFAULT_BACKUPS_KEEP)
+    max_age_days = raw.get("max_age_days")
+    if not isinstance(keep, int) or keep < 1:
+        raise InvalidArgumentsError(f"{SETTINGS_FILE}: target_backups.keep должен быть целым ≥ 1, а не {keep!r}")
+    if max_age_days is not None and (not isinstance(max_age_days, int) or max_age_days < 1):
+        raise InvalidArgumentsError(
+            f"{SETTINGS_FILE}: target_backups.max_age_days должен быть целым ≥ 1 или пустым, а не {max_age_days!r}"
+        )
+    return BackupPolicy(keep=keep, max_age_days=max_age_days)
+
+
+def migrate_legacy_data() -> list[str]:
+    """Одноразовый перенос состояния из ~/.config/hostme в DATA_DIR (до v0.4.0
+    всё лежало в конфиге). Возвращает строки для сообщения пользователю; пусто,
+    если переносить нечего. Уже существующее в DATA_DIR не перезаписывается."""
+    moved: list[str] = []
+    legacy_sites = CONFIG_DIR / "sites.yaml"
+    if legacy_sites.exists() and legacy_sites != SITES_FILE and not SITES_FILE.exists():
+        includes = (_yaml.load(legacy_sites.read_text()) or {}).get("include", []) or []
+        _ensure_data_dir()
+        for rel in includes:
+            src = CONFIG_DIR / rel
+            dst = DATA_DIR / rel
+            if Path(rel).is_absolute() or not src.exists() or dst.exists():
+                continue
+            dst.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            shutil.move(src, dst)
+            moved.append(f"{src} → {dst}")
+        shutil.move(legacy_sites, SITES_FILE)
+        moved.append(f"{legacy_sites} → {SITES_FILE}")
+        legacy_sites_d = CONFIG_DIR / "sites.d"
+        if legacy_sites_d.is_dir() and not any(legacy_sites_d.iterdir()):
+            legacy_sites_d.rmdir()
+
+    legacy_backups = CONFIG_DIR / "target-backups"
+    if legacy_backups.is_dir() and legacy_backups != TARGET_BACKUPS_DIR:
+        for target_dir in sorted(p for p in legacy_backups.iterdir() if p.is_dir()):
+            dst_target = TARGET_BACKUPS_DIR / target_dir.name
+            dst_target.mkdir(parents=True, exist_ok=True, mode=0o700)
+            for snapshot in sorted(target_dir.iterdir()):
+                if not (dst_target / snapshot.name).exists():
+                    shutil.move(snapshot, dst_target / snapshot.name)
+            if not any(target_dir.iterdir()):
+                target_dir.rmdir()
+        if not any(legacy_backups.iterdir()):
+            legacy_backups.rmdir()
+            moved.append(f"{legacy_backups} → {TARGET_BACKUPS_DIR}")
+        else:
+            moved.append(f"{legacy_backups} → {TARGET_BACKUPS_DIR} (частично: совпавшие снепшоты остались на месте)")
+    return moved
 
 
 def load_servers() -> list[Server]:
@@ -252,7 +328,7 @@ def save_sites(sites: list[Site]) -> None:
     (главный sites.yaml или include-файл из sites.d/) — иначе сайт, once заведённый
     в отдельный include-файл вручную, при первом же обновлении из hostme переехал
     бы в главный sites.yaml (раздел 2.5 TODO)."""
-    _ensure_config_dir()
+    SITES_FILE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     by_file: dict[str, list[Site]] = {}
     main_sites: list[Site] = []
     for s in sites:

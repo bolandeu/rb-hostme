@@ -6,7 +6,7 @@ from typing import Annotated
 import typer
 from rich.markup import escape as rich_escape
 
-from hostme import output
+from hostme import config, output
 from hostme.commands import auth, doctor, domain, server, site, skill, target
 from hostme.commands import help as help_cmd
 from hostme.core.errors import HostmeError, UnexpectedError
@@ -147,7 +147,16 @@ def root(
     output.set_non_interactive(non_interactive)
     output.set_dry_run(dry_run)
     output.configure_logging(verbose)
+    _migrate_legacy_data()
     output.help_if_no_command(ctx)
+
+
+def _migrate_legacy_data() -> None:
+    """До v0.4.0 состояние (sites.yaml, target-backups) лежало в ~/.config/hostme;
+    переносим один раз и сообщаем в stderr (stdout занят --json)."""
+    moved = config.migrate_legacy_data()
+    for line in moved:
+        output.err_console.print(f"hostme: данные перенесены (стандарт §13): {rich_escape(line)}")
 
 
 def main() -> None:

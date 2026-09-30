@@ -3,8 +3,9 @@ import os
 import keyring.errors
 import pytest
 
-from hostme import output
+from hostme import config, output
 from hostme.credentials import manager as credentials
+from hostme.providers import ssh
 
 
 class _FakeKeyring:
@@ -31,6 +32,21 @@ class _FakeKeyring:
         if (service, username) not in self.store:
             raise keyring.errors.PasswordDeleteError(f"{service}/{username} not found")
         del self.store[(service, username)]
+
+
+@pytest.fixture(autouse=True)
+def isolated_dirs(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Ни один тест (включая CliRunner с миграцией в root-callback) не должен
+    # трогать настоящие ~/.config/hostme и user_data_dir.
+    root = tmp_path_factory.mktemp("hostme-home")
+    config_dir, data_dir = root / "config", root / "data"
+    monkeypatch.setattr(config, "CONFIG_DIR", config_dir)
+    monkeypatch.setattr(config, "SERVERS_FILE", config_dir / "servers.yaml")
+    monkeypatch.setattr(config, "SETTINGS_FILE", config_dir / "settings.yaml")
+    monkeypatch.setattr(config, "DATA_DIR", data_dir)
+    monkeypatch.setattr(config, "SITES_FILE", data_dir / "sites.yaml")
+    monkeypatch.setattr(config, "TARGET_BACKUPS_DIR", data_dir / "target-backups")
+    monkeypatch.setattr(ssh, "_CONTROL_DIR", root / "cache" / "ssh-control")
 
 
 @pytest.fixture(autouse=True)

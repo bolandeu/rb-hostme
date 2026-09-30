@@ -130,8 +130,8 @@ failing mysteriously.
 
 ## Before deploying: check what's already there
 
-`hostme` manages its own registry (`~/.config/hostme/servers.yaml` /
-`sites.yaml`) — it's not aware of anything deployed outside itself:
+`hostme` manages its own registry (`~/.config/hostme/servers.yaml`, and
+`sites.yaml` in its data dir — `hostme doctor` prints the path) — it's not aware of anything deployed outside itself:
 
 ```
 hostme list --json           # every known site: domain, server, php/html, last deploy
@@ -181,7 +181,8 @@ ask the user to paste one into a command line unless it's `target add`.
 
 This is meaningfully higher-stakes than a `--server` deploy: it's
 third-party infrastructure (often someone's live production site), the
-rollback story is weaker (one local pre-deploy backup per deploy, not
+rollback story is weaker (one local pre-deploy backup per deploy — only the
+newest is restored; older ones are pruned by `settings.yaml` policy — not
 server-side release history), and a wrong domain/target pairing overwrites
 real content on a host you don't own the failure mode for. **Never run a
 `--target` deploy, `target add`/`target remove`, or

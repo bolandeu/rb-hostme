@@ -1,0 +1,1 @@
+Политика хранения бэкапов target'ов: `~/.config/hostme/settings.yaml` → `target_backups: {keep: N, max_age_days: X}` (по умолчанию последние 5 без срока; самый свежий снепшот не удаляется). `hostme doctor` показывает путь, размер, число снепшотов и политику (`--json`: `data_dir`, `target_backups`).

@@ -1,1 +1,0 @@
-Дистрибутив переименован в `rb-hostme` (команда остаётся `hostme`): старую установку удалить `uv tool uninstall hostme`, ставить `uv tool install "rb-hostme @ git+https://github.com/bolandeu/hostme.git@vX.Y.Z"`. Версия берётся из git-тега, changelog собирается из фрагментов.

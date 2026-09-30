@@ -6,6 +6,20 @@
 patch|minor|major` собирает их в секцию версии. Версия — из git-тега.
 
 <!-- towncrier release notes start -->
+
+## [0.3.0] - 2026-09-30
+
+### Added
+
+- `hostme auth status [--check] [--provider server:N|target:N] --json` — отчёт о доступах по общему для tools контракту: запись на каждый сервер (ssh-ключ) и target (пароль), откуда он берётся и работает ли (`--check` — один read-only вход за 10 с); exit 3 при проблеме. `hostme <domain> auth` (HTTP Basic Auth) работает как раньше.
+
+### Changed
+
+- Дистрибутив переименован в `rb-hostme` (команда остаётся `hostme`): старую установку удалить `uv tool uninstall hostme`, ставить `uv tool install "rb-hostme @ git+https://github.com/bolandeu/hostme.git@vX.Y.Z"`. Версия берётся из git-тега, changelog собирается из фрагментов.
+- Пароль target'а сначала берётся из `HOSTME_<TARGET>_PASSWORD`, OS keychain необязателен: без него (headless Linux) hostme работает на переменных окружения, `target add` без `--password` берёт пароль из env. Деструктивная команда без TTY и без `--confirm` падает с INVALID_ARGUMENTS, а не ждёт ответа.
+- У каждой команды в `--help` есть строка `Example:`, квадратные скобки (`[domain]`, `[--confirm]`) больше не пропадают из справки; у `config --force-https/--no-force-https` появились описания.
+
+
 ## [0.2.0] - 2026-09-17
 
 ### Changed — рефакторинг на архитектуру cli-builder (breaking для агентов)

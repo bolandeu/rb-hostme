@@ -1,1 +1,0 @@
-Пароль target'а сначала берётся из `HOSTME_<TARGET>_PASSWORD`, OS keychain необязателен: без него (headless Linux) hostme работает на переменных окружения, `target add` без `--password` берёт пароль из env. Деструктивная команда без TTY и без `--confirm` падает с INVALID_ARGUMENTS, а не ждёт ответа.

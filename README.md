@@ -68,7 +68,7 @@ hostme <path> [domain] [--server NAME]
 `output/` (human/json, guard), `credentials/` (пароли target'ов: env
 `HOSTME_<TARGET>_PASSWORD`, иначе OS keychain `hostme:<target>`; `auth status`).
 
-Проверка — один гейт (`~/Projects/tools/docs/standard-release.md` §3):
+Проверка — один гейт (`~/Work/tools/docs/standard-release.md` §3):
 
 ```
 uv run scripts/release.py --check

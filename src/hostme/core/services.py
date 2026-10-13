@@ -50,7 +50,7 @@ def init_server(name: str) -> dict:
     server = config.find_server(servers, name)
     if server is None:
         raise InvalidArgumentsError(f"Сервер {name!r} не найден. Сначала `hostme server add`.")
-    output.info(f"Устанавливаю Webinoly на {server.name}...")
+    output.progress(f"Устанавливаю Webinoly на {server.name}...")
     webinoly.install(server)
     webinoly.enable_sftp(server)
     return {"message": f"Сервер {name} готов (Webinoly установлен)", "server": name}
@@ -63,7 +63,7 @@ def update_server(name: str) -> dict:
     server = config.find_server(servers, name)
     if server is None:
         raise InvalidArgumentsError(f"Сервер {name!r} не найден")
-    output.info(f"Обновляю Webinoly на {server.name}...")
+    output.progress(f"Обновляю Webinoly на {server.name}...")
     webinoly.update_webinoly(server)
     return {"message": f"Webinoly на {name} обновлён", "server": name}
 
@@ -286,7 +286,7 @@ def _backup_target_before_deploy(target: config.Target) -> None:
             ftp.mirror_from(target, str(snapshot))
     except HostmeError as exc:
         shutil.rmtree(snapshot, ignore_errors=True)
-        output.info(f"Бэкап перед деплоем не удался (возможно, это первый деплой на {target.name}): {exc}")
+        output.progress(f"Бэкап перед деплоем не удался (возможно, это первый деплой на {target.name}): {exc}")
         return
     _prune_target_backups(target.name)
 
@@ -320,7 +320,7 @@ def deploy_to_target(local_path: Path, domain: str | None, target_name: str, con
 
     _backup_target_before_deploy(target)
 
-    output.info(f"Заливаю файлы на {target.name} ({target.connection})...")
+    output.progress(f"Заливаю файлы на {target.name} ({target.connection})...")
     if target.connection == "ssh":
         rsync_to_target(str(local_path), target)
     else:
@@ -396,7 +396,7 @@ def deploy(path: str, domain: str | None, server_name: str | None, target_name: 
     site_type = detect_site_type(local_path)
     is_new_site = not webinoly.site_exists(server, domain)
     if is_new_site:
-        output.info(f"Создаю сайт {domain} ({site_type}) на {server.name}...")
+        output.progress(f"Создаю сайт {domain} ({site_type}) на {server.name}...")
         webinoly.create_site(server, domain, site_type)
 
         base_domain = next(
@@ -432,7 +432,7 @@ def deploy(path: str, domain: str | None, server_name: str | None, target_name: 
     webinoly.ensure_releases_layout(server, domain)
     ts = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
     release = webinoly.release_path(domain, ts)
-    output.info(f"Заливаю файлы в новый релиз {ts}...")
+    output.progress(f"Заливаю файлы в новый релиз {ts}...")
     rsync_to(str(local_path), server, release)
     webinoly.fix_ownership_path(server, release)
     webinoly.switch_release(server, domain, ts)

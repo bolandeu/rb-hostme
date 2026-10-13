@@ -100,7 +100,8 @@ single-line JSON object **to stdout** — success and error alike:
 {"ok": false, "error": {"code": "...", "message": "...", "action": "..."}}
 ```
 
-Parse stdout; stderr is only diagnostics (`--verbose` shows the actual
+Parse stdout; stderr is only diagnostics (progress lines of long operations
+like deploy, and `--verbose` shows the actual
 `ssh`/`rsync`/`lftp` commands being run). `action`, when present, is the
 concrete next command to run. `--json` implies `--non-interactive`: nothing
 blocks on stdin.

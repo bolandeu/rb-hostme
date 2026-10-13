@@ -173,11 +173,18 @@ def success(message: str, **fields: object) -> None:
     )
 
 
-def info(message: str, **fields: object) -> None:
-    emit_success(
-        {"message": message, **fields},
-        render_human=lambda d: console.print(rich_escape(str(d["message"]))),
-    )
+def progress(message: str) -> None:
+    """Промежуточная строка долгой операции («Создаю сайт...», «Заливаю файлы...»).
+
+    Не результат: под --json stdout — ровно один JSON-объект (итог команды),
+    поэтому прогресс уходит в stderr простым текстом. Под --quiet — молчим.
+    """
+    if _quiet:
+        return
+    if _json_mode:
+        err_console.print(message, markup=False, highlight=False)
+    else:
+        console.print(rich_escape(message))
 
 
 def vecho(message: str) -> None:

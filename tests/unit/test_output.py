@@ -37,10 +37,20 @@ def test_success_json(capsys):
     assert data == {"ok": True, "message": "done", "domain": "a.dev"}
 
 
-def test_info_plain_text(capsys):
-    output.info("hello")
+def test_progress_plain_text(capsys):
+    output.progress("hello")
     captured = capsys.readouterr()
     assert "hello" in captured.out
+
+
+def test_progress_json_keeps_stdout_single_object(capsys):
+    # --json: stdout — ровно один объект (итог), прогресс — в stderr.
+    output.set_json_mode(True)
+    output.progress("Заливаю файлы...")
+    output.success("done")
+    captured = capsys.readouterr()
+    assert json.loads(captured.out) == {"ok": True, "message": "done"}
+    assert "Заливаю файлы..." in captured.err
 
 
 def test_error_plain_text_goes_to_stderr_with_code_from_error(capsys):

@@ -301,7 +301,9 @@ def _backup_target_before_deploy(target: config.Target) -> None:
     _prune_target_backups(target.name)
 
 
-def deploy_to_target(local_path: Path, domain: str | None, target_name: str, confirm: bool) -> dict:
+def deploy_to_target(
+    local_path: Path, domain: str | None, target_name: str, confirm: bool, rebind: bool = False
+) -> dict:
     """Деплой на сторонний хостинг (ftp/sftp/ssh, без Webinoly) — просто залить
     файлы, никакого create_site/SSL/releases (хостер уже сам всё настроил)."""
     if domain is None:
@@ -326,7 +328,7 @@ def deploy_to_target(local_path: Path, domain: str | None, target_name: str, con
     confirm_target_action(f"Деплой {domain}", target, confirm)
 
     sites = config.load_sites()
-    config.check_collision(sites, domain, str(local_path))
+    config.check_collision(sites, domain, str(local_path), rebind)
 
     _backup_target_before_deploy(target)
 
@@ -368,13 +370,20 @@ def teardown_target(target: config.Target) -> None:
         os.rmdir(empty_dir)
 
 
-def deploy(path: str, domain: str | None, server_name: str | None, target_name: str | None, confirm: bool) -> dict:
+def deploy(
+    path: str,
+    domain: str | None,
+    server_name: str | None,
+    target_name: str | None,
+    confirm: bool,
+    rebind: bool = False,
+) -> dict:
     local_path = Path(path).expanduser().resolve()
     if not local_path.is_dir():
         raise InvalidArgumentsError(f"{local_path} не является директорией")
 
     if target_name is not None:
-        return deploy_to_target(local_path, domain, target_name, confirm)
+        return deploy_to_target(local_path, domain, target_name, confirm, rebind)
 
     servers = config.load_servers()
     sites = config.load_sites()
@@ -393,7 +402,7 @@ def deploy(path: str, domain: str | None, server_name: str | None, target_name: 
     if server is None:
         raise InvalidArgumentsError(f"Не удалось определить сервер для домена {domain}. Укажи --server явно.")
 
-    config.check_collision(sites, domain, str(local_path))
+    config.check_collision(sites, domain, str(local_path), rebind)
 
     if output.is_dry_run():
         return {

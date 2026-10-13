@@ -441,9 +441,11 @@ def default_domain(local_path: str, servers: list[Server]) -> str | None:
     return f"{slugify(folder_name)}.{base_domain.name}"
 
 
-def check_collision(sites: list[Site], domain: str, local_path: str) -> None:
+def check_collision(sites: list[Site], domain: str, local_path: str, rebind: bool = False) -> None:
+    """rebind — явное «это тот же сайт, папка переехала» (CI собирает в
+    случайном checkout'е); защита остаётся для ручных выкладок."""
     existing = next((s for s in sites if s.domain == domain), None)
-    if existing is None:
+    if existing is None or rebind:
         return
     existing_path = str(Path(existing.local_path).resolve())
     new_path = str(Path(local_path).resolve())
@@ -451,5 +453,6 @@ def check_collision(sites: list[Site], domain: str, local_path: str) -> None:
         raise InvalidArgumentsError(
             f"Домен {domain} уже используется другим сайтом "
             f"(local_path={existing.local_path}). "
-            f"Укажи другой домен или удали существующий сайт (teardown)."
+            f"Укажи другой домен, удали существующий сайт (teardown) "
+            f"или, если это тот же сайт из новой папки, добавь --rebind."
         )

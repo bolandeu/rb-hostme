@@ -37,8 +37,12 @@ def deploy(
         str | None, typer.Option("--target", help="Сторонний хостинг из `hostme target list` (домен обязателен).")
     ] = None,
     confirm: ConfirmOption = False,
+    rebind: Annotated[
+        bool,
+        typer.Option("--rebind", help="Это тот же сайт из другой папки: перепривязать домен к ней (для CI)."),
+    ] = False,
 ) -> None:
-    """hostme <path> [domain] [--server NAME | --target NAME] — задеплоить папку (без слова "deploy").
+    """hostme <path> [domain] [--server NAME | --target NAME] [--rebind] — задеплоить папку (без слова "deploy").
 
     На свой сервер: создаёт сайт в Webinoly при первом деплое (html или php —
     по наличию *.php), включает SSL, заливает rsync --delete в новый релиз и
@@ -46,10 +50,12 @@ def deploy(
     На --target: только заливка файлов (rsync или lftp mirror) с локальным
     бэкапом перед ней; сторонний хостинг — требует --confirm на каждый вызов.
     Webroot становится точным зеркалом папки: лишние файлы на сервере удаляются.
+    Домен привязан к папке первого деплоя: из другой папки — отказ, пока не
+    передан --rebind (CI собирает в новом checkout'е каждый раз).
 
     Example: hostme ./dist landing.example.com
     """
-    result = services.deploy(path, domain, server_name, target_name, confirm)
+    result = services.deploy(path, domain, server_name, target_name, confirm, rebind)
     output.success(result.pop("message"), **result)
 
 

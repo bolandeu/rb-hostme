@@ -179,6 +179,13 @@ def test_check_collision_rejects_different_local_path(tmp_path):
         config.check_collision(sites, "a.dev", str(new_path))
 
 
+def test_check_collision_rebind_allows_different_local_path(tmp_path):
+    sites = [
+        config.Site(domain="a.dev", server="vps1", local_path=str(tmp_path / "existing")),
+    ]
+    config.check_collision(sites, "a.dev", str(tmp_path / "new"), rebind=True)
+
+
 def test_check_collision_no_existing_site_is_noop(tmp_path):
     config.check_collision([], "a.dev", str(tmp_path))
 

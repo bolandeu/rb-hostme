@@ -7,6 +7,13 @@ patch|minor|major` собирает их в секцию версии. Верс�
 
 <!-- towncrier release notes start -->
 
+## [0.5.0] - 2026-10-13
+
+### Added
+
+- Сайты на своём сервере получают nginx-дефолты hostme (`/var/www/<domain>/hostme-defaults-nginx.conf`, Webinoly не перезаписывает его при обновлении): закрывающий слэш у всех страниц (`/a`, `/a.html`, `/a/index.html` → 301 `/a/` с сохранением query string, плоский `a.html` отдаётся по `/a/`) и `Cache-Control: public, max-age=31536000, immutable` для `/_astro/*`. Файл перезаливается при каждом деплое и в `hostme server update`, который теперь обновляет дефолты всем сайтам сервера. Сниппет `docs/nginx-snippets/static-site-generator.conf` больше не убирает слэш: теперь в нём только charset и кастомный 404.
+
+
 ## [0.4.1] - 2026-10-13
 
 ### Fixed

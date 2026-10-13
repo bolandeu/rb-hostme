@@ -8,6 +8,7 @@ from typing import Literal
 
 from hostme.config import Server
 from hostme.core.errors import ProviderError
+from hostme.data import load_nginx_defaults
 from hostme.providers.ssh import RemoteResult, run_remote
 
 SiteType = Literal["html", "php"]
@@ -384,7 +385,7 @@ def set_custom_nginx_snippet(server: Server, domain: str, content: str) -> Remot
     """`hostme <domain> config --nginx-snippet PATH` / `--no-nginx-snippet`.
     Webinoly не даёт кастомных per-site nginx-настроек из коробки (docs/webinoly.md,
     «Кастомный Nginx-конфиг») — общий механизм для того, чего нет в стандартных
-    флагах Hostme (config --cors/--redirect): чистые URL, кастомный error_page,
+    флагах Hostme (config --cors/--redirect) и дефолтах (apply_site_defaults): кастомный error_page,
     что угодно ещё. В отличие от CORS-сниппета содержимое произвольное — за
     корректность отвечает пользователь, но безопасность та же: nginx -t перед
     reload, откат файла при поломке (сломанный конфиг никогда не попадёт в
@@ -392,6 +393,20 @@ def set_custom_nginx_snippet(server: Server, domain: str, content: str) -> Remot
     location / (её уже объявил сам Webinoly, дублировать нельзя)."""
     return _write_snippet_or_remove(
         server, domain, custom_nginx_snippet_path(domain), content, label="custom nginx-сниппет"
+    )
+
+
+_DEFAULTS_SNIPPET_NAME = "hostme-defaults-nginx.conf"
+
+
+def apply_site_defaults(server: Server, domain: str) -> RemoteResult:
+    """Дефолты каждого сайта (политика закрывающего слэша, кэш `/_astro/`) —
+    `data/nginx-defaults.conf`. Пишется в `/var/www/<domain>/*-nginx.conf`: такие
+    файлы Webinoly подключает сам и не перезаписывает при `webinoly -update`.
+    Перезаливаем на каждом деплое и `server update` — новая версия hostme
+    доезжает до всех сайтов без отдельной миграции."""
+    return _write_snippet_or_remove(
+        server, domain, f"/var/www/{domain}/{_DEFAULTS_SNIPPET_NAME}", load_nginx_defaults(), label="nginx-дефолты"
     )
 
 

@@ -50,6 +50,9 @@ def init(name: Annotated[str, typer.Argument(help="Имя сервера из `h
 def update(name: Annotated[str, typer.Argument(help="Имя сервера из `hostme server list`.")]) -> None:
     """hostme server update <name> — обновить сам Webinoly на сервере (не системные пакеты).
 
+    Затем перезаливает nginx-дефолты hostme (закрывающий слэш, кэш /_astro/)
+    всем сайтам этого сервера из реестра.
+
     Example: hostme server update vps1
     """
     result = services.update_server(name)

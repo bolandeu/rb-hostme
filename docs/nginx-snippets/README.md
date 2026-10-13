@@ -95,21 +95,25 @@ hostme <domain> config --nginx-snippet docs/nginx-snippets/<файл>.conf
 Все пункты выше стоили нескольких часов живой отладки на `test.bolandau.ru`
 2026-09-09 — не наступать снова.
 
+## Дефолты hostme (`src/hostme/data/nginx-defaults.conf`)
+
+С 0.5.0 hostme сам кладёт каждому сайту своего сервера
+`/var/www/<domain>/hostme-defaults-nginx.conf` — при каждом деплое и в
+`hostme server update` (Webinoly такие файлы не перезаписывает). Там:
+
+- политика закрывающего слэша: `/a/index.html` и `/a.html` → 301 `/a/`,
+  `/a` → 301 `/a/`, `/a/` отдаёт `a/index.html`, иначе `a.html` (в том числе
+  при коллизии `a.html` + `a/` с заглушкой `index.php`); query string
+  сохраняется; `404.html` и файлы подтверждения Google/Яндекса не трогаются;
+- `/_astro/*` — `Cache-Control: public, max-age=31536000, immutable`.
+
+Сниппеты в этой папке — только поверх дефолтов, политику URL в них не менять.
+Brotli нет: nginx из репозитория nginx.org собран без модуля, пакета
+`nginx-module-brotli` там нет (проверено 2026-10-13, nginx 1.30.4).
+
 ## `static-site-generator.conf`
 
-Профиль под «Static Landing Generator» (`~/Projects/sitegenerator`, PHP-генератор
-статических лендингов — см. его README.md). Полностью проверено вживую на
-`test.bolandau.ru` (2026-09-09, реальный проект `mwlogistics` из этого
-генератора: PHP+HTML, формы `form.php`/`subscribe.php`, коллизии
-`catalog.html`+`catalog/`, `blog.html`+`blog/`). Делает:
-
-- `/page.html` → редирект 301 на `/page`
-- `/page/` → редирект 301 на `/page` (кроме корня)
-- `/page` → отдаёт `page.html`, если он есть — **включая случаи, когда рядом
-  есть одноимённая директория** (`/catalog`, `/blog` у этого проекта)
-- Настоящий 404 (статус 404, не 200) с кастомной `/404.html`, если ни файла,
-  ни `.html`-версии нет
-- PHP-скрипты и статика (картинки/css/js) не затронуты — работают как обычно
-
-Источник вдохновения — `apache-htaccess.conf` из `sitegenerator`
-(генератор статики с `.html`-файлами и чистыми URL).
+Дополнение для «Static Landing Generator» (`~/Work/sitegenerator`):
+`charset utf-8` и кастомный 404 с верным статусом. Чистые URL с закрывающим
+слэшем дают дефолты (см. выше); до 0.5.0 этот файл задавал обратную политику
+(`/page/` → `/page`).

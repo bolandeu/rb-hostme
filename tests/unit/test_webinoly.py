@@ -1,3 +1,4 @@
+import base64
 import shlex
 from unittest.mock import patch
 
@@ -339,6 +340,17 @@ def test_set_custom_nginx_snippet_writes_and_reloads():
     assert any("base64" in cmd and "hostme-custom-nginx.conf" in cmd for cmd in commands)
     assert "sudo nginx -t" in commands
     assert "sudo systemctl reload nginx" in commands
+
+
+def test_apply_site_defaults_writes_bundled_snippet_and_reloads():
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
+        webinoly.apply_site_defaults(SERVER, "a.dev")
+    commands = [c[0][1] for c in mock_run.call_args_list]
+    write = next(cmd for cmd in commands if "hostme-defaults-nginx.conf" in cmd)
+    assert "/var/www/a.dev/" in write
+    content = base64.b64decode(write.split()[1]).decode()
+    assert "location ^~ /_astro/" in content
+    assert "sudo nginx -t" in commands
 
 
 def test_set_custom_nginx_snippet_empty_removes():

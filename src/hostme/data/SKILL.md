@@ -88,6 +88,13 @@ previous version, it's just a symlink swap away. The webroot becomes an
 exact mirror of the folder (`rsync --delete`): deploying the wrong/empty
 folder replaces the site's content (recoverable via `rollback`).
 
+On `--server` sites hostme enforces trailing-slash URLs in nginx: `/a`,
+`/a.html` and `/a/index.html` all 301 to `/a/` (query kept), and `/a/` serves
+`a/index.html` or a flat `a.html`. Build and link with trailing slashes
+(Astro: `trailingSlash: 'always'`, `build.format: 'directory'`); don't add
+your own snippet that strips slashes, that makes a redirect loop.
+`/_astro/*` is served `immutable` for a year.
+
 ## Always use `--json`
 
 `--json`, `--non-interactive`, `--dry-run`, `--quiet`, `--verbose` work

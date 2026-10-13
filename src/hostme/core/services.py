@@ -58,14 +58,24 @@ def init_server(name: str) -> dict:
 
 def update_server(name: str) -> dict:
     """Обновить сам Webinoly на сервере (`sudo webinoly -update`) — не пакеты
-    сервера (nginx/php/mysql), только сам Webinoly."""
+    сервера (nginx/php/mysql), только сам Webinoly. Затем перезалить nginx-дефолты
+    всем сайтам сервера из реестра: так их получают и сайты, которые давно не
+    деплоились, после обновления самого hostme."""
     servers = config.load_servers()
     server = config.find_server(servers, name)
     if server is None:
         raise InvalidArgumentsError(f"Сервер {name!r} не найден")
     output.progress(f"Обновляю Webinoly на {server.name}...")
     webinoly.update_webinoly(server)
-    return {"message": f"Webinoly на {name} обновлён", "server": name}
+    domains = [s.domain for s in config.load_sites() if s.server == name]
+    for domain in domains:
+        output.progress(f"nginx-дефолты: {domain}...")
+        webinoly.apply_site_defaults(server, domain)
+    return {
+        "message": f"Webinoly на {name} обновлён, nginx-дефолты у {len(domains)} сайтов",
+        "server": name,
+        "sites": domains,
+    }
 
 
 def remove_server(name: str, force: bool) -> dict:
@@ -435,6 +445,7 @@ def deploy(path: str, domain: str | None, server_name: str | None, target_name: 
     output.progress(f"Заливаю файлы в новый релиз {ts}...")
     rsync_to(str(local_path), server, release)
     webinoly.fix_ownership_path(server, release)
+    webinoly.apply_site_defaults(server, domain)
     webinoly.switch_release(server, domain, ts)
     webinoly.prune_releases(server, domain)
 

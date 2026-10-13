@@ -7,6 +7,13 @@ patch|minor|major` собирает их в секцию версии. Верс�
 
 <!-- towncrier release notes start -->
 
+## [0.4.1] - 2026-10-13
+
+### Fixed
+
+- `--json`: строки прогресса долгих команд (deploy, server init/update) больше не печатаются в stdout отдельными JSON-объектами — уходят в stderr; в stdout ровно один объект-итог.
+
+
 ## [0.4.0] - 2026-09-30
 
 ### Added

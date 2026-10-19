@@ -7,6 +7,13 @@ patch|minor|major` собирает их в секцию версии. Верс�
 
 <!-- towncrier release notes start -->
 
+## [0.5.2] - 2026-10-19
+
+### Changed
+
+- Пароль target'а читается из `HOSTME_DEPLOY_<TARGET>_PASSWORD` (контракт ключей sysadmin, правило 6); старое имя `HOSTME_<TARGET>_PASSWORD` работает запасным с предупреждением, будет убрано в следующем релизе.
+
+
 ## [0.5.1] - 2026-10-13
 
 ### Added

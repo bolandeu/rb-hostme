@@ -19,8 +19,10 @@ _log = logging.getLogger(__name__)
 # путём к локальному файлу ключа, не строкой-секретом, и через этот модуль не идёт.
 #
 # Порядок (стандарт §13, headless-серверы под `doppler run`): сначала переменная
-# окружения HOSTME_<TARGET>_PASSWORD, потом OS keychain `hostme:<target>`. Keychain
-# необязателен: на Linux без secret service чтение молча даёт «нет», а не ошибку.
+# окружения HOSTME_DEPLOY_<TARGET>_PASSWORD (контракт ключей sysadmin, правило 6), потом
+# OS keychain `hostme:<target>`. Keychain необязателен: на Linux без secret service
+# чтение молча даёт «нет», а не ошибку. Старое имя HOSTME_<TARGET>_PASSWORD читается
+# запасным на один релиз — пока sysadmin переименовывает ключи в Doppler.
 
 
 def service_name(provider: str) -> str:
@@ -31,15 +33,32 @@ def env_var_name(provider: str, field: str = "password") -> str:
     # provider — часто домен/хостнейм Target'а (например "top-ved.ru"), в котором
     # "." и "-" не валидны в имени переменной окружения — заменяем на "_".
     safe_provider = re.sub(r"[^A-Za-z0-9]", "_", provider).upper()
+    return f"{_PACKAGE_NAME.upper()}_DEPLOY_{safe_provider}_{field.upper()}"
+
+
+def _legacy_env_var_name(provider: str, field: str = "password") -> str:
+    # TODO: убрать в следующем релизе после переименования ключей в Doppler.
+    safe_provider = re.sub(r"[^A-Za-z0-9]", "_", provider).upper()
     return f"{_PACKAGE_NAME.upper()}_{safe_provider}_{field.upper()}"
+
+
+def _from_env(provider: str, field: str) -> tuple[str, str] | None:
+    """(значение, имя переменной): новое имя, иначе старое — с предупреждением."""
+    name = env_var_name(provider, field)
+    if (value := os.environ.get(name)) is not None:
+        return value, name
+    legacy = _legacy_env_var_name(provider, field)
+    if (value := os.environ.get(legacy)) is not None:
+        _log.warning("%s устарело — переименуй в %s", legacy, name)
+        return value, legacy
+    return None
 
 
 def read_fields_from_env(provider: str, fields: list[str]) -> dict[str, str]:
     result: dict[str, str] = {}
     for field in fields:
-        value = os.environ.get(env_var_name(provider, field))
-        if value is not None:
-            result[field] = value
+        if (found := _from_env(provider, field)) is not None:
+            result[field] = found[0]
     return result
 
 
@@ -62,9 +81,8 @@ def _stored(provider: str) -> dict[str, str]:
 
 def locate(provider: str, field: str = "password") -> tuple[str, str, str] | None:
     """(значение, источник "env" | "keychain", где: имя переменной или сервис keychain) — для `auth status`."""
-    name = env_var_name(provider, field)
-    if (value := os.environ.get(name)) is not None:
-        return value, "env", name
+    if (found := _from_env(provider, field)) is not None:
+        return found[0], "env", found[1]
     stored = _stored(provider)
     if field in stored:
         return stored[field], "keychain", service_name(provider)

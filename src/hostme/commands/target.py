@@ -20,7 +20,8 @@ def add(
     password: Annotated[
         str | None,
         typer.Option(
-            "--password", help="Пароль — уходит в OS keychain, не в servers.yaml; без него — из HOSTME_<NAME>_PASSWORD."
+            "--password",
+            help="Пароль — уходит в OS keychain, не в servers.yaml; без него — из HOSTME_DEPLOY_<NAME>_PASSWORD.",
         ),
     ] = None,
     ssh_key: Annotated[str | None, typer.Option("--ssh-key", help="Путь к ключу (только для ssh).")] = None,
@@ -32,7 +33,7 @@ def add(
 
     Target — чужая инфраструктура (shared-хостинг клиента и т.п.): hostme тут только
     транспорт, без SSL/релизов/nginx. Пароль: сначала переменная окружения
-    HOSTME_<NAME>_PASSWORD (тогда --password не нужен), иначе OS keychain
+    HOSTME_DEPLOY_<NAME>_PASSWORD (тогда --password не нужен), иначе OS keychain
     `hostme:<name>`; в реестре — только has_password.
 
     Example: hostme target add --name client.ru --connection sftp --host sftp.host.ru --user u123 --path www

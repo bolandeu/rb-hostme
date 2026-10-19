@@ -27,7 +27,7 @@ def auth_status(
     """hostme auth status [--check] [--provider server:N|target:N] — здоровье доступов (стандарт §8).
 
     Запись на каждый сервер (`server:<имя>`, ssh-ключ — файл) и target
-    (`target:<имя>`: пароль из HOSTME_<TARGET>_PASSWORD, иначе keychain
+    (`target:<имя>`: пароль из HOSTME_DEPLOY_<TARGET>_PASSWORD, иначе keychain
     `hostme:<target>`; или ssh-ключ). Без --check — только наличие (`unchecked`/
     `missing`). Exit 0 — всё в порядке, 3 — что-то missing/invalid/unreachable,
     2 — неизвестный --provider. Форма --json — контракт для tools-watch:

@@ -22,6 +22,7 @@ def isolated_config(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "CONFIG_DIR", config_dir)
     monkeypatch.setattr(config, "SERVERS_FILE", config_dir / "servers.yaml")
     monkeypatch.setattr(config, "SITES_FILE", config_dir / "sites.yaml")
+    monkeypatch.delenv("HOSTME_DEPLOY_CLIENT_RU_PASSWORD", raising=False)
     monkeypatch.delenv("HOSTME_CLIENT_RU_PASSWORD", raising=False)
     yield
     output.set_json_mode(False)
@@ -75,12 +76,24 @@ def test_shape_without_check(tmp_path):
 
 def test_env_wins_over_keychain(monkeypatch):
     config.save_targets([_target()])
-    monkeypatch.setenv("HOSTME_CLIENT_RU_PASSWORD", "from-env")
+    monkeypatch.setenv("HOSTME_DEPLOY_CLIENT_RU_PASSWORD", "from-env")
     _, data = _status()
     entry = data["credentials"][0]
     assert entry["source"] == "env"
-    assert entry["source_ref"] == "HOSTME_CLIENT_RU_PASSWORD"
+    assert entry["source_ref"] == "HOSTME_DEPLOY_CLIENT_RU_PASSWORD"
     assert config.load_targets()[0].password == "from-env"
+
+
+def test_legacy_env_name_still_read(monkeypatch):
+    config.save_targets([_target()])
+    monkeypatch.setenv("HOSTME_CLIENT_RU_PASSWORD", "from-legacy-env")
+    result = runner.invoke(app, _translate_argv(["auth", "status", "--json"]))
+    data = json.loads(result.stdout)
+    assert "HOSTME_CLIENT_RU_PASSWORD устарело" in result.stderr
+    entry = data["credentials"][0]
+    assert entry["source"] == "env"
+    assert entry["source_ref"] == "HOSTME_CLIENT_RU_PASSWORD"
+    assert config.load_targets()[0].password == "from-legacy-env"
 
 
 def test_missing_key_and_password_exit_3(tmp_path, fake_keyring):
@@ -94,7 +107,7 @@ def test_missing_key_and_password_exit_3(tmp_path, fake_keyring):
     statuses = {e["provider"]: (e["source"], e["status"]) for e in data["credentials"]}
     assert statuses == {"server:vps1": ("missing", "missing"), "target:client.ru": ("missing", "missing")}
     target = next(e for e in data["credentials"] if e["provider"] == "target:client.ru")
-    assert target["source_ref"] == "HOSTME_CLIENT_RU_PASSWORD or keychain service hostme:client.ru"
+    assert target["source_ref"] == "HOSTME_DEPLOY_CLIENT_RU_PASSWORD or keychain service hostme:client.ru"
 
 
 def test_check_maps_probe_results_and_scrubs_secret(tmp_path):
@@ -146,7 +159,7 @@ class _NoKeyring:
 
 def test_headless_env_password_needs_no_keychain(monkeypatch):
     monkeypatch.setattr(manager, "keyring", _NoKeyring())
-    monkeypatch.setenv("HOSTME_CLIENT_RU_PASSWORD", "from-env")
+    monkeypatch.setenv("HOSTME_DEPLOY_CLIENT_RU_PASSWORD", "from-env")
     # target add без --password на сервере: пароль из env, keychain не трогается
     config.save_targets([_target(password=manager.get_secret("client.ru"))])
     assert config.load_targets()[0].password == "from-env"

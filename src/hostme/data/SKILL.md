@@ -182,7 +182,7 @@ SSL/releases/rollback lifecycle), `hostme` can deploy to a registered
 shared-hosting panel, e.g. Beget). Registered with `hostme target add`,
 listed with `hostme target list`, used with `hostme <path> <domain> --target
 NAME` (domain must be explicit — targets have no base-domain concept).
-Target passwords come from `HOSTME_<NAME>_PASSWORD` first, else the OS
+Target passwords come from `HOSTME_DEPLOY_<NAME>_PASSWORD` first, else the OS
 keychain (`hostme:<name>`), never from the registry file; `hostme auth status
 --check --json` shows where each comes from and whether it works — nothing an agent needs to handle, and never
 ask the user to paste one into a command line unless it's `target add`.

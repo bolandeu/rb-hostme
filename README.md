@@ -83,7 +83,7 @@ hostme <path> [domain] [--server NAME]
 `commands/` (только разбор аргументов) → `core/` (сервисы, ошибки) →
 `providers/` (ssh/rsync/lftp/Webinoly — всё, что выходит за пределы процесса),
 `output/` (human/json, guard), `credentials/` (пароли target'ов: env
-`HOSTME_<TARGET>_PASSWORD`, иначе OS keychain `hostme:<target>`; `auth status`).
+`HOSTME_DEPLOY_<TARGET>_PASSWORD`, иначе OS keychain `hostme:<target>`; `auth status`).
 
 Проверка — один гейт (`~/Work/tools/docs/standard-release.md` §3):
 

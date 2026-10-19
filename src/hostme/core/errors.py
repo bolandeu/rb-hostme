@@ -72,7 +72,7 @@ class CredentialStoreUnavailableError(HostmeError):
         safe_provider = re.sub(r"[^A-Za-z0-9]", "_", provider).upper()
         super().__init__(
             f"Не удалось обратиться к хранилищу учётных данных ОС для target {provider!r}: {reason}",
-            action=f"Задай пароль через переменную окружения HOSTME_{safe_provider}_PASSWORD вместо хранения в keychain.",
+            action=f"Задай пароль через переменную окружения HOSTME_DEPLOY_{safe_provider}_PASSWORD вместо хранения в keychain.",
         )
 
 
@@ -86,7 +86,7 @@ class CredentialsUnhealthyError(HostmeError):
         listed = ", ".join(f"{name}: {status}" for name, status in problems.items())
         super().__init__(
             f"Проблемы с доступами: {listed}",
-            action="Подробности — в `credentials[].message`; пароль target'а — HOSTME_<TARGET>_PASSWORD или "
+            action="Подробности — в `credentials[].message`; пароль target'а — HOSTME_DEPLOY_<TARGET>_PASSWORD или "
             "keychain `hostme:<target>`, ключ сервера — файл ssh_key из `hostme server list`.",
         )
 

@@ -5,7 +5,7 @@
 
 Доступы у hostme — per-target (одна запись на каждый зарегистрированный объект):
 - `server:<name>` — свой VPS, доступ по ssh-ключу (файл из servers.yaml);
-- `target:<name>` — сторонний хостинг: пароль (env HOSTME_<TARGET>_PASSWORD, иначе
+- `target:<name>` — сторонний хостинг: пароль (env HOSTME_DEPLOY_<TARGET>_PASSWORD, иначе
   keychain `hostme:<target>`) или ssh-ключ (файл).
 Значения секретов отсюда не выходят — только для вычистки из сообщений.
 """

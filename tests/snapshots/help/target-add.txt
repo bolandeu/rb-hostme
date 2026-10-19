@@ -6,7 +6,7 @@
 
  Target — чужая инфраструктура (shared-хостинг клиента и т.п.): hostme тут только
  транспорт, без SSL/релизов/nginx. Пароль: сначала переменная окружения
- HOSTME_<NAME>_PASSWORD (тогда --password не нужен), иначе OS keychain
+ HOSTME_DEPLOY_<NAME>_PASSWORD (тогда --password не нужен), иначе OS keychain
  `hostme:<name>`; в реестре — только has_password.
 
  Example: hostme target add --name client.ru --connection sftp --host sftp.host.ru --user u123
@@ -18,7 +18,7 @@
 │ *  --host                <str>  Хост хостинга. [required]                                        │
 │ *  --user                <str>  Логин. [required]                                                │
 │    --password            <str>  Пароль — уходит в OS keychain, не в servers.yaml; без него — из  │
-│                                 HOSTME_<NAME>_PASSWORD.                                          │
+│                                 HOSTME_DEPLOY_<NAME>_PASSWORD.                                   │
 │    --ssh-key             <str>  Путь к ключу (только для ssh).                                   │
 │    --path                <str>  Каталог сайта на хостинге; у shared-хостингов часто              │
 │                                 относительный.                                                   │

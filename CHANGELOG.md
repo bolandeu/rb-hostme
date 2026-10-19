@@ -7,6 +7,13 @@ patch|minor|major` собирает их в секцию версии. Верс�
 
 <!-- towncrier release notes start -->
 
+## [0.5.3] - 2026-10-19
+
+### Removed
+
+- Убрано запасное чтение старого имени `HOSTME_<TARGET>_PASSWORD`: пароль target'а — только `HOSTME_DEPLOY_<TARGET>_PASSWORD` или keychain.
+
+
 ## [0.5.2] - 2026-10-19
 
 ### Changed

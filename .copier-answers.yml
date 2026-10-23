@@ -1,6 +1,6 @@
 # Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
 _commit: v1.2.10
-_src_path: gh:bolandeu/cli-generator
+_src_path: https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git
 author_name: Roman Bolandau
 cli_name: hostme
 description: Личный аналог surge.sh — CLI-деплой статических сайтов и PHP на свои
@@ -13,4 +13,4 @@ include_http_provider: false
 package_name: hostme
 private_deps: false
 project_name: hostme
-repository_url: https://github.com/bolandeu/hostme
+repository_url: https://homeserver.tailee01ab.ts.net:3000/bolandeu/hostme

@@ -8,11 +8,14 @@
  sites.yaml в каталоге данных), путь, размер и политика хранения бэкапов target'ов
  (settings.yaml → target_backups: keep / max_age_days), наличие объявленных
  ssh-ключей на диске. Всегда exit 0 — сам отчёт и есть результат,
- `ok` говорит, все ли проверки прошли.
+ `healthy` говорит, все ли проверки прошли; у каждой проверки `ok` и `status` (ok/warn/fail).
 
  Example: hostme doctor --json
 
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
-│ --help  -h        Show this message and exit.                                                    │
+│ --json               Emit machine-readable JSON output.                                          │
+│ --quiet              Suppress non-essential output.                                              │
+│ --verbose            Emit extra diagnostic output.                                               │
+│ --help     -h        Show this message and exit.                                                 │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
 

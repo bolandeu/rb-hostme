@@ -1,7 +1,8 @@
 """Бизнес-логика hostme — деплой/управление сайтами и реестром серверов/
-targets. Команды в cli.py — только парсинг аргументов и вызов функций
+targets. Команды в commands/ — только парсинг аргументов и вызов функций
 отсюда; сюда же попадает единая точка подтверждения деструктивных операций
-(`output.require_confirmation`, раздел 10 architecture.md)."""
+(`output.require_confirmation`, раздел 10 architecture.md). Функции, которым
+нужен режим вывода (dry-run, подтверждение, прогресс), получают `ctx` команды."""
 
 from __future__ import annotations
 
@@ -10,12 +11,16 @@ import shutil
 import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from hostme import config, data, output
-from hostme.core.errors import HostmeError, InvalidArgumentsError
+from hostme import config, output
+from hostme.core.errors import InvalidArguments, StateError
 from hostme.credentials import manager as credentials
 from hostme.providers import ftp, http, webinoly
 from hostme.providers.ssh import rsync_from_target, rsync_to, rsync_to_target
+
+if TYPE_CHECKING:
+    import typer
 
 MAINTENANCE_TEMPLATE_DIR = Path(__file__).parent.parent / "templates" / "maintenance"
 
@@ -27,9 +32,9 @@ def require_unique_name(name: str) -> None:
     резолвится в любой из них по имени без квалификатора) — нельзя допустить
     коллизию между `hostme server add` и `hostme target add`."""
     if config.find_server(config.load_servers(), name) is not None:
-        raise InvalidArgumentsError(f"Имя {name!r} уже занято сервером (hostme server list)")
+        raise InvalidArguments(f"Имя {name!r} уже занято сервером (hostme server list)")
     if config.find_target(config.load_targets(), name) is not None:
-        raise InvalidArgumentsError(f"Имя {name!r} уже занято target'ом (hostme target list)")
+        raise InvalidArguments(f"Имя {name!r} уже занято target'ом (hostme target list)")
 
 
 def add_server(name: str, host: str, user: str, key: str, default: bool) -> dict:
@@ -45,18 +50,18 @@ def add_server(name: str, host: str, user: str, key: str, default: bool) -> dict
     return {"message": f"Сервер {name} добавлен", "server": name, "host": host}
 
 
-def init_server(name: str) -> dict:
+def init_server(ctx: typer.Context, name: str) -> dict:
     servers = config.load_servers()
     server = config.find_server(servers, name)
     if server is None:
-        raise InvalidArgumentsError(f"Сервер {name!r} не найден. Сначала `hostme server add`.")
-    output.progress(f"Устанавливаю Webinoly на {server.name}...")
+        raise InvalidArguments(f"Сервер {name!r} не найден. Сначала `hostme server add`.")
+    output.progress(ctx, f"Устанавливаю Webinoly на {server.name}...")
     webinoly.install(server)
     webinoly.enable_sftp(server)
     return {"message": f"Сервер {name} готов (Webinoly установлен)", "server": name}
 
 
-def update_server(name: str) -> dict:
+def update_server(ctx: typer.Context, name: str) -> dict:
     """Обновить сам Webinoly на сервере (`sudo webinoly -update`) — не пакеты
     сервера (nginx/php/mysql), только сам Webinoly. Затем перезалить nginx-дефолты
     всем сайтам сервера из реестра: так их получают и сайты, которые давно не
@@ -64,12 +69,12 @@ def update_server(name: str) -> dict:
     servers = config.load_servers()
     server = config.find_server(servers, name)
     if server is None:
-        raise InvalidArgumentsError(f"Сервер {name!r} не найден")
-    output.progress(f"Обновляю Webinoly на {server.name}...")
+        raise InvalidArguments(f"Сервер {name!r} не найден")
+    output.progress(ctx, f"Обновляю Webinoly на {server.name}...")
     webinoly.update_webinoly(server)
     domains = [s.domain for s in config.load_sites() if s.server == name]
     for domain in domains:
-        output.progress(f"nginx-дефолты: {domain}...")
+        output.progress(ctx, f"nginx-дефолты: {domain}...")
         webinoly.apply_site_defaults(server, domain)
     return {
         "message": f"Webinoly на {name} обновлён, nginx-дефолты у {len(domains)} сайтов",
@@ -82,13 +87,13 @@ def remove_server(name: str, force: bool) -> dict:
     servers = config.load_servers()
     server = config.find_server(servers, name)
     if server is None:
-        raise InvalidArgumentsError(f"Сервер {name!r} не найден")
+        raise InvalidArguments(f"Сервер {name!r} не найден")
 
     sites = config.load_sites()
     remaining = [s for s in sites if s.server == name]
     if remaining and not force:
         domains = ", ".join(s.domain for s in remaining)
-        raise InvalidArgumentsError(
+        raise InvalidArguments(
             f"На сервере {name} остались сайты в реестре ({domains}). "
             f"Сначала `hostme <domain> teardown` их, либо повтори с --force."
         )
@@ -106,10 +111,10 @@ def add_domain(server_name: str, domain: str, default: bool) -> dict:
     servers = config.load_servers()
     server = config.find_server(servers, server_name)
     if server is None:
-        raise InvalidArgumentsError(f"Сервер {server_name!r} не найден")
+        raise InvalidArguments(f"Сервер {server_name!r} не найден")
 
     if any(d.name == domain for s in servers for d in s.base_domains):
-        raise InvalidArgumentsError(f"Домен {domain} уже зарегистрирован")
+        raise InvalidArguments(f"Домен {domain} уже зарегистрирован")
 
     has_default = config.default_base_domain(servers) is not None
     if default:
@@ -126,7 +131,7 @@ def set_default_domain(domain: str) -> dict:
     servers = config.load_servers()
     target = next((d for s in servers for d in s.base_domains if d.name == domain), None)
     if target is None:
-        raise InvalidArgumentsError(f"Домен {domain!r} не зарегистрирован. Сначала `hostme domain add`.")
+        raise InvalidArguments(f"Домен {domain!r} не зарегистрирован. Сначала `hostme domain add`.")
 
     for s in servers:
         for d in s.base_domains:
@@ -145,7 +150,7 @@ def remove_domain(domain: str) -> dict:
     servers = config.load_servers()
     server = next((s for s in servers if any(d.name == domain for d in s.base_domains)), None)
     if server is None:
-        raise InvalidArgumentsError(f"Домен {domain!r} не зарегистрирован")
+        raise InvalidArguments(f"Домен {domain!r} не зарегистрирован")
 
     target = next(d for d in server.base_domains if d.name == domain)
     was_default = target.default
@@ -172,15 +177,13 @@ def add_target(
     remote_path: str,
 ) -> dict:
     if connection not in ("ssh", "ftp", "sftp"):
-        raise InvalidArgumentsError(f"--connection должен быть ssh/ftp/sftp, получено {connection!r}")
+        raise InvalidArguments(f"--connection должен быть ssh/ftp/sftp, получено {connection!r}")
     # Без --password — пароль, уже заданный в HOSTME_DEPLOY_<NAME>_PASSWORD (сервер под doppler) или в keychain.
     password = password or credentials.get_secret(name)
     if not password and not ssh_key:
-        raise InvalidArgumentsError(f"Укажи --password (или {credentials.env_var_name(name)}) либо --ssh-key")
+        raise InvalidArguments(f"Укажи --password (или {credentials.env_var_name(name)}) либо --ssh-key")
     if connection in ("ftp", "sftp") and not password:
-        raise InvalidArgumentsError(
-            f"--connection={connection} требует --password (ssh_key не подходит для {connection})"
-        )
+        raise InvalidArguments(f"--connection={connection} требует --password (ssh_key не подходит для {connection})")
 
     require_unique_name(name)
     targets = config.load_targets()
@@ -202,13 +205,13 @@ def remove_target(name: str, force: bool) -> dict:
     targets = config.load_targets()
     target = config.find_target(targets, name)
     if target is None:
-        raise InvalidArgumentsError(f"Target {name!r} не найден")
+        raise InvalidArguments(f"Target {name!r} не найден")
 
     sites = config.load_sites()
     remaining = [s for s in sites if s.server == name]
     if remaining and not force:
         domains = ", ".join(s.domain for s in remaining)
-        raise InvalidArgumentsError(
+        raise InvalidArguments(
             f"На target {name} остались сайты в реестре ({domains}). "
             f"Сначала `hostme <domain> teardown` их, либо повтори с --force."
         )
@@ -226,10 +229,12 @@ def detect_site_type(local_path: Path) -> webinoly.SiteType:
     return "php" if any(local_path.rglob("*.php")) else "html"
 
 
-def confirm_target_action(action: str, target: config.Target, confirm: bool) -> None:
+def confirm_target_action(ctx: typer.Context, action: str, target: config.Target, confirm: bool) -> None:
     """Target — сторонний хостинг (не наш VPS), часто чужая/клиентская
     инфраструктура — заметно более строгий гейт, чем у своих серверов."""
-    output.require_confirmation(f"{action} на target {target.name!r} ({target.connection}, сторонний хостинг)", confirm)
+    output.require_confirmation(
+        ctx, f"{action} на target {target.name!r} ({target.connection}, сторонний хостинг)", confirm
+    )
 
 
 def _target_backup_dir(target_name: str) -> Path:
@@ -277,7 +282,7 @@ def _human_size(size: float) -> str:
     return f"{size:.1f} ГБ"
 
 
-def _backup_target_before_deploy(target: config.Target) -> None:
+def _backup_target_before_deploy(ctx: typer.Context, target: config.Target) -> None:
     """Бэкап перед деплоем на Target — скачиваем текущее содержимое remote_path
     в локальный снепшот ДО заливки нового. Работает одинаково для ssh/ftp/sftp
     (просто ещё один `mirror`/rsync в обратную сторону) — в отличие от Webinoly-
@@ -294,20 +299,20 @@ def _backup_target_before_deploy(target: config.Target) -> None:
             rsync_from_target(target, str(snapshot))
         else:
             ftp.mirror_from(target, str(snapshot))
-    except HostmeError as exc:
+    except StateError as exc:
         shutil.rmtree(snapshot, ignore_errors=True)
-        output.progress(f"Бэкап перед деплоем не удался (возможно, это первый деплой на {target.name}): {exc}")
+        output.progress(ctx, f"Бэкап перед деплоем не удался (возможно, это первый деплой на {target.name}): {exc}")
         return
     _prune_target_backups(target.name)
 
 
 def deploy_to_target(
-    local_path: Path, domain: str | None, target_name: str, confirm: bool, rebind: bool = False
+    ctx: typer.Context, local_path: Path, domain: str | None, target_name: str, confirm: bool, rebind: bool = False
 ) -> dict:
     """Деплой на сторонний хостинг (ftp/sftp/ssh, без Webinoly) — просто залить
     файлы, никакого create_site/SSL/releases (хостер уже сам всё настроил)."""
     if domain is None:
-        raise InvalidArgumentsError(
+        raise InvalidArguments(
             "Для --target домен нужно указывать явно — у сторонних хостингов нет "
             "служебных (base) доменов для авто-генерации поддомена."
         )
@@ -315,9 +320,9 @@ def deploy_to_target(
 
     target = config.find_target(config.load_targets(), target_name)
     if target is None:
-        raise InvalidArgumentsError(f"Target {target_name!r} не найден. Сначала `hostme target add`.")
+        raise InvalidArguments(f"Target {target_name!r} не найден. Сначала `hostme target add`.")
 
-    if output.is_dry_run():
+    if output.is_dry_run(ctx):
         return {
             "message": f"(dry-run) Задеплоил бы {domain} на target {target.name}, изменений не внесено",
             "target": target.name,
@@ -325,14 +330,14 @@ def deploy_to_target(
             "dry_run": True,
         }
 
-    confirm_target_action(f"Деплой {domain}", target, confirm)
+    confirm_target_action(ctx, f"Деплой {domain}", target, confirm)
 
     sites = config.load_sites()
     config.check_collision(sites, domain, str(local_path), rebind)
 
-    _backup_target_before_deploy(target)
+    _backup_target_before_deploy(ctx, target)
 
-    output.progress(f"Заливаю файлы на {target.name} ({target.connection})...")
+    output.progress(ctx, f"Заливаю файлы на {target.name} ({target.connection})...")
     if target.connection == "ssh":
         rsync_to_target(str(local_path), target)
     else:
@@ -371,6 +376,7 @@ def teardown_target(target: config.Target) -> None:
 
 
 def deploy(
+    ctx: typer.Context,
     path: str,
     domain: str | None,
     server_name: str | None,
@@ -380,10 +386,10 @@ def deploy(
 ) -> dict:
     local_path = Path(path).expanduser().resolve()
     if not local_path.is_dir():
-        raise InvalidArgumentsError(f"{local_path} не является директорией")
+        raise InvalidArguments(f"{local_path} не является директорией")
 
     if target_name is not None:
-        return deploy_to_target(local_path, domain, target_name, confirm, rebind)
+        return deploy_to_target(ctx, local_path, domain, target_name, confirm, rebind)
 
     servers = config.load_servers()
     sites = config.load_sites()
@@ -391,7 +397,7 @@ def deploy(
     if domain is None:
         domain = config.default_domain(str(local_path), servers)
         if domain is None:
-            raise InvalidArgumentsError(
+            raise InvalidArguments(
                 "Домен не указан, и нет ни одного служебного домена по умолчанию. "
                 "Укажи домен явно или сначала `hostme domain add`."
             )
@@ -400,11 +406,11 @@ def deploy(
 
     server = config.resolve_server(servers, sites, domain, explicit_server=server_name)
     if server is None:
-        raise InvalidArgumentsError(f"Не удалось определить сервер для домена {domain}. Укажи --server явно.")
+        raise InvalidArguments(f"Не удалось определить сервер для домена {domain}. Укажи --server явно.")
 
     config.check_collision(sites, domain, str(local_path), rebind)
 
-    if output.is_dry_run():
+    if output.is_dry_run(ctx):
         return {
             "message": f"(dry-run) Задеплоил бы {domain} на {server.name}, изменений не внесено",
             "domain": domain,
@@ -415,7 +421,7 @@ def deploy(
     site_type = detect_site_type(local_path)
     is_new_site = not webinoly.site_exists(server, domain)
     if is_new_site:
-        output.progress(f"Создаю сайт {domain} ({site_type}) на {server.name}...")
+        output.progress(ctx, f"Создаю сайт {domain} ({site_type}) на {server.name}...")
         webinoly.create_site(server, domain, site_type)
 
         base_domain = next(
@@ -451,7 +457,7 @@ def deploy(
     webinoly.ensure_releases_layout(server, domain)
     ts = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
     release = webinoly.release_path(domain, ts)
-    output.progress(f"Заливаю файлы в новый релиз {ts}...")
+    output.progress(ctx, f"Заливаю файлы в новый релиз {ts}...")
     rsync_to(str(local_path), server, release)
     webinoly.fix_ownership_path(server, release)
     webinoly.apply_site_defaults(server, domain)
@@ -479,7 +485,7 @@ def list_sites() -> tuple[list[config.Site], list[tuple[str, str]]]:
 def find_site(domain: str) -> config.Site:
     site = next((s for s in config.load_sites() if s.domain == domain), None)
     if site is None:
-        raise InvalidArgumentsError(f"Сайт {domain} не найден в реестре")
+        raise InvalidArguments(f"Сайт {domain} не найден в реестре")
     return site
 
 
@@ -495,12 +501,12 @@ def require_site_server(domain: str) -> tuple[config.Site, config.Server]:
         return site, server
     target = config.find_target(config.load_targets(), site.server)
     if target is not None:
-        raise InvalidArgumentsError(
+        raise InvalidArguments(
             f"{domain} задеплоен на target {site.server!r} (сторонний хостинг, "
             f"connection={target.connection}) — эта команда Webinoly-специфична, "
             f"для target'ов не поддерживается"
         )
-    raise InvalidArgumentsError(f"Сервер {site.server!r} для сайта {domain} не найден в конфиге")
+    raise InvalidArguments(f"Сервер {site.server!r} для сайта {domain} не найден в конфиге")
 
 
 def get_revisions(domain: str) -> dict:
@@ -516,7 +522,7 @@ def rollback_target(target: config.Target) -> None:
     локальные снепшоты) — просто заливаем самый свежий локальный бэкап обратно."""
     snapshots = _target_backup_snapshots(target.name)
     if not snapshots:
-        raise HostmeError(f"У target {target.name!r} нет локальных бэкапов для отката")
+        raise StateError(f"У target {target.name!r} нет локальных бэкапов для отката")
     snapshot = snapshots[-1]
     if target.connection == "ssh":
         rsync_to_target(str(snapshot), target)
@@ -524,7 +530,7 @@ def rollback_target(target: config.Target) -> None:
         ftp.mirror_to(str(snapshot), target)
 
 
-def rollback(domain: str, confirm: bool) -> dict:
+def rollback(ctx: typer.Context, domain: str, confirm: bool) -> dict:
     site = find_site(domain)
 
     server = config.find_server(config.load_servers(), site.server)
@@ -532,13 +538,13 @@ def rollback(domain: str, confirm: bool) -> dict:
         releases = webinoly.list_releases(server, domain)
         current = webinoly.current_release(server, domain)
         if current is None or current not in releases:
-            raise HostmeError(f"Не удалось определить текущий релиз {domain}")
+            raise StateError(f"Не удалось определить текущий релиз {domain}")
         idx = releases.index(current)
         if idx == 0:
-            raise HostmeError(f"У {domain} нет более старого релиза для отката (текущий — самый старый: {current})")
+            raise StateError(f"У {domain} нет более старого релиза для отката (текущий — самый старый: {current})")
         release = releases[idx - 1]
 
-        if output.is_dry_run():
+        if output.is_dry_run(ctx):
             return {
                 "message": f"(dry-run) Откатил бы {domain} на релиз {release}, изменений не внесено",
                 "domain": domain,
@@ -546,15 +552,15 @@ def rollback(domain: str, confirm: bool) -> dict:
                 "dry_run": True,
             }
 
-        output.require_confirmation(f"Rollback {domain} на релиз {release}", confirm)
+        output.require_confirmation(ctx, f"Rollback {domain} на релиз {release}", confirm)
         webinoly.switch_release(server, domain, release)
         return {"message": f"{domain} откачен на релиз {release}", "domain": domain, "release": release}
 
     site_target = config.find_target(config.load_targets(), site.server)
     if site_target is None:
-        raise InvalidArgumentsError(f"Сервер/target {site.server!r} для сайта {domain} не найден в конфиге")
+        raise InvalidArguments(f"Сервер/target {site.server!r} для сайта {domain} не найден в конфиге")
 
-    if output.is_dry_run():
+    if output.is_dry_run(ctx):
         return {
             "message": f"(dry-run) Откатил бы {domain} на последний бэкап target {site_target.name}, изменений не внесено",
             "domain": domain,
@@ -562,7 +568,7 @@ def rollback(domain: str, confirm: bool) -> dict:
             "dry_run": True,
         }
 
-    confirm_target_action(f"Rollback {domain}", site_target, confirm)
+    confirm_target_action(ctx, f"Rollback {domain}", site_target, confirm)
     rollback_target(site_target)
     return {"message": f"{domain} откачен на предыдущий бэкап", "domain": domain, "target": site_target.name}
 
@@ -572,16 +578,16 @@ def rollfore(domain: str) -> dict:
     releases = webinoly.list_releases(server, domain)
     current = webinoly.current_release(server, domain)
     if current is None or current not in releases:
-        raise HostmeError(f"Не удалось определить текущий релиз {domain}")
+        raise StateError(f"Не удалось определить текущий релиз {domain}")
     idx = releases.index(current)
     if idx >= len(releases) - 1:
-        raise HostmeError(f"У {domain} нет более нового релиза (текущий — самый новый: {current})")
+        raise StateError(f"У {domain} нет более нового релиза (текущий — самый новый: {current})")
     release = releases[idx + 1]
     webinoly.switch_release(server, domain, release)
     return {"message": f"{domain} переключён на релиз {release}", "domain": domain, "release": release}
 
 
-def set_maintenance(domain: str, confirm: bool) -> dict:
+def set_maintenance(ctx: typer.Context, domain: str, confirm: bool) -> dict:
     """Очистить сайт, оставив встроенный плейсхолдер "в разработке". Реестр
     (local_path) не трогаем — редеплой реальной сборки продолжает работать
     как раньше. Старое содержимое не теряется: для сервера это обычный новый
@@ -591,13 +597,13 @@ def set_maintenance(domain: str, confirm: bool) -> dict:
 
     server = config.find_server(config.load_servers(), site.server)
     if server is not None:
-        if output.is_dry_run():
+        if output.is_dry_run(ctx):
             return {
                 "message": f"(dry-run) Перевёл бы {domain} в режим обслуживания, изменений не внесено",
                 "domain": domain,
                 "dry_run": True,
             }
-        output.require_confirmation(f"Maintenance {domain}", confirm)
+        output.require_confirmation(ctx, f"Maintenance {domain}", confirm)
         webinoly.ensure_releases_layout(server, domain)
         ts = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
         release = webinoly.release_path(domain, ts)
@@ -613,9 +619,9 @@ def set_maintenance(domain: str, confirm: bool) -> dict:
 
     target = config.find_target(config.load_targets(), site.server)
     if target is None:
-        raise InvalidArgumentsError(f"Сервер/target {site.server!r} для сайта {domain} не найден в конфиге")
+        raise InvalidArguments(f"Сервер/target {site.server!r} для сайта {domain} не найден в конфиге")
 
-    if output.is_dry_run():
+    if output.is_dry_run(ctx):
         return {
             "message": f"(dry-run) Перевёл бы {domain} в режим обслуживания на target {target.name}, изменений не внесено",
             "domain": domain,
@@ -623,8 +629,8 @@ def set_maintenance(domain: str, confirm: bool) -> dict:
             "dry_run": True,
         }
 
-    confirm_target_action(f"Maintenance {domain}", target, confirm)
-    _backup_target_before_deploy(target)
+    confirm_target_action(ctx, f"Maintenance {domain}", target, confirm)
+    _backup_target_before_deploy(ctx, target)
     if target.connection == "ssh":
         rsync_to_target(str(MAINTENANCE_TEMPLATE_DIR), target)
     else:
@@ -636,25 +642,25 @@ def set_maintenance(domain: str, confirm: bool) -> dict:
     }
 
 
-def teardown(domain: str, confirm: bool) -> dict:
+def teardown(ctx: typer.Context, domain: str, confirm: bool) -> dict:
     site = find_site(domain)
 
     server = config.find_server(config.load_servers(), site.server)
     target = None if server is not None else config.find_target(config.load_targets(), site.server)
 
-    if output.is_dry_run():
+    if output.is_dry_run(ctx):
         return {"message": f"(dry-run) Снёс бы сайт {domain}, изменений не внесено", "domain": domain, "dry_run": True}
 
     if target is not None:
-        confirm_target_action(f"Teardown {domain}", target, confirm)
+        confirm_target_action(ctx, f"Teardown {domain}", target, confirm)
     else:
-        output.require_confirmation(f"Снести сайт {domain} и убрать из реестра", confirm)
+        output.require_confirmation(ctx, f"Снести сайт {domain} и убрать из реестра", confirm)
 
     if server is not None:
         webinoly.delete_site(server, domain)
     else:
         if target is None:
-            raise InvalidArgumentsError(f"Сервер/target {site.server!r} для сайта {domain} не найден в конфиге")
+            raise InvalidArguments(f"Сервер/target {site.server!r} для сайта {domain} не найден в конфиге")
         teardown_target(target)
 
     sites = config.load_sites()
@@ -675,7 +681,7 @@ def set_http_auth(domain: str, user: str | None, password: str | None, off: bool
         return {"message": f"Пароль снят с {domain}", "domain": domain}
 
     if not user or not password:
-        raise InvalidArgumentsError("Укажи --user и --pass, либо --off чтобы снять защиту")
+        raise InvalidArguments("Укажи --user и --pass, либо --off чтобы снять защиту")
 
     webinoly.set_http_auth(server, domain, user, password)
     # Пароль на сервер уже ушёл в открытом виде (PRD §13.2 — решено: `--pass` в
@@ -700,7 +706,7 @@ def update_site_config(
     """message=None в результате значит "изменений не запрошено" — вызывающий
     код должен напечатать текущий конфиг (result["site"]) вместо success."""
     if no_force_https:
-        raise InvalidArgumentsError(
+        raise InvalidArguments(
             "Webinoly всегда включает редирект HTTP→HTTPS вместе с -ssl=on и не даёт его "
             "отключить (см. docs/webinoly.md) — --no-force-https не поддерживается"
         )
@@ -708,7 +714,7 @@ def update_site_config(
     sites = config.load_sites()
     site = next((s for s in sites if s.domain == domain), None)
     if site is None:
-        raise InvalidArgumentsError(f"Сайт {domain} не найден в реестре")
+        raise InvalidArguments(f"Сайт {domain} не найден в реестре")
 
     if force_https and not (cors or no_cors or redirect or remove_redirect):
         return {
@@ -721,13 +727,13 @@ def update_site_config(
         }
 
     if nginx_snippet and no_nginx_snippet:
-        raise InvalidArgumentsError("--nginx-snippet и --no-nginx-snippet вместе не имеют смысла")
+        raise InvalidArguments("--nginx-snippet и --no-nginx-snippet вместе не имеют смысла")
 
     snippet_content: str | None = None
     if nginx_snippet:
         snippet_path = Path(nginx_snippet).expanduser()
         if not snippet_path.is_file():
-            raise InvalidArgumentsError(f"{snippet_path} не найден")
+            raise InvalidArguments(f"{snippet_path} не найден")
         snippet_content = snippet_path.read_text()
 
     has_changes = (
@@ -741,7 +747,7 @@ def update_site_config(
     for pair in redirect:
         frm, sep, to = pair.partition("=")
         if not sep:
-            raise InvalidArgumentsError(f"--redirect ожидает вид FROM=TO, получено {pair!r}")
+            raise InvalidArguments(f"--redirect ожидает вид FROM=TO, получено {pair!r}")
         webinoly.add_redirect(server, domain, frm, to)
         site.redirects = [r for r in site.redirects if r["from"] != frm]
         site.redirects.append({"from": frm, "to": to})
@@ -777,7 +783,8 @@ def get_debug_info(domain: str, error: bool, lines: int) -> dict:
 
 
 def _check(name: str, status: str, detail: str) -> dict:
-    return {"name": name, "status": status, "detail": detail}
+    # `ok` — по Standard, Health; `warn` — не провал (healthy остаётся true).
+    return {"name": name, "ok": status != "fail", "status": status, "detail": detail}
 
 
 def run_doctor() -> dict:
@@ -881,7 +888,7 @@ def _target_backups_report() -> tuple[dict, dict]:
     info: dict = {"path": str(backups_dir), "bytes": size, "snapshots": snapshots}
     try:
         policy = config.load_backup_policy()
-    except InvalidArgumentsError as exc:
+    except InvalidArguments as exc:
         return _check("target_backups", "fail", str(exc)), info
     info["policy"] = {"keep": policy.keep, "max_age_days": policy.max_age_days}
     policy_text = f"храним последние {policy.keep}" + (
@@ -889,19 +896,3 @@ def _target_backups_report() -> tuple[dict, dict]:
     )
     detail = f"{backups_dir} — {_human_size(size)}, снепшотов: {snapshots}; {policy_text}"
     return _check("target_backups", "ok", detail), info
-
-
-# --- skill (bundled SKILL.md для AI-агентов, см. hostme --ai) --------------
-
-DEFAULT_SKILL_INSTALL_PATH = Path.home() / ".claude" / "skills" / "hostme" / "SKILL.md"
-
-
-def install_skill(path: str | None) -> dict:
-    """Синхронизирует bundled `src/hostme/data/SKILL.md` (единственный источник
-    правды, см. `hostme --ai`) туда, откуда его читает AI-агент — по умолчанию
-    Claude Code skill, чтобы документация не расходилась с реальным CLI, как
-    это уже случалось (раздел «Staying in sync» в самом SKILL.md)."""
-    dest = Path(path).expanduser() if path else DEFAULT_SKILL_INSTALL_PATH
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(data.load_skill_doc(), encoding="utf-8")
-    return {"message": f"SKILL.md записан в {dest}", "path": str(dest)}

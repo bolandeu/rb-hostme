@@ -3,12 +3,12 @@ name = "rb-hostme"
 # Version comes from the git tag vX.Y.Z (uv-dynamic-versioning) — never add `version =`.
 dynamic = ["version"]
 description = "Личный аналог surge.sh — CLI-деплой статических сайтов и PHP на свои VPS через Webinoly"
-authors = [
-    { name = "Roman Bolandau", email = "r.bolandau@gmail.com" }
-]
+readme = "README.md"
+authors = [{ name = "Roman Bolandau", email = "r.bolandau@gmail.com" }]
 requires-python = ">=3.14"
 dependencies = [
     "keyring>=25.0.0",
+    "packaging>=24.0",
     "platformdirs>=4.4",
     "rich>=15.0.0",
     "ruamel-yaml>=0.19.1",
@@ -19,7 +19,7 @@ dependencies = [
 hostme = "hostme.cli:main"
 
 [project.urls]
-Repository = "https://github.com/bolandeu/hostme"
+Repository = "https://homeserver.tailee01ab.ts.net:3000/bolandeu/hostme"
 
 [build-system]
 requires = ["hatchling", "uv-dynamic-versioning"]
@@ -37,6 +37,18 @@ fallback-version = "0.0.0"
 # Rebuild the editable install when a commit or tag moves, so `--version` follows the tag.
 cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
 
+# Our packages come only from the Gitea registry: a version range in
+# `dependencies` ("rb-serp>=0.3") and a source line per package, never a git
+# tag. explicit = true: only the packages named in [tool.uv.sources] are looked
+# up there, and they are never taken from PyPI (an unrelated package of the
+# same name may live there).
+# [tool.uv.sources]
+# rb-serp = { index = "gitea" }
+[[tool.uv.index]]
+name = "gitea"
+url = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple"
+explicit = true
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/hostme"]
 
@@ -45,57 +57,24 @@ packages = ["src/hostme"]
 "pyproject.toml" = "hostme/_pyproject.toml"
 
 [dependency-groups]
+# Mutation testing, run now and then and before big releases — not in the gate:
+# `uv run --group mutation mutmut run`, then `mutmut results` / `mutmut browse`.
+# Needs fork(): macOS/Linux (WSL on Windows). Settings: [tool.mutmut] below.
+mutation = ["mutmut>=3.3"]
 dev = [
+    "jsonschema>=4.23",
     "pytest>=9.1.1",
+    "pyyaml>=6.0",  # .copier-answers.yml, the CI workflow, tests/contracts/*.yaml
     "pytest-cov>=7.1.0",
     "ruff>=0.16.6",
     "syrupy>=4.8",
-    "towncrier>=24.8",
     "ty>=0.0.80",
 ]
 
-# Changelog from fragments: each change adds changelog.d/+<slug>.<type>.md
-# (`uv run towncrier create +<slug>.<type>.md -c "..."`); scripts/release.py assembles them.
-[tool.towncrier]
-filename = "CHANGELOG.md"
-directory = "changelog.d"
-start_string = "<!-- towncrier release notes start -->\n"
-title_format = "## [{version}] - {project_date}"
-issue_format = "#{issue}"
-
-[[tool.towncrier.type]]
-directory = "added"
-name = "Added"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "changed"
-name = "Changed"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "deprecated"
-name = "Deprecated"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "removed"
-name = "Removed"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "fixed"
-name = "Fixed"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "security"
-name = "Security"
-showcontent = true
-
-# External (non-Python) dependencies — every program this tool runs. The gate
-# checks this list against src/ both ways; the tools/ root builds
-# docs/external-deps.md from it (standard §12).
+# External (non-Python) dependencies — every CLI this tool runs (require_cli,
+# shutil.which, subprocess with a literal program, npx). The gate checks this
+# list against the code both ways; doctor and require_cli read it at runtime;
+# the tools catalog reads it (the Standard, Technology).
 [[tool.rb.external]]
 name = "ssh"
 required = true
@@ -118,21 +97,38 @@ required = false
 check = "sshpass -V"
 why = "ssh-target'ы с паролем вместо ключа (пароль через SSHPASS, не в argv)"
 
+# Where sysadmin's tool-updater installs this tool after its first tag. The
+# installation is sysadmin's; this section only says where. homeserver: users
+# to install for (empty = build and publish only); mac: install on the Mac.
+# extras (optional): the extras to install with, e.g. extras = ["browser"].
+[tool.rb.install]
+homeserver = ["rbtools"]
+mac = true
+
 [tool.cli-generator]
-# Where scripts/check_command_docstrings.py (git pre-commit + Claude Code hooks)
+# Where scripts/check_command_docstrings.py (called by the project's checks)
 # looks for commands: a glob or a list of globs, relative to the repo root.
 commands = ["src/hostme/commands/*.py"]
+# rb-release check (the gate): extras to install before ruff/ty/pytest.
+# gate_extras = ["browser"]
 
 [tool.pytest.ini_options]
+# Only tests/: mutmut leaves a copy of the tree in mutants/.
 testpaths = ["tests"]
 addopts = "--cov --cov-report=term-missing:skip-covered"
 # tests/test_help.py keeps help snapshots at tests/snapshots/help/<command>.txt
-# (standard §7), not in syrupy's own layout, so syrupy warns it "can not relate"
-# each file to its test. It can — by name.
+# (the Standard, Commands), not in syrupy's own `__snapshots__/<test file>/` layout, so
+# syrupy warns it "can not relate" each file to its test. It can — by name.
 filterwarnings = ["ignore:(?s).*Can not relate snapshot:UserWarning"]
 markers = [
     "e2e: реальный сервер по SSH (HOSTME_E2E_HOST), по умолчанию пропускается",
 ]
+
+[tool.mutmut]
+source_paths = ["src/hostme"]
+also_copy = ["scripts/", "pyproject.toml"]  # tests read them (test_scripts.py, the distribution checks)
+pytest_add_cli_args = ["--no-cov"]  # fail_under would kill every mutant
+# only_mutate = ["*/core/normalize.py"]  # one module at a time on a big tool
 
 [tool.coverage.run]
 source = ["src"]
@@ -148,17 +144,20 @@ show_missing = true
 line-length = 120
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I", "UP", "B", "SIM", "RUF", "S", "BLE"]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "SIM", "RUF", "S", "BLE", "T20", "TID251"]
 # RUF001-003 («похожие на латиницу» символы) — весь текст проекта на русском.
 ignore = ["RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.lint.per-file-ignores]
-# assert — суть теста; тестовые пароли/subprocess в e2e — тоже намеренно
-"tests/*" = ["S101", "S105", "S106", "S108", "S603", "S607"]
-"scripts/*" = ["S603", "S607"]      # subprocess с фиксированным argv (git, uv), без shell
+# assert — суть теста; тестовые пароли/subprocess в e2e — тоже намеренно; print в строках кода; httpx для моков
+"tests/*" = ["S101", "S105", "S106", "S108", "S603", "S607", "T201", "TID251", "BLE001"]
+"scripts/*" = ["S603", "S607", "T201"]  # subprocess with fixed argv lists (git, uv), no shell; scripts print to the console
 # providers/ — весь смысл слоя в запуске ssh/rsync/lftp: argv-списком, без shell;
 # бинарь ищется в PATH намеренно (уважаем окружение пользователя, кроссплатформенно)
-"src/hostme/providers/*" = ["S603", "S607"]
+"src/*/providers/*" = ["S603", "S607", "TID251"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"httpx".msg = "Call external APIs through providers/ (subclass providers.HttpProvider)."
 
 [tool.ruff.lint.flake8-bugbear]
 # Typer's `param: T = typer.Option(...)` style is a call in a default on purpose.

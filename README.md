@@ -6,22 +6,20 @@
 
 ## Установка
 
-На любой другой машине (репозиторий приватный — нужен `gh auth login`,
-который настраивает git credential helper; на машине без интерактивного
-логина — `gh auth setup-git`, или SSH-форма ниже):
+Из Gitea-реестра (пакет релизится туда):
 
 ```
-uv tool install "rb-hostme @ git+https://github.com/bolandeu/hostme.git@vX.Y.Z"
+uv tool install rb-hostme --index https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple
+```
+
+Или из git-тега, на любой машине:
+
+```
+uv tool install "rb-hostme @ git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/hostme.git@vX.Y.Z"
 ```
 
 `vX.Y.Z` — последний тег релиза (только из тега, не из ветки). Дистрибутив
-называется `rb-hostme`, команда — `hostme`. Копию, поставленную под старым
-именем `hostme`, сначала удалить: `uv tool uninstall hostme`, иначе два
-пакета дерутся за одну команду. Через SSH (если HTTPS отказывает в авторизации):
-
-```
-uv tool install "rb-hostme @ git+ssh://git@github.com/bolandeu/hostme.git@vX.Y.Z"
-```
+называется `rb-hostme`, команда — `hostme`; обновление — `uv tool upgrade rb-hostme`.
 
 При разработке самого `hostme` (в этом репозитории) — editable-режим, чтобы
 изменения в коде подхватывались без переустановки:
@@ -79,26 +77,21 @@ hostme <path> [domain] [--server NAME]
 
 ## Разработка
 
-Архитектура — по [cli-builder](https://github.com/bolandeu/cli-generator):
+Архитектура — по [cli-builder](https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator):
 `commands/` (только разбор аргументов) → `core/` (сервисы, ошибки) →
 `providers/` (ssh/rsync/lftp/Webinoly — всё, что выходит за пределы процесса),
 `output/` (human/json, guard), `credentials/` (пароли target'ов: env
 `HOSTME_DEPLOY_<TARGET>_PASSWORD`, иначе OS keychain `hostme:<target>`; `auth status`).
 
-Проверка — один гейт (`~/Work/tools/docs/standard-release.md` §3):
+Проверка — один гейт: шаг `rb-release check` в `.gitea/workflows/ci.yml`
+(та же команда в CI), из корня пакета:
 
 ```
-uv run scripts/release.py --check
+uvx --from "git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git@v1.27.1#subdirectory=gate" rb-release check
 ```
 
 (lock, ruff, ty, pytest с порогом покрытия и снапшотами `--help`, сверка
-`[[tool.rb.external]]` с кодом, changelog-фрагмент, сборка+установка колеса,
-osv-scanner). После клонирования один раз `scripts/install_hooks.sh`
-(`core.hooksPath=.githooks`: pre-commit блокирует команду, чей код поменялся
-без docstring = `--help`; pre-push сообщает корневому агенту о тегах).
-
-Изменение с видимым эффектом — фрагмент `changelog.d/+<slug>.<type>.md`
-(`uv run towncrier create +<slug>.<type>.md -c "…"`). Релиз:
-`uv run scripts/release.py patch|minor|major` на чистом `main` — собирает
-changelog, коммитит, ставит тег; push — `git push --follow-tags`. Версия
-только из git-тега, `version =` в pyproject нет.
+`[[tool.rb.external]]` с кодом, сборка+установка колеса, правила Standard,
+gitleaks и osv-scanner, если установлены). Работа и релизы — через Antagor
+(`antagor publish` пишет CHANGELOG.md и ставит тег). Версия только из
+git-тега, `version =` в pyproject нет.

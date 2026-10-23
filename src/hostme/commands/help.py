@@ -8,6 +8,8 @@ Click-овский список Commands показывает `teardown`/`config
 
 from __future__ import annotations
 
+import typer
+
 from hostme import output
 
 GRAMMAR_NOTE = """
@@ -71,9 +73,11 @@ _COMMAND_REFERENCE: list[tuple[str, str]] = [
     ("hostme target list", "таблица target'ов"),
     ("hostme target remove <name> [--force]", "убрать target из реестра"),
     (
-        "hostme skill install [--path PATH]",
+        "hostme skill install [--tool claude-code|agents] [--project]",
         "записать bundled SKILL.md туда, откуда его читает AI-агент (по умолчанию ~/.claude/skills/hostme/SKILL.md)",
     ),
+    ("hostme skill list", "встроенные skills: имя и описание"),
+    ("hostme describe --json", "весь CLI одним OpenCLI-документом (команды, опции, exit-коды, env, данные)"),
     ("hostme --ai", "напечатать bundled SKILL.md в stdout (для агента без доступа к файлам на диске) и выйти"),
     (
         "hostme <path> <domain> --target NAME [--confirm]",
@@ -110,7 +114,7 @@ _NOT_IMPLEMENTED_NOTE = (
 
 
 @output.guard
-def help_cmd() -> None:
+def help_cmd(ctx: typer.Context) -> None:
     """hostme help — полный справочник команд с реальным порядком аргументов (--json для агентов).
 
     Example: hostme help --json
@@ -128,6 +132,7 @@ def help_cmd() -> None:
         output.console.print(f"\n{d['not_implemented']}", markup=False)
 
     output.emit_success(
+        ctx,
         {
             "commands": [{"usage": usage, "description": desc} for usage, desc in _COMMAND_REFERENCE],
             "not_implemented": _NOT_IMPLEMENTED_NOTE,

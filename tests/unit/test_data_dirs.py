@@ -4,7 +4,7 @@ import pytest
 
 from hostme import config
 from hostme.core import services
-from hostme.core.errors import InvalidArgumentsError
+from hostme.core.errors import InvalidArguments
 
 
 def _snapshot(target: str, ts: datetime) -> None:
@@ -76,7 +76,7 @@ def test_backup_policy_from_settings():
 @pytest.mark.parametrize("body", ["keep: 0", "keep: many", "max_age_days: -1"])
 def test_backup_policy_rejects_bad_values(body):
     _write_settings(f"target_backups:\n  {body}\n")
-    with pytest.raises(InvalidArgumentsError):
+    with pytest.raises(InvalidArguments):
         config.load_backup_policy()
 
 

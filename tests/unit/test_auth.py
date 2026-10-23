@@ -7,7 +7,7 @@ import keyring.errors
 import pytest
 from typer.testing import CliRunner
 
-from hostme import config, output
+from hostme import config
 from hostme.cli import _translate_argv, app
 from hostme.credentials import manager
 
@@ -23,8 +23,6 @@ def isolated_config(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "SERVERS_FILE", config_dir / "servers.yaml")
     monkeypatch.setattr(config, "SITES_FILE", config_dir / "sites.yaml")
     monkeypatch.delenv("HOSTME_DEPLOY_CLIENT_RU_PASSWORD", raising=False)
-    yield
-    output.set_json_mode(False)
 
 
 def _status(*args: str):

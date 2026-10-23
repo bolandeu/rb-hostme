@@ -1,13 +1,23 @@
+"""The `doctor` command: checks of this CLI's own setup, one line per check."""
+
 from __future__ import annotations
 
-from hostme import output
-from hostme.core import services
+import typer
+
+from .. import output
+from ..core import services
+from ..core.version import DEV_VERSION, installed_version
 
 _ICONS = {"ok": "[green]✔[/green]", "warn": "[yellow]![/yellow]", "fail": "[red]✖[/red]"}
 
 
 @output.guard
-def doctor() -> None:
+def doctor(
+    ctx: typer.Context,
+    json_output: bool = output.JsonOption,
+    quiet: bool = output.QuietOption,
+    verbose: bool = output.VerboseOption,
+) -> None:
     """hostme doctor — проверка окружения без обращения к серверам.
 
     Бинарии (ssh/rsync/lftp/sshpass — по тому, что реально нужно зарегистрированным
@@ -15,13 +25,18 @@ def doctor() -> None:
     sites.yaml в каталоге данных), путь, размер и политика хранения бэкапов target'ов
     (settings.yaml → target_backups: keep / max_age_days), наличие объявленных
     ssh-ключей на диске. Всегда exit 0 — сам отчёт и есть результат,
-    `ok` говорит, все ли проверки прошли.
+    `healthy` говорит, все ли проверки прошли; у каждой проверки `ok` и `status` (ok/warn/fail).
 
     Example: hostme doctor --json
     """
+    report = services.run_doctor()
+    checks: list[dict] = [{"name": "python", "ok": True, "status": "ok"}]
+    checks.append({"name": "cli_version", "ok": True, "status": "ok", "detail": installed_version() or DEV_VERSION})
+    report["checks"] = checks + report["checks"]
 
     def render(d: dict) -> None:
         for check in d["checks"]:
-            output.console.print(f"{_ICONS[check['status']]} {check['name']}: {check['detail']}")
+            detail = f": {check['detail']}" if check.get("detail") else ""
+            output.human.console.print(f"{_ICONS[check['status']]} {check['name']}{detail}")
 
-    output.emit_success(services.run_doctor(), render_human=render)
+    output.emit_success(ctx, report, render_human=render)

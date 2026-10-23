@@ -17,6 +17,8 @@
 │ --check                    Ещё и проверить каждый доступ одним read-only входом (ssh true / lftp │
 │                            cls), 10 с.                                                           │
 │ --provider          <str>  Только этот доступ: server:<имя> или target:<имя>.                    │
+│ --json                     Emit machine-readable JSON output.                                    │
+│ --quiet                    Suppress non-essential output.                                        │
 │ --help      -h             Show this message and exit.                                           │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
 

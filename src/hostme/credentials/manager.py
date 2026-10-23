@@ -1,3 +1,7 @@
+"""The credential store: save, read and delete a provider's secrets in the system keyring, or in environment variables
+where no keyring exists.
+"""
+
 from __future__ import annotations
 
 import json
@@ -8,7 +12,7 @@ import re
 import keyring
 import keyring.errors
 
-from hostme.core.errors import CredentialStoreUnavailableError
+from hostme.core.errors import CredentialStoreUnavailable
 
 _PACKAGE_NAME = "hostme"
 _log = logging.getLogger(__name__)
@@ -87,7 +91,7 @@ def store_credential(provider: str, fields: dict[str, str]) -> None:
     try:
         keyring.set_password(service_name(provider), provider, json.dumps(fields))
     except keyring.errors.KeyringError as exc:
-        raise CredentialStoreUnavailableError(provider, str(exc)) from exc
+        raise CredentialStoreUnavailable(provider, str(exc)) from exc
 
 
 def delete_credential(provider: str) -> None:

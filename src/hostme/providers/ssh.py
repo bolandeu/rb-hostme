@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from hostme.config import Server, Target
-from hostme.core.errors import InvalidArgumentsError, ProviderError
+from hostme.core.errors import InvalidArguments, ProviderError
 
 DEFAULT_TIMEOUT = 30
 _log = logging.getLogger(__name__)
@@ -157,7 +157,7 @@ def _target_ssh_transport(target: Target) -> tuple[str, dict[str, str] | None]:
             None,
         )
     if not target.password:
-        raise InvalidArgumentsError(f"Target {target.name!r}: для connection=ssh нужен ssh_key или password")
+        raise InvalidArguments(f"Target {target.name!r}: для connection=ssh нужен ssh_key или password")
 
     # BatchMode=yes НЕЛЬЗЯ здесь (в отличие от ключевой ветки выше) — эта опция
     # отключает у ssh вообще любой запрос пароля, включая тот самый prompt,

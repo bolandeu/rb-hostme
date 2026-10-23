@@ -1,11 +1,39 @@
+"""Shared fixtures: rerun a test file under the CI environment; isolate the config/data dirs, the keychain and stdin."""
+
+from __future__ import annotations
+
 import os
+import subprocess
+import sys
+from collections.abc import Callable
 
 import keyring.errors
 import pytest
+import typer
+import typer.core
 
 from hostme import config, output
 from hostme.credentials import manager as credentials
 from hostme.providers import ssh
+
+# Typer reads these once, at import, and then forces terminal output — what a CI runner sets.
+CI_ENV = {"GITHUB_ACTIONS": "true", "FORCE_COLOR": "1", "PY_COLORS": "1"}
+
+
+@pytest.fixture
+def same_in_ci(request: pytest.FixtureRequest) -> Callable[[str], None]:
+    """Rerun this file's tests matching `-k` under CI_ENV in a fresh interpreter: the only way to set a value read at import."""
+    if request.config.getoption("--snapshot-update"):
+        pytest.skip("the snapshots are being written; there is nothing to compare yet")
+
+    def run(selection: str) -> None:
+        options = ["-k", selection, "-p", "no:cacheprovider", "--no-cov", "-q"]
+        command = [sys.executable, "-m", "pytest", str(request.path), *options]
+        env = {**os.environ, **CI_ENV}
+        result = subprocess.run(command, env=env, capture_output=True, text=True, check=False)
+        assert result.returncode == 0, result.stdout[-3000:]
+
+    return run
 
 
 class _FakeKeyring:
@@ -86,3 +114,17 @@ def real_server(e2e_host: str):
     user = os.environ.get("HOSTME_E2E_USER", "root")
     key = os.environ.get("HOSTME_E2E_KEY", "~/.ssh/bolandau")
     return Server(name="e2e", host=e2e_host, user=user, ssh_key=key)
+
+
+@pytest.fixture
+def make_ctx() -> Callable[..., typer.Context]:
+    """A command's ctx with the given modes in ctx.obj (json, quiet, verbose, non_interactive, dry_run), all off by default.
+
+    Что root-callback (cli.main_options) кладёт в ctx.obj — для тестов output и сервисов без запуска CLI.
+    """
+
+    def make(**modes: bool) -> typer.Context:
+        obj = {"json": False, "quiet": False, "verbose": False, "non_interactive": False, "dry_run": False}
+        return typer.Context(typer.core.TyperCommand("test"), obj={**obj, **modes})
+
+    return make

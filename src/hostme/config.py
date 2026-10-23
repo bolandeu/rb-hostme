@@ -8,7 +8,7 @@ from typing import Literal
 from platformdirs import user_data_dir
 from ruamel.yaml import YAML
 
-from hostme.core.errors import InvalidArgumentsError
+from hostme.core.errors import InvalidArguments
 from hostme.credentials import manager as credentials
 
 # Настройки (что пишет человек): реестр серверов/targets и settings.yaml.
@@ -114,9 +114,9 @@ def load_backup_policy() -> BackupPolicy:
     keep = raw.get("keep", DEFAULT_BACKUPS_KEEP)
     max_age_days = raw.get("max_age_days")
     if not isinstance(keep, int) or keep < 1:
-        raise InvalidArgumentsError(f"{SETTINGS_FILE}: target_backups.keep должен быть целым ≥ 1, а не {keep!r}")
+        raise InvalidArguments(f"{SETTINGS_FILE}: target_backups.keep должен быть целым ≥ 1, а не {keep!r}")
     if max_age_days is not None and (not isinstance(max_age_days, int) or max_age_days < 1):
-        raise InvalidArgumentsError(
+        raise InvalidArguments(
             f"{SETTINGS_FILE}: target_backups.max_age_days должен быть целым ≥ 1 или пустым, а не {max_age_days!r}"
         )
     return BackupPolicy(keep=keep, max_age_days=max_age_days)
@@ -412,7 +412,7 @@ def normalize_domain(domain: str) -> str:
     try:
         return domain.encode("idna").decode("ascii")
     except UnicodeError as exc:
-        raise InvalidArgumentsError(f"Не удалось привести домен {domain!r} к ASCII/punycode: {exc}") from exc
+        raise InvalidArguments(f"Не удалось привести домен {domain!r} к ASCII/punycode: {exc}") from exc
 
 
 def slugify(name: str) -> str:
@@ -450,7 +450,7 @@ def check_collision(sites: list[Site], domain: str, local_path: str, rebind: boo
     existing_path = str(Path(existing.local_path).resolve())
     new_path = str(Path(local_path).resolve())
     if existing_path != new_path:
-        raise InvalidArgumentsError(
+        raise InvalidArguments(
             f"Домен {domain} уже используется другим сайтом "
             f"(local_path={existing.local_path}). "
             f"Укажи другой домен, удали существующий сайт (teardown) "

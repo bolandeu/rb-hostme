@@ -1,0 +1,1644 @@
+{
+  "opencli": "0.1",
+  "info": {
+    "title": "hostme",
+    "version": "<version>",
+    "summary": "Личный аналог surge.sh — CLI-деплой статических сайтов и PHP на свои VPS через Webinoly"
+  },
+  "command": {
+    "name": "hostme",
+    "options": [
+      {
+        "name": "--json",
+        "description": "Машиночитаемый вывод (для агентов).",
+        "metadata": [
+          {
+            "name": "x-rb-type",
+            "value": "boolean"
+          },
+          {
+            "name": "x-rb-default",
+            "value": false
+          }
+        ]
+      },
+      {
+        "name": "--quiet",
+        "description": "Не печатать необязательный человеческий вывод.",
+        "metadata": [
+          {
+            "name": "x-rb-type",
+            "value": "boolean"
+          },
+          {
+            "name": "x-rb-default",
+            "value": false
+          }
+        ]
+      },
+      {
+        "name": "--verbose",
+        "description": "Диагностика в stderr: какие ssh/rsync/lftp-команды реально запускаются.",
+        "metadata": [
+          {
+            "name": "x-rb-type",
+            "value": "boolean"
+          },
+          {
+            "name": "x-rb-default",
+            "value": false
+          }
+        ]
+      },
+      {
+        "name": "--non-interactive",
+        "description": "Никогда не спрашивать подтверждение интерактивно.",
+        "metadata": [
+          {
+            "name": "x-rb-type",
+            "value": "boolean"
+          },
+          {
+            "name": "x-rb-default",
+            "value": false
+          }
+        ]
+      },
+      {
+        "name": "--dry-run",
+        "description": "Показать, что сделала бы деструктивная команда, ничего не меняя.",
+        "metadata": [
+          {
+            "name": "x-rb-type",
+            "value": "boolean"
+          },
+          {
+            "name": "x-rb-default",
+            "value": false
+          }
+        ]
+      },
+      {
+        "name": "--version",
+        "description": "Показать версию и выйти.",
+        "metadata": [
+          {
+            "name": "x-rb-type",
+            "value": "boolean"
+          },
+          {
+            "name": "x-rb-default",
+            "value": false
+          }
+        ]
+      },
+      {
+        "name": "--ai",
+        "description": "Print AI-oriented usage documentation (the bundled skill doc) and exit.",
+        "metadata": [
+          {
+            "name": "x-rb-type",
+            "value": "boolean"
+          },
+          {
+            "name": "x-rb-default",
+            "value": false
+          }
+        ]
+      },
+      {
+        "name": "--install-completion",
+        "description": "Install completion for the current shell.",
+        "metadata": [
+          {
+            "name": "x-rb-type",
+            "value": "boolean"
+          }
+        ]
+      },
+      {
+        "name": "--show-completion",
+        "description": "Show completion for the current shell, to copy it or customize the installation.",
+        "metadata": [
+          {
+            "name": "x-rb-type",
+            "value": "boolean"
+          }
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "name": "_deploy",
+        "description": "hostme <path> [domain] [--server NAME | --target NAME] [--rebind] — задеплоить папку (без слова \"deploy\").\n\nНа свой сервер: создаёт сайт в Webinoly при первом деплое (html или php —\nпо наличию *.php), включает SSL, заливает rsync --delete в новый релиз и\nпереключает symlink — предыдущие релизы остаются для `rollback`.\nНа --target: только заливка файлов (rsync или lftp mirror) с локальным\nбэкапом перед ней; сторонний хостинг — требует --confirm на каждый вызов.\nWebroot становится точным зеркалом папки: лишние файлы на сервере удаляются.\nДомен привязан к папке первого деплоя: из другой папки — отказ, пока не\nпередан --rebind (CI собирает в новом checkout'е каждый раз).\n\nExample: hostme ./dist landing.example.com",
+        "hidden": true,
+        "options": [
+          {
+            "name": "--server",
+            "arguments": [
+              {
+                "name": "SERVER_NAME",
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
+              }
+            ],
+            "description": "Сервер из `hostme server list`.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
+          {
+            "name": "--target",
+            "arguments": [
+              {
+                "name": "TARGET_NAME",
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
+              }
+            ],
+            "description": "Сторонний хостинг из `hostme target list` (домен обязателен).",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
+          {
+            "name": "--confirm",
+            "aliases": [
+              "--yes",
+              "-y"
+            ],
+            "description": "Подтвердить деструктивное действие без вопроса (обязателен вместе с --non-interactive/--json).",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          },
+          {
+            "name": "--rebind",
+            "description": "Это тот же сайт из другой папки: перепривязать домен к ней (для CI).",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          }
+        ],
+        "arguments": [
+          {
+            "name": "path",
+            "required": true,
+            "arity": {
+              "minimum": 1,
+              "maximum": 1
+            },
+            "description": "Локальная папка с готовым сайтом (dist/build/public).",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
+          {
+            "name": "domain",
+            "required": false,
+            "arity": {
+              "minimum": 0,
+              "maximum": 1
+            },
+            "description": "Домен; без него — <slug-папки>.<default-домен>.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "list",
+        "description": "hostme list — все сайты из реестра (+ служебные домены без деплоя, помечены отдельно).\n\nExample: hostme list --json"
+      },
+      {
+        "name": "open",
+        "description": "hostme open <domain> — открыть https://<domain> в браузере по умолчанию.\n\nExample: hostme open landing.example.com",
+        "arguments": [
+          {
+            "name": "domain",
+            "required": true,
+            "arity": {
+              "minimum": 1,
+              "maximum": 1
+            },
+            "description": "Домен сайта из `hostme list`.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "revs",
+        "description": "hostme <domain> revs — список релизов сайта на сервере (для rollback/rollfore).\n\nExample: hostme landing.example.com revs",
+        "arguments": [
+          {
+            "name": "domain",
+            "required": true,
+            "arity": {
+              "minimum": 1,
+              "maximum": 1
+            },
+            "description": "Домен сайта из `hostme list`.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "rollback",
+        "description": "hostme <domain> rollback [--confirm] — откатить на предыдущий релиз (сервер) или последний локальный бэкап (target).\n\nОбратимо: на сервере это переключение symlink (`rollfore` вернёт обратно),\nна target — восстановление снепшота, снятого перед последним деплоем.\n--dry-run показывает, на какой релиз откатился бы.\n\nExample: hostme landing.example.com rollback --confirm",
+        "options": [
+          {
+            "name": "--confirm",
+            "aliases": [
+              "--yes",
+              "-y"
+            ],
+            "description": "Подтвердить деструктивное действие без вопроса (обязателен вместе с --non-interactive/--json).",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          }
+        ],
+        "arguments": [
+          {
+            "name": "domain",
+            "required": true,
+            "arity": {
+              "minimum": 1,
+              "maximum": 1
+            },
+            "description": "Домен сайта из `hostme list`.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "rollfore",
+        "description": "hostme <domain> rollfore — вернуть сайт на следующий (после rollback) релиз. Только для своих серверов.\n\nExample: hostme landing.example.com rollfore",
+        "arguments": [
+          {
+            "name": "domain",
+            "required": true,
+            "arity": {
+              "minimum": 1,
+              "maximum": 1
+            },
+            "description": "Домен сайта из `hostme list`.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "maintenance",
+        "description": "hostme <domain> maintenance [--confirm] — очистить сайт, оставив встроенный плейсхолдер «в разработке».\n\nСодержимое не теряется: на сервере это новый релиз (откат — `rollback`),\nна target — снимается бэкап перед заливкой. --dry-run показывает план.\n\nExample: hostme landing.example.com maintenance --confirm",
+        "options": [
+          {
+            "name": "--confirm",
+            "aliases": [
+              "--yes",
+              "-y"
+            ],
+            "description": "Подтвердить деструктивное действие без вопроса (обязателен вместе с --non-interactive/--json).",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          }
+        ],
+        "arguments": [
+          {
+            "name": "domain",
+            "required": true,
+            "arity": {
+              "minimum": 1,
+              "maximum": 1
+            },
+            "description": "Домен сайта из `hostme list`.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "teardown",
+        "description": "hostme <domain> teardown [--confirm] — снести сайт (файлы + SSL) и убрать из реестра. Необратимо.\n\nНа сервере удаляет сайт из Webinoly со всеми релизами; на target — файлы\nв remote_path. --dry-run показывает, что было бы удалено.\n\nExample: hostme landing.example.com teardown --confirm",
+        "options": [
+          {
+            "name": "--confirm",
+            "aliases": [
+              "--yes",
+              "-y"
+            ],
+            "description": "Подтвердить деструктивное действие без вопроса (обязателен вместе с --non-interactive/--json).",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          }
+        ],
+        "arguments": [
+          {
+            "name": "domain",
+            "required": true,
+            "arity": {
+              "minimum": 1,
+              "maximum": 1
+            },
+            "description": "Домен сайта из `hostme list`.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "http-auth",
+        "description": "hostme <domain> auth --user U --pass P | --off — password protection (HTTP Basic Auth). Только свои серверы.\n\nExample: hostme landing.example.com auth --user admin --pass s3cret",
+        "options": [
+          {
+            "name": "--user",
+            "arguments": [
+              {
+                "name": "USER",
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
+              }
+            ],
+            "description": "Логин для HTTP Basic Auth.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
+          {
+            "name": "--pass",
+            "arguments": [
+              {
+                "name": "PASSWORD",
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
+              }
+            ],
+            "description": "Пароль (локально не хранится).",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
+          {
+            "name": "--off",
+            "description": "Снять защиту паролем.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          }
+        ],
+        "arguments": [
+          {
+            "name": "domain",
+            "required": true,
+            "arity": {
+              "minimum": 1,
+              "maximum": 1
+            },
+            "description": "Домен сайта из `hostme list`.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "config",
+        "description": "hostme <domain> config [--cors ORIGIN ...] [--redirect FROM=TO] [--nginx-snippet PATH] ... — настройки сайта; без флагов печатает текущие.\n\nТолько свои серверы (Webinoly). Все изменения обратимы соответствующим\n--no-*/--remove-* флагом.\n\nExample: hostme landing.example.com config --redirect /old=/new",
+        "options": [
+          {
+            "name": "--cors",
+            "arguments": [
+              {
+                "name": "CORS",
+                "required": true
+              }
+            ],
+            "description": "Разрешённый CORS-origin (повторяемый).",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              },
+              {
+                "name": "x-rb-default",
+                "value": []
+              },
+              {
+                "name": "x-rb-multiple",
+                "value": true
+              }
+            ]
+          },
+          {
+            "name": "--no-cors",
+            "description": "Убрать CORS.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          },
+          {
+            "name": "--redirect",
+            "arguments": [
+              {
+                "name": "REDIRECT",
+                "required": true
+              }
+            ],
+            "description": "Редирект FROM=TO (повторяемый).",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              },
+              {
+                "name": "x-rb-default",
+                "value": []
+              },
+              {
+                "name": "x-rb-multiple",
+                "value": true
+              }
+            ]
+          },
+          {
+            "name": "--remove-redirect",
+            "arguments": [
+              {
+                "name": "REMOVE_REDIRECT",
+                "required": true
+              }
+            ],
+            "description": "Убрать редирект FROM.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              },
+              {
+                "name": "x-rb-default",
+                "value": []
+              },
+              {
+                "name": "x-rb-multiple",
+                "value": true
+              }
+            ]
+          },
+          {
+            "name": "--force-https",
+            "description": "Принудительный HTTPS — у Webinoly и так всегда включён с SSL.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          },
+          {
+            "name": "--no-force-https",
+            "description": "Не поддерживается: Webinoly не отключает редирект на HTTPS.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          },
+          {
+            "name": "--nginx-snippet",
+            "arguments": [
+              {
+                "name": "NGINX_SNIPPET",
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
+              }
+            ],
+            "description": "Локальный .conf → кастомный nginx-сниппет сайта.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          },
+          {
+            "name": "--no-nginx-snippet",
+            "description": "Убрать кастомный сниппет.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          }
+        ],
+        "arguments": [
+          {
+            "name": "domain",
+            "required": true,
+            "arity": {
+              "minimum": 1,
+              "maximum": 1
+            },
+            "description": "Домен сайта из `hostme list`.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "debug",
+        "description": "hostme <domain> debug [--error] [--lines N] — HTTP-статус сайта + хвост nginx-лога с сервера.\n\nExample: hostme landing.example.com debug --error --lines 50",
+        "options": [
+          {
+            "name": "--error",
+            "description": "Хвост error-лога вместо access-лога.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          },
+          {
+            "name": "--lines",
+            "arguments": [
+              {
+                "name": "LINES",
+                "required": true,
+                "arity": {
+                  "maximum": 1
+                }
+              }
+            ],
+            "description": "Сколько строк лога.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "int"
+              },
+              {
+                "name": "x-rb-default",
+                "value": 10
+              }
+            ]
+          }
+        ],
+        "arguments": [
+          {
+            "name": "domain",
+            "required": true,
+            "arity": {
+              "minimum": 1,
+              "maximum": 1
+            },
+            "description": "Домен сайта из `hostme list`.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "str"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "doctor",
+        "description": "hostme doctor — проверка окружения без обращения к серверам.\n\nБинарии (ssh/rsync/lftp/sshpass — по тому, что реально нужно зарегистрированным\nсерверам и target'ам), права и читаемость реестров (servers.yaml в ~/.config/hostme,\nsites.yaml в каталоге данных), путь, размер и политика хранения бэкапов target'ов\n(settings.yaml → target_backups: keep / max_age_days), наличие объявленных\nssh-ключей на диске. Всегда exit 0 — сам отчёт и есть результат,\n`healthy` говорит, все ли проверки прошли; у каждой проверки `ok` и `status` (ok/warn/fail).\n\nExample: hostme doctor --json",
+        "options": [
+          {
+            "name": "--json",
+            "description": "Emit machine-readable JSON output.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          },
+          {
+            "name": "--quiet",
+            "description": "Suppress non-essential output.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          },
+          {
+            "name": "--verbose",
+            "description": "Emit extra diagnostic output.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "hostme help — полный справочник команд с реальным порядком аргументов (--json для агентов).\n\nExample: hostme help --json"
+      },
+      {
+        "name": "describe",
+        "description": "Print this CLI's machine-readable contract: an OpenCLI document (opencli.org).\n\nCommands, options, arguments, exit codes, plus `x-rb-*` metadata: env vars,\ntables, v1 views, data files, external programs. With --json it is the bare\ndocument on one line (no {\"ok\": ...} envelope); without, the same indented.\n\nExample: hostme describe --json",
+        "options": [
+          {
+            "name": "--json",
+            "description": "Emit machine-readable JSON output.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          },
+          {
+            "name": "--quiet",
+            "description": "Suppress non-essential output.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          },
+          {
+            "name": "--verbose",
+            "description": "Emit extra diagnostic output.",
+            "metadata": [
+              {
+                "name": "x-rb-type",
+                "value": "boolean"
+              },
+              {
+                "name": "x-rb-default",
+                "value": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "server",
+        "description": "Управление серверами (свои VPS с Webinoly).",
+        "commands": [
+          {
+            "name": "add",
+            "description": "hostme server add --name N --host H [--user U] [--key PATH] [--default] — зарегистрировать сервер.\n\nТолько запись в реестр (~/.config/hostme/servers.yaml): сервер не трогается.\nТребования к серверу (Ubuntu LTS, порты 22/80/443, ключ + passwordless sudo)\n— README.md. Дальше `hostme server init <name>` ставит Webinoly.\n\nExample: hostme server add --name vps1 --host 203.0.113.10 --key ~/.ssh/id_ed25519 --default",
+            "options": [
+              {
+                "name": "--name",
+                "required": true,
+                "arguments": [
+                  {
+                    "name": "NAME",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Имя сервера в реестре hostme (любое короткое).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--host",
+                "required": true,
+                "arguments": [
+                  {
+                    "name": "HOST",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Хост или IP для SSH.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--user",
+                "arguments": [
+                  {
+                    "name": "USER",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "SSH-пользователь с passwordless sudo.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": "root"
+                  }
+                ]
+              },
+              {
+                "name": "--key",
+                "arguments": [
+                  {
+                    "name": "KEY",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Путь к приватному SSH-ключу.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": "~/.ssh/id_ed25519"
+                  }
+                ]
+              },
+              {
+                "name": "--default",
+                "description": "Сделать сервером по умолчанию для деплоя.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "init",
+            "description": "hostme server init <name> — поставить (или проверить) Webinoly на сервере.\n\nИдемпотентно: на сервере с уже установленным Webinoly ничего не переустанавливает.\nСама ОС должна быть подготовлена заранее (apt upgrade, reboot) — README.md.\n\nExample: hostme server init vps1",
+            "arguments": [
+              {
+                "name": "name",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Имя сервера из `hostme server list`.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "update",
+            "description": "hostme server update <name> — обновить сам Webinoly на сервере (не системные пакеты).\n\nЗатем перезаливает nginx-дефолты hostme (закрывающий слэш, кэш /_astro/)\nвсем сайтам этого сервера из реестра.\n\nExample: hostme server update vps1",
+            "arguments": [
+              {
+                "name": "name",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Имя сервера из `hostme server list`.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "description": "hostme server list — все зарегистрированные серверы (имя, user@host, default).\n\nExample: hostme server list --json"
+          },
+          {
+            "name": "remove",
+            "description": "hostme server remove <name> [--force] — убрать сервер из локального реестра.\n\nСервер и сайты на нём не трогаются — только запись в ~/.config/hostme.\nБез --force отказывается, пока за сервером числятся сайты (сначала teardown).\n\nExample: hostme server remove vps1",
+            "options": [
+              {
+                "name": "--force",
+                "description": "Убрать, даже если на нём числятся сайты.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "name",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Имя сервера из `hostme server list`.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "domain",
+        "description": "Служебные (base) домены — для авто-генерации поддоменов при деплое.",
+        "commands": [
+          {
+            "name": "add",
+            "description": "hostme domain add <server> <domain> [--default] — зарегистрировать служебный домен.\n\nПосле этого `hostme ./dist` без домена получает `<slug-папки>.<default-домен>`.\nDNS (wildcard A-запись) и wildcard-SSL настраиваются вручную — WILDCARD-SSL.md.\n\nExample: hostme domain add sites-first example.com --default",
+            "options": [
+              {
+                "name": "--default",
+                "description": "Использовать для деплоя без явного домена.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "server_name",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Имя сервера из `hostme server list`.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "domain",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Домен, чей wildcard (*.domain) указывает на этот сервер.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "default",
+            "description": "hostme domain default <domain> — сделать служебный домен дефолтным.\n\nExample: hostme domain default example.com",
+            "arguments": [
+              {
+                "name": "domain",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Уже зарегистрированный служебный домен.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "remove",
+            "description": "hostme domain remove <domain> — убрать служебный домен из реестра (сайты на нём не трогаются).\n\nExample: hostme domain remove example.com",
+            "arguments": [
+              {
+                "name": "domain",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Служебный домен из `hostme domain list`.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "description": "hostme domain list — служебные домены и какой сервер за каждым стоит.\n\nExample: hostme domain list"
+          }
+        ]
+      },
+      {
+        "name": "target",
+        "description": "Сторонние хостинги (ftp/sftp/ssh, без Webinoly) — только заливка файлов.",
+        "commands": [
+          {
+            "name": "add",
+            "description": "hostme target add --name N --connection ssh|ftp|sftp --host H --user U [--password P] [--ssh-key PATH] [--path REMOTE] — зарегистрировать сторонний хостинг.\n\nTarget — чужая инфраструктура (shared-хостинг клиента и т.п.): hostme тут только\nтранспорт, без SSL/релизов/nginx. Пароль: сначала переменная окружения\nHOSTME_DEPLOY_<NAME>_PASSWORD (тогда --password не нужен), иначе OS keychain\n`hostme:<name>`; в реестре — только has_password.\n\nExample: hostme target add --name client.ru --connection sftp --host sftp.host.ru --user u123 --path www",
+            "options": [
+              {
+                "name": "--name",
+                "required": true,
+                "arguments": [
+                  {
+                    "name": "NAME",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Имя target'а (удобно — сам домен сайта).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--connection",
+                "required": true,
+                "arguments": [
+                  {
+                    "name": "CONNECTION",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "ssh (rsync) | sftp | ftp (lftp mirror).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--host",
+                "required": true,
+                "arguments": [
+                  {
+                    "name": "HOST",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Хост хостинга.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--user",
+                "required": true,
+                "arguments": [
+                  {
+                    "name": "USER",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Логин.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--password",
+                "arguments": [
+                  {
+                    "name": "PASSWORD",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Пароль — уходит в OS keychain, не в servers.yaml; без него — из HOSTME_DEPLOY_<NAME>_PASSWORD.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--ssh-key",
+                "arguments": [
+                  {
+                    "name": "SSH_KEY",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Путь к ключу (только для ssh).",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--path",
+                "arguments": [
+                  {
+                    "name": "REMOTE_PATH",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Каталог сайта на хостинге; у shared-хостингов часто относительный.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": "/"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "description": "hostme target list — зарегистрированные target'ы (без паролей — только факт их наличия).\n\nExample: hostme target list --json"
+          },
+          {
+            "name": "remove",
+            "description": "hostme target remove <name> [--force] — убрать target из реестра и его пароль из keychain.\n\nФайлы на хостинге не трогаются. Без --force отказывается, пока за target'ом\nчислятся сайты.\n\nExample: hostme target remove client.ru",
+            "options": [
+              {
+                "name": "--force",
+                "description": "Убрать, даже если на нём числятся сайты.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ],
+            "arguments": [
+              {
+                "name": "name",
+                "required": true,
+                "arity": {
+                  "minimum": 1,
+                  "maximum": 1
+                },
+                "description": "Имя target'а из `hostme target list`.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "auth",
+        "description": "Доступы к серверам и target'ам: откуда берутся и работают ли (значения не печатаются).",
+        "commands": [
+          {
+            "name": "status",
+            "description": "hostme auth status [--check] [--provider server:N|target:N] — здоровье доступов (стандарт §8).\n\nЗапись на каждый сервер (`server:<имя>`, ssh-ключ — файл) и target\n(`target:<имя>`: пароль из HOSTME_DEPLOY_<TARGET>_PASSWORD, иначе keychain\n`hostme:<target>`; или ssh-ключ). Без --check — только наличие (`unchecked`/\n`missing`). Exit 0 — всё в порядке, 3 — что-то missing/invalid/unreachable,\n2 — неизвестный --provider. Форма --json — контракт для tools-watch:\n`tool`, `version`, `checked_at`, `credentials[]` с `provider`, `required`,\n`fields`, `source`, `source_ref`, `status`, `expires_at`, `quota`, `message`.\n\nExample: hostme auth status --check --json",
+            "options": [
+              {
+                "name": "--check",
+                "description": "Ещё и проверить каждый доступ одним read-only входом (ssh true / lftp cls), 10 с.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--provider",
+                "arguments": [
+                  {
+                    "name": "PROVIDER",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Только этот доступ: server:<имя> или target:<имя>.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Emit machine-readable JSON output.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--quiet",
+                "description": "Suppress non-essential output.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "skill",
+        "description": "Install this CLI's agent skill for AI tools.",
+        "commands": [
+          {
+            "name": "install",
+            "description": "Copy this CLI's bundled skills into an AI tool's skill directory.\n\nThe conventions skill and every extra skill the package ships, each into its own directory.\n\nExample: hostme skill install --tool claude-code",
+            "options": [
+              {
+                "name": "--tool",
+                "arguments": [
+                  {
+                    "name": "TOOL",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Target AI tool: one of claude-code, agents.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": "claude-code"
+                  }
+                ]
+              },
+              {
+                "name": "--project",
+                "description": "Install into the current project instead of the user-level directory.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--skill",
+                "arguments": [
+                  {
+                    "name": "SKILL",
+                    "required": true,
+                    "arity": {
+                      "maximum": 1
+                    }
+                  }
+                ],
+                "description": "Install only this bundled skill (see `skill list`); by default all.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "str"
+                  }
+                ]
+              },
+              {
+                "name": "--json",
+                "description": "Emit machine-readable JSON output.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--quiet",
+                "description": "Suppress non-essential output.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "description": "List the agent skills this CLI bundles: name and description.\n\nExample: hostme skill list",
+            "options": [
+              {
+                "name": "--json",
+                "description": "Emit machine-readable JSON output.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              },
+              {
+                "name": "--quiet",
+                "description": "Suppress non-essential output.",
+                "metadata": [
+                  {
+                    "name": "x-rb-type",
+                    "value": "boolean"
+                  },
+                  {
+                    "name": "x-rb-default",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "exitCodes": [
+      {
+        "code": 0,
+        "description": "Success"
+      },
+      {
+        "code": 1,
+        "description": "General error (incl. UNEXPECTED and ABORTED)"
+      },
+      {
+        "code": 2,
+        "description": "Invalid arguments"
+      },
+      {
+        "code": 3,
+        "description": "Authentication error"
+      },
+      {
+        "code": 4,
+        "description": "Project not initialized"
+      },
+      {
+        "code": 5,
+        "description": "Provider error (external service: network, timeout, 5xx, 429, bad body)"
+      },
+      {
+        "code": 6,
+        "description": "CLI too old for this project or database"
+      }
+    ],
+    "metadata": [
+      {
+        "name": "x-rb-tool",
+        "value": {
+          "tool": "hostme",
+          "dist": "rb-hostme",
+          "package": "hostme"
+        }
+      },
+      {
+        "name": "x-rb-template-version",
+        "value": "<template-version>"
+      },
+      {
+        "name": "x-rb-env",
+        "value": []
+      },
+      {
+        "name": "x-rb-data",
+        "value": {
+          "user_data_dir": {
+            "appname": "hostme",
+            "files": []
+          }
+        }
+      },
+      {
+        "name": "x-rb-external",
+        "value": [
+          {
+            "name": "ssh",
+            "required": true,
+            "why": "команды Webinoly на своих серверах, проверка доступа в auth status --check",
+            "min_version": null,
+            "check": "ssh -V",
+            "detect": true,
+            "dist": null,
+            "url": null
+          },
+          {
+            "name": "rsync",
+            "required": true,
+            "why": "заливка сайтов на свои серверы и на ssh-target'ы, бэкап target'а перед деплоем",
+            "min_version": null,
+            "check": null,
+            "detect": true,
+            "dist": null,
+            "url": null
+          },
+          {
+            "name": "lftp",
+            "required": false,
+            "why": "заливка на ftp/sftp-target'ы (нужен, только если такие target'ы зарегистрированы)",
+            "min_version": null,
+            "check": null,
+            "detect": true,
+            "dist": null,
+            "url": null
+          },
+          {
+            "name": "sshpass",
+            "required": false,
+            "why": "ssh-target'ы с паролем вместо ключа (пароль через SSHPASS, не в argv)",
+            "min_version": null,
+            "check": "sshpass -V",
+            "detect": true,
+            "dist": null,
+            "url": null
+          }
+        ]
+      },
+      {
+        "name": "x-rb-skills",
+        "value": [
+          {
+            "name": "hostme",
+            "description": "\"Deploy static/PHP sites (built landing pages, client sites, previews, artifacts that need a real URL) via `hostme` — a personal surge.sh-alike CLI. Deploys to the user's own VPS (--server, full lifecycle) or a registered third-party ftp/sftp/ssh hosting (--target, file transfer only — needs the user's explicit go-ahead per deploy, see below). Use whenever the user wants a local folder published/hosted/deployed to a real domain, not just previewed locally. Not for anything with a backend process (Node/API servers) — hostme only serves static files and PHP.\""
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,11 +1,9 @@
 # Changelog
 
-Формат — [Keep a Changelog](https://keepachangelog.com/), версии — [SemVer](https://semver.org/).
-Руками не править: каждое изменение — фрагмент в `changelog.d/`
-(`uv run towncrier create +<slug>.<type>.md -c "…"`), `scripts/release.py
-patch|minor|major` собирает их в секцию версии. Версия — из git-тега.
+All notable changes to this project are documented here. Versions follow
+[SemVer](https://semver.org/) (while at `0.x`, a minor bump may break).
 
-<!-- towncrier release notes start -->
+The changelog is written by `antagor publish`; don't edit it by hand.
 
 ## [0.5.3] - 2026-10-19
 

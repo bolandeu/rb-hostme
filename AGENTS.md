@@ -1,5 +1,15 @@
 # AGENTS.md
 
+Pointers for agents. Antagor shows the changing state (statuses, branches, tasks): `antagor board`.
+
+- What the project is, and the domain glossary: `CONTEXT.md`. Take terms only from there.
+- Decisions and why: `docs/adr/` (format: `docs/adr/README.md`).
+- Code rules for review: `CODING_STANDARDS.md`.
+- Antagor keeps the tasks and epics: `.agents/antagor/`.
+- How to write to the Human and to agents (ASD-STE100): the skill `antagor-method`, section «How to write to the Human and to agents».
+- The package Standard: https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator/src/branch/main/skills/cli-builder/reference/standard.md (sections by name, for example «Install»).
+- The gate before a commit: the `rb-release check` step of `.gitea/workflows/ci.yml` — run that command.
+
 Инструкции для AI-агентов (Claude Code и т.п.), работающих в этом репозитории.
 
 ## Что это за проект
@@ -39,23 +49,23 @@
 
 ## Архитектура (cli-builder) и проверка
 
-Пакет следует архитектуре [cli-builder](https://github.com/bolandeu/cli-generator) — см. README «Разработка». Коротко, что где:
+Пакет следует архитектуре cli-builder (Standard — ссылка выше) — см. README «Разработка». Коротко, что где:
 - `commands/` — только разбор аргументов → один вызов сервиса → `output.success`/`output.emit_success`. Docstring команды = её `--help`; первая строка показывает реальную surge-форму вызова (`hostme <domain> teardown [--confirm]`).
-- `core/services.py` — бизнес-логика; `core/errors.py` — фиксированная таблица кодов (`INVALID_ARGUMENTS` 2, `PROVIDER_ERROR` 5, `ERROR`/`ABORTED`/`UNEXPECTED` 1); `core/version.py`.
+- `core/services.py` — бизнес-логика; `core/errors.py` — подклассы `CliError` и таблица exit-кодов (`INVALID_ARGUMENTS` 2, `CREDENTIALS_UNHEALTHY` 3, `PROVIDER_ERROR` 5, `ERROR`/`ABORTED`/`UNEXPECTED` 1); `core/version.py`.
 - `providers/` — ssh/rsync/lftp/Webinoly/HTTP-проба: единственное место с `subprocess`/`urllib`; ошибки наружу только как `ProviderError`.
-- `output/` — human/json-вывод, `guard` (на каждой команде), `group`, `require_confirmation` (гейт `--confirm`, `--yes`/`-y` — алиасы), состояние `--json/--quiet/--verbose/--non-interactive/--dry-run`.
+- `output/` — human/json-вывод, `guard` (на каждой команде, команда получает `ctx` первым), `group`, `require_confirmation` (гейт `--confirm`, `--yes`/`-y` — алиасы). Режимы `--json/--quiet/--verbose/--non-interactive/--dry-run` — в `ctx.obj`; сервисам, которым они нужны, команда передаёт `ctx`.
 - `credentials/manager.py` — пароли target'ов: сначала env `HOSTME_DEPLOY_<NAME>_PASSWORD`, потом OS keychain `hostme:<name>` (keychain необязателен — на headless-сервере его нет, это не ошибка); в `servers.yaml` секретов нет. `credentials/health.py` — `hostme auth status` (стандарт §8): запись `server:<имя>` (ssh-ключ, файл) и `target:<имя>` на каждый объект реестра; проверки `--check` — в `providers/ssh.py`/`ftp.py` (`check_*`, 10 с).
 - Настройки — `~/.config/hostme` (PRD §8, путь одинаков на macOS и Linux); состояние (`sites.yaml`, `sites.d/`, `target-backups/`) — `platformdirs.user_data_dir("hostme")` (стандарт §13). Перенос со старого места — `config.migrate_legacy_data()` в root-callback.
 - `hostme <domain> auth` (HTTP Basic Auth сайта) внутри называется `http-auth` — имя `auth` занято группой `auth status`; перевод — `_DOMAIN_SUBCOMMAND_TARGETS` в `cli.py`.
 
-## Проверка и релиз (`~/Work/tools/docs/standard-release.md`)
+## Проверка и релиз
 
-- Перед коммитом — `uv run scripts/release.py --check` (единственный гейт: lock, ruff, ty, pytest с порогом покрытия и снапшотами `--help`, `[[tool.rb.external]]`, фрагмент, сборка колеса, osv-scanner).
+- Перед коммитом — gate: шаг `rb-release check` в `.gitea/workflows/ci.yml` (lock, ruff, ty, pytest с порогом покрытия и снапшотами `--help`, `[[tool.rb.external]]`, сборка колеса, секреты, osv-scanner, правила Standard).
 - Версия — только из git-тега `vX.Y.Z` (uv-dynamic-versioning); `version =` в pyproject не добавлять. Дистрибутив `rb-hostme`, команда `hostme`.
-- Изменение с видимым эффектом — фрагмент `changelog.d/+<slug>.<type>.md` (`uv run towncrier create …`), `CHANGELOG.md` руками не править.
-- Docstring команды = её `--help`: меняешь поведение — меняй docstring в том же коммите (pre-commit блокирует), строка `Example: hostme …` обязательна (проверяется по реальному переводу argv). Потом `uv run pytest --snapshot-update` и прочитать diff `tests/snapshots/help/`.
+- `CHANGELOG.md` пишет `antagor publish`; руками не править.
+- Docstring команды = её `--help`: меняешь поведение — меняй docstring в том же коммите, строка `Example: hostme …` обязательна (проверяется по реальному переводу argv). Потом `uv run pytest --snapshot-update` и прочитать diff `tests/snapshots/help/`.
 - Новая внешняя программа (`subprocess`/`shutil.which` литералом) — запись в `[[tool.rb.external]]` в pyproject.
-- **Каждое видимое изменение выходит релизом**: серверы и Mac ставят только из тегов. Merge в `main` → `uv run scripts/release.py patch|minor|major` → push с `--follow-tags` (с подтверждения) → тег в отчёте.
+- **Каждое видимое изменение выходит релизом** через `antagor publish`: серверы и Mac ставят только из тегов.
 
 ## Внутри системы tools
 
@@ -72,3 +82,7 @@
 - Перед реализацией любого шага, завязанного на поведение Webinoly, сверяться с `docs/webinoly.md`; если там что-то не сходится с реальностью — перепроверять на `sites-first-beget` и обновлять и `docs/webinoly.md`, и этот файл (секция выше).
 - TODO.md — источник истины по прогрессу; отмечать выполненные пункты по ходу работы, а не только в конце.
 - **Всегда следовать TODO.md**: перед началом работы — свериться, какой пункт делаем; после завершения пункта — отметить его выполненным в TODO.md и сделать отдельный git-коммит на этот пункт (не накапливать несколько пунктов в один коммит). Если по ходу реализации выясняется, что PRD.md/TODO.md устарели или ошибались в деталях (как уже было с флагами Webinoly) — поправить их в том же коммите, а не оставлять расхождение.
+
+## Architect only
+
+A worker does not need this section: Antagor cuts it from the worker's brief.

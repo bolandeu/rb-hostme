@@ -1,3 +1,7 @@
+"""The root Typer app: global options, the command groups and the optional commands a generated package has, wired
+together, and the console-script entry point.
+"""
+
 from __future__ import annotations
 
 import sys
@@ -6,12 +10,16 @@ from typing import Annotated
 import typer
 from rich.markup import escape as rich_escape
 
-from hostme import config, output
-from hostme.commands import auth, doctor, domain, server, site, skill, target
-from hostme.commands import help as help_cmd
-from hostme.core.errors import HostmeError, UnexpectedError
-from hostme.core.version import DEV_VERSION, installed_version, package_summary
-from hostme.data import load_skill_doc
+from . import config, output
+from .commands import auth, doctor, domain, server, site, target
+from .commands import help as help_cmd
+from .core.errors import CliError
+from .core.version import DEV_VERSION, installed_version, optional_module, package_summary
+
+_PACKAGE_NAME = __name__.split(".")[0]
+# Optional parts (copier questions, dropped by _exclude): each one ships a module that registers its
+# commands and global options. Probed at runtime, so this file needs no template logic.
+PARTS = ("project", "skill", "describe", "db")
 
 # Форма команд копирует surge.sh (AGENTS.md): `hostme <path> [domain]` для деплоя,
 # `hostme <domain> <subcommand>` для управления — без промежуточных слов вроде "deploy".
@@ -23,6 +31,7 @@ _TOP_LEVEL_COMMANDS = {
     "domain",
     "target",
     "skill",
+    "describe",
     "list",
     "open",
     "doctor",
@@ -68,8 +77,9 @@ def _translate_argv(argv: list[str]) -> list[str]:
 
 # Голый `hostme` — точка входа для человека и агента: имя + версия + описание,
 # затем команды с первой строкой docstring. Без no_args_is_help (он выходит с
-# кодом 2) — root() ниже печатает справку и выходит с 0 (conventions.md).
+# кодом 2) — main_options() ниже печатает справку и выходит с 0 (conventions.md).
 app = typer.Typer(
+    cls=output.RootGroup,  # a usage error under --json is the error envelope
     name="hostme",
     help=f"hostme {installed_version() or DEV_VERSION} — {package_summary() or 'деплой сайтов на свои VPS.'}",
     epilog=rich_escape(help_cmd.GRAMMAR_NOTE),
@@ -80,7 +90,6 @@ app = typer.Typer(
 app.add_typer(server.app, name="server")
 app.add_typer(domain.app, name="domain")
 app.add_typer(target.app, name="target")
-app.add_typer(skill.app, name="skill")
 app.add_typer(auth.app, name="auth")
 
 app.command("_deploy", hidden=True)(site.deploy)
@@ -96,6 +105,9 @@ app.command("config")(site.site_config)
 app.command("debug")(site.debug)
 app.command("doctor")(doctor.doctor)
 app.command("help")(help_cmd.help_cmd)
+for part in PARTS:
+    if module := optional_module(f"{_PACKAGE_NAME}.commands.{part}"):
+        module.register(app)
 
 
 def _version_callback(value: bool) -> None:
@@ -105,17 +117,8 @@ def _version_callback(value: bool) -> None:
     raise typer.Exit()
 
 
-def _ai_callback(value: bool) -> None:
-    """Встроенный SKILL.md в stdout — для агента, который может запускать CLI,
-    но не может читать файлы с диска (sandbox, remote exec)."""
-    if not value:
-        return
-    typer.echo(load_skill_doc())
-    raise typer.Exit()
-
-
-@app.callback()
-def root(
+@app.callback(invoke_without_command=True)
+def main_options(
     ctx: typer.Context,
     json_output: Annotated[bool, typer.Option("--json", help="Машиночитаемый вывод (для агентов).")] = False,
     quiet: Annotated[bool, typer.Option("--quiet", help="Не печатать необязательный человеческий вывод.")] = False,
@@ -131,21 +134,13 @@ def root(
     version: Annotated[
         bool, typer.Option("--version", callback=_version_callback, is_eager=True, help="Показать версию и выйти.")
     ] = False,
-    ai: Annotated[
-        bool,
-        typer.Option(
-            "--ai",
-            callback=_ai_callback,
-            is_eager=True,
-            help="Напечатать встроенный SKILL.md (для агента без доступа к файлам на диске) и выйти.",
-        ),
-    ] = False,
 ) -> None:
-    output.set_json_mode(json_output)
-    output.set_quiet(quiet)
-    output.set_verbose(verbose)
-    output.set_non_interactive(non_interactive)
-    output.set_dry_run(dry_run)
+    ctx.ensure_object(dict)  # a part's global option (--project) may have put its value here already
+    ctx.obj["json"] = json_output
+    ctx.obj["quiet"] = quiet
+    ctx.obj["verbose"] = verbose
+    ctx.obj["non_interactive"] = non_interactive
+    ctx.obj["dry_run"] = dry_run
     output.configure_logging(verbose)
     _migrate_legacy_data()
     output.help_if_no_command(ctx)
@@ -156,22 +151,28 @@ def _migrate_legacy_data() -> None:
     переносим один раз и сообщаем в stderr (stdout занят --json)."""
     moved = config.migrate_legacy_data()
     for line in moved:
-        output.err_console.print(f"hostme: данные перенесены (стандарт §13): {rich_escape(line)}")
+        output.human.err_console.print(f"hostme: данные перенесены (стандарт §13): {rich_escape(line)}")
 
 
 def main() -> None:
     output.force_utf8_streams()
     # Команды уже под output.guard; это страховка для ошибок в самом
-    # root-callback (например, не прочитался bundled SKILL.md для --ai).
+    # root-callback (например, не перенеслись данные в _migrate_legacy_data).
     # Здесь мы уже вне Typer — typer.Exit никто не поймает, поэтому sys.exit.
+    argv = _translate_argv(sys.argv[1:])
+    json_mode = "--json" in argv
     try:
-        app(args=_translate_argv(sys.argv[1:]))
-    except HostmeError as exc:
-        output.render_error(exc)
+        app(args=argv)
+    except CliError as exc:
+        output.render_error(exc, json_mode=json_mode)
         sys.exit(exc.exit_code)
     except Exception as exc:  # noqa: BLE001 — не даём агенту голый трейсбек
-        error = UnexpectedError(exc)
-        output.render_error(error)
+        error = CliError(
+            "UNEXPECTED",
+            f"{type(exc).__name__}: {exc}",
+            action="Повтори с --verbose, чтобы увидеть трейсбек; если повторяется — сообщи вместе с ним.",
+        )
+        output.render_error(error, json_mode=json_mode)
         sys.exit(error.exit_code)
 
 

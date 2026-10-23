@@ -6,7 +6,7 @@ from typer.testing import CliRunner
 
 from hostme import output
 from hostme.cli import _translate_argv, app, main
-from hostme.core.errors import HostmeError, InvalidArgumentsError
+from hostme.core.errors import InvalidArguments, StateError
 
 runner = CliRunner()
 
@@ -14,16 +14,6 @@ runner = CliRunner()
 def _invoke(argv: list[str]):
     # Через _translate_argv, как main() — тесты видят реальную surge-грамматику.
     return runner.invoke(app, _translate_argv(argv))
-
-
-@pytest.fixture(autouse=True)
-def reset_output_state():
-    yield
-    output.set_json_mode(False)
-    output.set_non_interactive(False)
-    output.set_dry_run(False)
-    output.set_quiet(False)
-    output.set_verbose(False)
 
 
 def test_help_exits_zero() -> None:
@@ -59,16 +49,18 @@ def test_ai_flag_prints_bundled_skill() -> None:
 
 
 def test_root_callback_sets_output_state() -> None:
-    _invoke(["--json", "--non-interactive", "--dry-run", "--quiet", "--verbose", "server", "list"])
-    assert output.is_json_mode() is True
-    assert output.is_non_interactive() is True
-    assert output.is_dry_run() is True
-    assert output.is_quiet() is True
-    assert output.is_verbose() is True
+    with patch("hostme.output.emit_success") as emit:
+        _invoke(["--json", "--non-interactive", "--dry-run", "--quiet", "--verbose", "server", "list"])
+    ctx = emit.call_args.args[0]
+    assert ctx.obj["json"] is True
+    assert output.is_non_interactive(ctx) is True
+    assert output.is_dry_run(ctx) is True
+    assert ctx.obj["quiet"] is True
+    assert ctx.obj["verbose"] is True
 
 
 def test_guarded_command_emits_json_error_envelope_on_stdout() -> None:
-    with patch("hostme.commands.site.services.teardown", side_effect=HostmeError("сломалось", action="почини")):
+    with patch("hostme.commands.site.services.teardown", side_effect=StateError("сломалось", action="почини")):
         result = _invoke(["--json", "a.dev", "teardown", "--confirm"])
     assert result.exit_code == 1
     data = json.loads(result.stdout)
@@ -84,7 +76,8 @@ def test_guarded_command_maps_unknown_exception_to_unexpected() -> None:
 
 def test_main_catches_hostme_error_and_exits_with_its_code(capsys) -> None:
     with (
-        patch("hostme.cli.app", side_effect=InvalidArgumentsError("boom")),
+        patch("hostme.cli.sys.argv", ["hostme", "list"]),
+        patch("hostme.cli.app", side_effect=InvalidArguments("boom")),
         pytest.raises(SystemExit) as exc_info,
     ):
         main()
@@ -95,8 +88,8 @@ def test_main_catches_hostme_error_and_exits_with_its_code(capsys) -> None:
 def test_main_turns_escaped_exception_into_unexpected_not_traceback(capsys) -> None:
     # Поймано CI на Windows: раньше страховка в main() бросала typer.Exit вне
     # Typer-приложения — и агент получал трейсбек про typer.Exit вместо ошибки.
-    output.set_json_mode(True)
     with (
+        patch("hostme.cli.sys.argv", ["hostme", "--json", "list"]),
         patch("hostme.cli.app", side_effect=UnicodeEncodeError("cp1252", "x", 0, 1, "boom")),
         pytest.raises(SystemExit) as exc_info,
     ):
@@ -155,6 +148,7 @@ def test_force_utf8_streams_reconfigures_non_utf8_stream() -> None:
         # флаг) — вынимаются из любой позиции и переносятся в префикс.
         (["doctor", "--json"], ["--json", "doctor"]),
         (["help", "--json"], ["--json", "help"]),
+        (["describe", "--json"], ["--json", "describe"]),
         (["server", "list", "--json"], ["--json", "server", "list"]),
         (["mydomain.com", "teardown", "--yes", "--json"], ["--json", "teardown", "mydomain.com", "--yes"]),
         (["./dist", "--json"], ["--json", "_deploy", "./dist"]),

@@ -30,6 +30,7 @@ DomainArg = Annotated[str, typer.Argument(help="Домен сайта из `host
 
 @output.guard
 def deploy(
+    ctx: typer.Context,
     path: Annotated[str, typer.Argument(help="Локальная папка с готовым сайтом (dist/build/public).")],
     domain: Annotated[str | None, typer.Argument(help="Домен; без него — <slug-папки>.<default-домен>.")] = None,
     server_name: Annotated[str | None, typer.Option("--server", help="Сервер из `hostme server list`.")] = None,
@@ -55,12 +56,12 @@ def deploy(
 
     Example: hostme ./dist landing.example.com
     """
-    result = services.deploy(path, domain, server_name, target_name, confirm, rebind)
-    output.success(result.pop("message"), **result)
+    result = services.deploy(ctx, path, domain, server_name, target_name, confirm, rebind)
+    output.success(ctx, result.pop("message"), **result)
 
 
 @output.guard
-def list_() -> None:
+def list_(ctx: typer.Context) -> None:
     """hostme list — все сайты из реестра (+ служебные домены без деплоя, помечены отдельно).
 
     Example: hostme list --json
@@ -81,6 +82,7 @@ def list_() -> None:
 
     sites, bare_base_domains = services.list_sites()
     output.emit_success(
+        ctx,
         {
             "sites": [
                 {
@@ -102,17 +104,17 @@ def list_() -> None:
 
 
 @output.guard
-def open_(domain: DomainArg) -> None:
+def open_(ctx: typer.Context, domain: DomainArg) -> None:
     """hostme open <domain> — открыть https://<domain> в браузере по умолчанию.
 
     Example: hostme open landing.example.com
     """
     webbrowser.open(f"https://{domain}")
-    output.success(f"Открываю https://{domain}", domain=domain)
+    output.success(ctx, f"Открываю https://{domain}", domain=domain)
 
 
 @output.guard
-def revs(domain: DomainArg) -> None:
+def revs(ctx: typer.Context, domain: DomainArg) -> None:
     """hostme <domain> revs — список релизов сайта на сервере (для rollback/rollfore).
 
     Example: hostme landing.example.com revs
@@ -126,11 +128,11 @@ def revs(domain: DomainArg) -> None:
             output.console.print(f"{r}{' (current)' if r == d['current'] else ''}")
 
     domain = config.normalize_domain(domain)
-    output.emit_success(services.get_revisions(domain), render_human=render)
+    output.emit_success(ctx, services.get_revisions(domain), render_human=render)
 
 
 @output.guard
-def rollback(domain: DomainArg, confirm: ConfirmOption = False) -> None:
+def rollback(ctx: typer.Context, domain: DomainArg, confirm: ConfirmOption = False) -> None:
     """hostme <domain> rollback [--confirm] — откатить на предыдущий релиз (сервер) или последний локальный бэкап (target).
 
     Обратимо: на сервере это переключение symlink (`rollfore` вернёт обратно),
@@ -140,23 +142,23 @@ def rollback(domain: DomainArg, confirm: ConfirmOption = False) -> None:
     Example: hostme landing.example.com rollback --confirm
     """
     domain = config.normalize_domain(domain)
-    result = services.rollback(domain, confirm)
-    output.success(result.pop("message"), **result)
+    result = services.rollback(ctx, domain, confirm)
+    output.success(ctx, result.pop("message"), **result)
 
 
 @output.guard
-def rollfore(domain: DomainArg) -> None:
+def rollfore(ctx: typer.Context, domain: DomainArg) -> None:
     """hostme <domain> rollfore — вернуть сайт на следующий (после rollback) релиз. Только для своих серверов.
 
     Example: hostme landing.example.com rollfore
     """
     domain = config.normalize_domain(domain)
     result = services.rollfore(domain)
-    output.success(result.pop("message"), **result)
+    output.success(ctx, result.pop("message"), **result)
 
 
 @output.guard
-def maintenance(domain: DomainArg, confirm: ConfirmOption = False) -> None:
+def maintenance(ctx: typer.Context, domain: DomainArg, confirm: ConfirmOption = False) -> None:
     """hostme <domain> maintenance [--confirm] — очистить сайт, оставив встроенный плейсхолдер «в разработке».
 
     Содержимое не теряется: на сервере это новый релиз (откат — `rollback`),
@@ -165,12 +167,12 @@ def maintenance(domain: DomainArg, confirm: ConfirmOption = False) -> None:
     Example: hostme landing.example.com maintenance --confirm
     """
     domain = config.normalize_domain(domain)
-    result = services.set_maintenance(domain, confirm)
-    output.success(result.pop("message"), **result)
+    result = services.set_maintenance(ctx, domain, confirm)
+    output.success(ctx, result.pop("message"), **result)
 
 
 @output.guard
-def teardown(domain: DomainArg, confirm: ConfirmOption = False) -> None:
+def teardown(ctx: typer.Context, domain: DomainArg, confirm: ConfirmOption = False) -> None:
     """hostme <domain> teardown [--confirm] — снести сайт (файлы + SSL) и убрать из реестра. Необратимо.
 
     На сервере удаляет сайт из Webinoly со всеми релизами; на target — файлы
@@ -179,12 +181,13 @@ def teardown(domain: DomainArg, confirm: ConfirmOption = False) -> None:
     Example: hostme landing.example.com teardown --confirm
     """
     domain = config.normalize_domain(domain)
-    result = services.teardown(domain, confirm)
-    output.success(result.pop("message"), **result)
+    result = services.teardown(ctx, domain, confirm)
+    output.success(ctx, result.pop("message"), **result)
 
 
 @output.guard
 def auth(
+    ctx: typer.Context,
     domain: DomainArg,
     user: Annotated[str | None, typer.Option("--user", help="Логин для HTTP Basic Auth.")] = None,
     password: Annotated[str | None, typer.Option("--pass", help="Пароль (локально не хранится).")] = None,
@@ -196,7 +199,7 @@ def auth(
     """
     domain = config.normalize_domain(domain)
     result = services.set_http_auth(domain, user, password, off)
-    output.success(result.pop("message"), **result)
+    output.success(ctx, result.pop("message"), **result)
 
 
 def _render_site_config(d: dict) -> None:
@@ -215,6 +218,7 @@ def _render_site_config(d: dict) -> None:
 
 @output.guard
 def site_config(
+    ctx: typer.Context,
     domain: DomainArg,
     cors: Annotated[list[str], typer.Option("--cors", help="Разрешённый CORS-origin (повторяемый).")] = [],  # noqa: B006
     no_cors: Annotated[bool, typer.Option("--no-cors", help="Убрать CORS.")] = False,
@@ -245,6 +249,7 @@ def site_config(
     if result["message"] is None:
         site: config.Site = result["site"]
         output.emit_success(
+            ctx,
             {
                 "domain": site.domain,
                 "server": site.server,
@@ -258,11 +263,12 @@ def site_config(
             render_human=_render_site_config,
         )
         return
-    output.success(result["message"], domain=domain)
+    output.success(ctx, result["message"], domain=domain)
 
 
 @output.guard
 def debug(
+    ctx: typer.Context,
     domain: DomainArg,
     error: Annotated[bool, typer.Option("--error", help="Хвост error-лога вместо access-лога.")] = False,
     lines: Annotated[int, typer.Option("--lines", help="Сколько строк лога.")] = 10,
@@ -278,4 +284,4 @@ def debug(
         output.console.print(d["log"] or "(пусто)")
 
     domain = config.normalize_domain(domain)
-    output.emit_success(services.get_debug_info(domain, error, lines), render_human=render)
+    output.emit_success(ctx, services.get_debug_info(domain, error, lines), render_human=render)

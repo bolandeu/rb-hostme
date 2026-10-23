@@ -19,7 +19,7 @@ from pathlib import Path
 from rich.markup import escape
 
 from hostme import config, output
-from hostme.core.errors import CredentialsUnhealthyError, InvalidArgumentsError
+from hostme.core.errors import CredentialsUnhealthy, InvalidArguments
 from hostme.credentials import manager
 from hostme.providers import ftp, ssh
 
@@ -103,14 +103,14 @@ def _is_problem(entry: dict) -> bool:
     return entry["required"] and entry["status"] not in HEALTHY
 
 
-def status(tool: str, version: str, *, check: bool, only: str | None) -> tuple[dict, CredentialsUnhealthyError | None]:
+def status(tool: str, version: str, *, check: bool, only: str | None) -> tuple[dict, CredentialsUnhealthy | None]:
     """То, что печатает `auth status`: отчёт и проблема (exit 3), если есть."""
     candidates = [_server_entry(s) for s in config.load_servers()]
     candidates += [_target_entry(t) for t in config.load_targets()]
     if only is not None:
         candidates = [c for c in candidates if c[0]["provider"] == only]
         if not candidates:
-            raise InvalidArgumentsError(
+            raise InvalidArguments(
                 f"Неизвестный провайдер {only!r}",
                 action="Формат: server:<имя> или target:<имя> — см. `hostme auth status`.",
             )
@@ -124,7 +124,7 @@ def status(tool: str, version: str, *, check: bool, only: str | None) -> tuple[d
 
     payload = {"tool": tool, "version": version, "checked_at": _now_iso(), "credentials": credentials}
     problems = {e["provider"]: e["status"] for e in credentials if _is_problem(e)}
-    return payload, CredentialsUnhealthyError(problems) if problems else None
+    return payload, CredentialsUnhealthy(problems) if problems else None
 
 
 def render(payload: dict) -> None:

@@ -1,13 +1,13 @@
 
  Usage: hostme skill [OPTIONS] COMMAND [ARGS]...
 
- Синхронизация bundled SKILL.md туда, откуда его читают AI-агенты.
+ Install this CLI's agent skill for AI tools.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
 │ --help  -h        Show this message and exit.                                                    │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────╮
-│ install  hostme skill install [--path PATH] — записать встроенный SKILL.md туда, откуда его      │
-│          читает AI-агент.                                                                        │
+│ install  Copy this CLI's bundled skills into an AI tool's skill directory.                       │
+│ list     List the agent skills this CLI bundles: name and description.                           │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
 

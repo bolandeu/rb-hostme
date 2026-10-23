@@ -13,6 +13,7 @@ app = output.group("Управление серверами (свои VPS с Web
 @app.command("add")
 @output.guard
 def add(
+    ctx: typer.Context,
     name: Annotated[str, typer.Option("--name", help="Имя сервера в реестре hostme (любое короткое).")],
     host: Annotated[str, typer.Option("--host", help="Хост или IP для SSH.")],
     user: Annotated[str, typer.Option("--user", help="SSH-пользователь с passwordless sudo.")] = "root",
@@ -28,12 +29,12 @@ def add(
     Example: hostme server add --name vps1 --host 203.0.113.10 --key ~/.ssh/id_ed25519 --default
     """
     result = services.add_server(name, host, user, key, default)
-    output.success(result.pop("message"), **result)
+    output.success(ctx, result.pop("message"), **result)
 
 
 @app.command("init")
 @output.guard
-def init(name: Annotated[str, typer.Argument(help="Имя сервера из `hostme server list`.")]) -> None:
+def init(ctx: typer.Context, name: Annotated[str, typer.Argument(help="Имя сервера из `hostme server list`.")]) -> None:
     """hostme server init <name> — поставить (или проверить) Webinoly на сервере.
 
     Идемпотентно: на сервере с уже установленным Webinoly ничего не переустанавливает.
@@ -41,13 +42,15 @@ def init(name: Annotated[str, typer.Argument(help="Имя сервера из `h
 
     Example: hostme server init vps1
     """
-    result = services.init_server(name)
-    output.success(result.pop("message"), **result)
+    result = services.init_server(ctx, name)
+    output.success(ctx, result.pop("message"), **result)
 
 
 @app.command("update")
 @output.guard
-def update(name: Annotated[str, typer.Argument(help="Имя сервера из `hostme server list`.")]) -> None:
+def update(
+    ctx: typer.Context, name: Annotated[str, typer.Argument(help="Имя сервера из `hostme server list`.")]
+) -> None:
     """hostme server update <name> — обновить сам Webinoly на сервере (не системные пакеты).
 
     Затем перезаливает nginx-дефолты hostme (закрывающий слэш, кэш /_astro/)
@@ -55,13 +58,13 @@ def update(name: Annotated[str, typer.Argument(help="Имя сервера из 
 
     Example: hostme server update vps1
     """
-    result = services.update_server(name)
-    output.success(result.pop("message"), **result)
+    result = services.update_server(ctx, name)
+    output.success(ctx, result.pop("message"), **result)
 
 
 @app.command("list")
 @output.guard
-def list_() -> None:
+def list_(ctx: typer.Context) -> None:
     """hostme server list — все зарегистрированные серверы (имя, user@host, default).
 
     Example: hostme server list --json
@@ -77,6 +80,7 @@ def list_() -> None:
 
     servers = config.load_servers()
     output.emit_success(
+        ctx,
         {"servers": [{"name": s.name, "host": s.host, "user": s.user, "default": s.default} for s in servers]},
         render_human=render,
     )
@@ -85,6 +89,7 @@ def list_() -> None:
 @app.command("remove")
 @output.guard
 def remove(
+    ctx: typer.Context,
     name: Annotated[str, typer.Argument(help="Имя сервера из `hostme server list`.")],
     force: Annotated[bool, typer.Option("--force", help="Убрать, даже если на нём числятся сайты.")] = False,
 ) -> None:
@@ -96,4 +101,4 @@ def remove(
     Example: hostme server remove vps1
     """
     result = services.remove_server(name, force)
-    output.success(result.pop("message"), **result)
+    output.success(ctx, result.pop("message"), **result)

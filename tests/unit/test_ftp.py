@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pytest
 
 from hostme.config import Target
-from hostme.core.errors import HostmeError
+from hostme.core.errors import CliError
 from hostme.providers import ftp
 
 
@@ -46,7 +46,7 @@ def test_mirror_to_builds_reverse_delete_mirror_command():
 
 
 def test_mirror_to_without_password_raises():
-    with pytest.raises(HostmeError, match="password"):
+    with pytest.raises(CliError, match="password"):
         ftp.mirror_to("/local/path", make_target(password=None))
 
 

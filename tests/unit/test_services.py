@@ -3,21 +3,9 @@ from unittest.mock import patch
 
 import pytest
 
-from hostme import output
 from hostme.config import BaseDomain, Server, Site, Target
 from hostme.core import services
-from hostme.core.errors import AbortedError, HostmeError, InvalidArgumentsError
-
-
-@pytest.fixture(autouse=True)
-def reset_state():
-    output.set_json_mode(False)
-    output.set_non_interactive(False)
-    output.set_dry_run(False)
-    yield
-    output.set_json_mode(False)
-    output.set_non_interactive(False)
-    output.set_dry_run(False)
+from hostme.core.errors import Aborted, CliError, InvalidArguments
 
 
 def make_target(**overrides) -> Target:
@@ -51,30 +39,34 @@ def make_site(**overrides) -> Site:
 # hostme/SKILL.md).
 
 
-def test_confirm_target_action_yes_flag_skips_prompt() -> None:
+def test_confirm_target_action_yes_flag_skips_prompt(make_ctx) -> None:
+    ctx = make_ctx()
     with patch("hostme.output.typer.confirm") as mock_confirm:
-        services.confirm_target_action("Деплой x", make_target(), confirm=True)
+        services.confirm_target_action(ctx, "Деплой x", make_target(), confirm=True)
     mock_confirm.assert_not_called()
 
 
-def test_confirm_target_action_json_without_yes_raises_instead_of_bypassing() -> None:
-    output.set_json_mode(True)
-    with pytest.raises(InvalidArgumentsError, match="--confirm"):
-        services.confirm_target_action("Деплой x", make_target(), confirm=False)
+def test_confirm_target_action_json_without_yes_raises_instead_of_bypassing(make_ctx) -> None:
+    ctx = make_ctx()
+    ctx.obj["json"] = True
+    with pytest.raises(InvalidArguments, match="--confirm"):
+        services.confirm_target_action(ctx, "Деплой x", make_target(), confirm=False)
 
 
-def test_confirm_target_action_interactive_confirmed_proceeds() -> None:
+def test_confirm_target_action_interactive_confirmed_proceeds(make_ctx) -> None:
+    ctx = make_ctx()
     with patch("hostme.output.typer.confirm", return_value=True) as mock_confirm:
-        services.confirm_target_action("Деплой x", make_target(), confirm=False)
+        services.confirm_target_action(ctx, "Деплой x", make_target(), confirm=False)
     mock_confirm.assert_called_once()
 
 
-def test_confirm_target_action_interactive_declined_raises_aborted() -> None:
+def test_confirm_target_action_interactive_declined_raises_aborted(make_ctx) -> None:
+    ctx = make_ctx()
     with (
         patch("hostme.output.typer.confirm", return_value=False),
-        pytest.raises(AbortedError),
+        pytest.raises(Aborted),
     ):
-        services.confirm_target_action("Деплой x", make_target(), confirm=False)
+        services.confirm_target_action(ctx, "Деплой x", make_target(), confirm=False)
 
 
 # --- maintenance — плейсхолдер "в разработке" вместо содержимого сайта.
@@ -83,7 +75,8 @@ def test_confirm_target_action_interactive_declined_raises_aborted() -> None:
 # (релиз/target-бэкап) и откатывается через `rollback`.
 
 
-def test_maintenance_server_site_deploys_placeholder_as_new_release_without_touching_registry() -> None:
+def test_maintenance_server_site_deploys_placeholder_as_new_release_without_touching_registry(make_ctx) -> None:
+    ctx = make_ctx()
     site = make_site(server="vps1")
     server = make_server(name="vps1")
     with (
@@ -98,7 +91,7 @@ def test_maintenance_server_site_deploys_placeholder_as_new_release_without_touc
         patch("hostme.core.services.webinoly.switch_release") as mock_switch,
         patch("hostme.core.services.webinoly.prune_releases") as mock_prune,
     ):
-        services.set_maintenance("a.dev", confirm=True)
+        services.set_maintenance(ctx, "a.dev", confirm=True)
 
     mock_ensure.assert_called_once_with(server, "a.dev")
     mock_rsync.assert_called_once()
@@ -109,25 +102,27 @@ def test_maintenance_server_site_deploys_placeholder_as_new_release_without_touc
     mock_save_sites.assert_not_called()
 
 
-def test_maintenance_server_site_without_yes_requires_confirmation() -> None:
+def test_maintenance_server_site_without_yes_requires_confirmation(make_ctx) -> None:
+    ctx = make_ctx()
     # Раньше maintenance на своём сервере не требовал никакого подтверждения
     # вообще — закрытый пробел (см. AskUserQuestion в сессии рефакторинга):
     # теперь own-server ведёт себя так же строго, как target.
     site = make_site(server="vps1")
     server = make_server(name="vps1")
-    output.set_json_mode(True)
+    ctx.obj["json"] = True
     with (
         patch("hostme.core.services.config.load_sites", return_value=[site]),
         patch("hostme.core.services.config.load_servers", return_value=[server]),
         patch("hostme.core.services.config.find_server", return_value=server),
         patch("hostme.core.services.webinoly.ensure_releases_layout") as mock_ensure,
-        pytest.raises(InvalidArgumentsError, match="--confirm"),
+        pytest.raises(InvalidArguments, match="--confirm"),
     ):
-        services.set_maintenance("a.dev", confirm=False)
+        services.set_maintenance(ctx, "a.dev", confirm=False)
     mock_ensure.assert_not_called()
 
 
-def test_maintenance_target_site_requires_confirmation_and_backs_up_first() -> None:
+def test_maintenance_target_site_requires_confirmation_and_backs_up_first(make_ctx) -> None:
+    ctx = make_ctx()
     site = make_site(server="thirdparty")
     target = make_target(name="thirdparty")
     with (
@@ -140,16 +135,17 @@ def test_maintenance_target_site_requires_confirmation_and_backs_up_first() -> N
         patch("hostme.output.typer.confirm", return_value=False),
         patch("hostme.core.services._backup_target_before_deploy") as mock_backup,
         patch("hostme.core.services.rsync_to_target") as mock_rsync_target,
-        pytest.raises(AbortedError),
+        pytest.raises(Aborted),
     ):
-        services.set_maintenance("a.dev", confirm=False)
+        services.set_maintenance(ctx, "a.dev", confirm=False)
 
     mock_backup.assert_not_called()
     mock_rsync_target.assert_not_called()
     mock_save_sites.assert_not_called()
 
 
-def test_maintenance_target_site_yes_flag_proceeds_without_prompt() -> None:
+def test_maintenance_target_site_yes_flag_proceeds_without_prompt(make_ctx) -> None:
+    ctx = make_ctx()
     site = make_site(server="thirdparty")
     target = make_target(name="thirdparty")
     with (
@@ -163,10 +159,10 @@ def test_maintenance_target_site_yes_flag_proceeds_without_prompt() -> None:
         patch("hostme.core.services._backup_target_before_deploy") as mock_backup,
         patch("hostme.core.services.rsync_to_target") as mock_rsync_target,
     ):
-        services.set_maintenance("a.dev", confirm=True)
+        services.set_maintenance(ctx, "a.dev", confirm=True)
 
     mock_confirm.assert_not_called()
-    mock_backup.assert_called_once_with(target)
+    mock_backup.assert_called_once_with(ctx, target)
     mock_rsync_target.assert_called_once()
     mock_save_sites.assert_not_called()
 
@@ -174,32 +170,34 @@ def test_maintenance_target_site_yes_flag_proceeds_without_prompt() -> None:
 # --- dry-run — деструктивные команды не должны трогать ничего внешнее ---
 
 
-def test_maintenance_dry_run_does_not_touch_server() -> None:
+def test_maintenance_dry_run_does_not_touch_server(make_ctx) -> None:
+    ctx = make_ctx()
     site = make_site(server="vps1")
     server = make_server(name="vps1")
-    output.set_dry_run(True)
+    ctx.obj["dry_run"] = True
     with (
         patch("hostme.core.services.config.load_sites", return_value=[site]),
         patch("hostme.core.services.config.load_servers", return_value=[server]),
         patch("hostme.core.services.config.find_server", return_value=server),
         patch("hostme.core.services.webinoly.ensure_releases_layout") as mock_ensure,
     ):
-        result = services.set_maintenance("a.dev", confirm=False)
+        result = services.set_maintenance(ctx, "a.dev", confirm=False)
     mock_ensure.assert_not_called()
     assert result["dry_run"] is True
 
 
-def test_teardown_dry_run_does_not_touch_server() -> None:
+def test_teardown_dry_run_does_not_touch_server(make_ctx) -> None:
+    ctx = make_ctx()
     site = make_site(server="vps1")
     server = make_server(name="vps1")
-    output.set_dry_run(True)
+    ctx.obj["dry_run"] = True
     with (
         patch("hostme.core.services.config.load_sites", return_value=[site]),
         patch("hostme.core.services.config.load_servers", return_value=[server]),
         patch("hostme.core.services.config.find_server", return_value=server),
         patch("hostme.core.services.webinoly.delete_site") as mock_delete,
     ):
-        result = services.teardown("a.dev", confirm=False)
+        result = services.teardown(ctx, "a.dev", confirm=False)
     mock_delete.assert_not_called()
     assert result["dry_run"] is True
 
@@ -207,24 +205,26 @@ def test_teardown_dry_run_does_not_touch_server() -> None:
 # --- teardown/rollback на своём сервере — тот же гейт, что и у target ---
 
 
-def test_teardown_own_server_json_without_yes_raises_instead_of_bypassing() -> None:
+def test_teardown_own_server_json_without_yes_raises_instead_of_bypassing(make_ctx) -> None:
+    ctx = make_ctx()
     # Раньше --json на own-server teardown молча обходил подтверждение —
     # закрытый пробел безопасности (см. аудит рефакторинга).
     site = make_site(server="vps1")
     server = make_server(name="vps1")
-    output.set_json_mode(True)
+    ctx.obj["json"] = True
     with (
         patch("hostme.core.services.config.load_sites", return_value=[site]),
         patch("hostme.core.services.config.load_servers", return_value=[server]),
         patch("hostme.core.services.config.find_server", return_value=server),
         patch("hostme.core.services.webinoly.delete_site") as mock_delete,
-        pytest.raises(InvalidArgumentsError, match="--confirm"),
+        pytest.raises(InvalidArguments, match="--confirm"),
     ):
-        services.teardown("a.dev", confirm=False)
+        services.teardown(ctx, "a.dev", confirm=False)
     mock_delete.assert_not_called()
 
 
-def test_teardown_own_server_yes_flag_proceeds() -> None:
+def test_teardown_own_server_yes_flag_proceeds(make_ctx) -> None:
+    ctx = make_ctx()
     site = make_site(server="vps1")
     server = make_server(name="vps1")
     with (
@@ -234,17 +234,18 @@ def test_teardown_own_server_yes_flag_proceeds() -> None:
         patch("hostme.core.services.config.save_sites") as mock_save_sites,
         patch("hostme.core.services.webinoly.delete_site") as mock_delete,
     ):
-        result = services.teardown("a.dev", confirm=True)
+        result = services.teardown(ctx, "a.dev", confirm=True)
     mock_delete.assert_called_once()
     mock_save_sites.assert_called_once()
     assert result["domain"] == "a.dev"
 
 
-def test_rollback_own_server_without_yes_requires_confirmation() -> None:
+def test_rollback_own_server_without_yes_requires_confirmation(make_ctx) -> None:
+    ctx = make_ctx()
     # Раньше rollback на своём сервере вообще не спрашивал подтверждения.
     site = make_site(server="vps1")
     server = make_server(name="vps1")
-    output.set_non_interactive(True)
+    ctx.obj["non_interactive"] = True
     with (
         patch("hostme.core.services.config.load_sites", return_value=[site]),
         patch("hostme.core.services.config.load_servers", return_value=[server]),
@@ -252,9 +253,9 @@ def test_rollback_own_server_without_yes_requires_confirmation() -> None:
         patch("hostme.core.services.webinoly.list_releases", return_value=["r0", "r1"]),
         patch("hostme.core.services.webinoly.current_release", return_value="r1"),
         patch("hostme.core.services.webinoly.switch_release") as mock_switch,
-        pytest.raises(InvalidArgumentsError, match="--confirm"),
+        pytest.raises(InvalidArguments, match="--confirm"),
     ):
-        services.rollback("a.dev", confirm=False)
+        services.rollback(ctx, "a.dev", confirm=False)
     mock_switch.assert_not_called()
 
 
@@ -265,7 +266,7 @@ def test_remove_domain_not_registered_raises() -> None:
     server = make_server(base_domains=[BaseDomain(name="a.dev", default=True)])
     with (
         patch("hostme.core.services.config.load_servers", return_value=[server]),
-        pytest.raises(HostmeError, match="не зарегистрирован"),
+        pytest.raises(CliError, match="не зарегистрирован"),
     ):
         services.remove_domain("b.dev")
 
@@ -300,7 +301,7 @@ def test_require_unique_name_rejects_existing_server() -> None:
     with (
         patch("hostme.core.services.config.load_servers", return_value=[server]),
         patch("hostme.core.services.config.load_targets", return_value=[]),
-        pytest.raises(HostmeError, match="сервером"),
+        pytest.raises(CliError, match="сервером"),
     ):
         services.require_unique_name("vps1")
 
@@ -310,7 +311,7 @@ def test_require_unique_name_rejects_existing_target() -> None:
     with (
         patch("hostme.core.services.config.load_servers", return_value=[]),
         patch("hostme.core.services.config.load_targets", return_value=[target]),
-        pytest.raises(HostmeError, match="target"),
+        pytest.raises(CliError, match="target"),
     ):
         services.require_unique_name("ext1")
 

@@ -1,30 +1,138 @@
+"""The `skill` command group: print this CLI's agent skill or install it for AI tools."""
+
 from __future__ import annotations
 
-from typing import Annotated
+from pathlib import Path
 
 import typer
+from typer.core import TyperOption
 
-from hostme import output
-from hostme.core import services
+from .. import output
+from ..core import skills
 
-app = output.group("Синхронизация bundled SKILL.md туда, откуда его читают AI-агенты.")
+app = output.group("Install this CLI's agent skill for AI tools.")
+
+
+def _print_skill(ctx: typer.Context, _param: object, value: bool) -> None:
+    """Print the bundled agent skill doc to stdout.
+
+    For agents that can execute this CLI but cannot read files from disk
+    (e.g. a sandboxed shell with no access to a SKILL.md on the filesystem),
+    this is the fallback way to get full usage guidance.
+    """
+    if not value:
+        return
+    typer.echo(skills.conventions().text)
+    raise typer.Exit()
+
+
+def register(root: typer.Typer) -> None:
+    """Add the `skill` group and the global --ai to the CLI's root (the package skill part, copier's include_skill)."""
+    root.add_typer(app, name="skill")
+    output.RootGroup.part_options.append(
+        TyperOption(
+            param_decls=["--ai"],
+            is_flag=True,
+            default=False,
+            is_eager=True,
+            expose_value=False,
+            callback=_print_skill,
+            help="Print AI-oriented usage documentation (the bundled skill doc) and exit.",
+        )
+    )
+
+
+# Where each AI tool looks for personal (user-level) and project-level skills.
+_TOOL_TARGETS = {
+    "claude-code": {
+        "user": Path.home() / ".claude" / "skills",
+        "project": Path(".claude") / "skills",
+    },
+    "agents": {
+        "user": Path.home() / ".agents" / "skills",
+        "project": Path(".agents") / "skills",
+    },
+}
+
+
+def _chosen(wanted: str | None) -> list[skills.Skill]:
+    """Every bundled skill, or the one `--skill` names (by its name or its short name)."""
+    from ..core.errors import InvalidArguments
+
+    bundled = skills.bundled()
+    if wanted is None:
+        return bundled
+    found = [s for s in bundled if wanted in (s.name, s.short_name)]
+    if not found:
+        raise InvalidArguments(f"Unknown --skill '{wanted}'. Bundled skills: {', '.join(s.name for s in bundled)}.")
+    return found
 
 
 @app.command("install")
 @output.guard
 def install(
-    path: Annotated[
-        str | None,
-        typer.Option("--path", help="Куда записать (по умолчанию — ~/.claude/skills/hostme/SKILL.md)."),
-    ] = None,
+    ctx: typer.Context,
+    tool: str = typer.Option(
+        "claude-code",
+        "--tool",
+        help=f"Target AI tool: one of {', '.join(_TOOL_TARGETS)}.",
+    ),
+    project: bool = typer.Option(
+        False, "--project", help="Install into the current project instead of the user-level directory."
+    ),
+    skill: str = typer.Option(
+        None, "--skill", help="Install only this bundled skill (see `skill list`); by default all."
+    ),
+    json_output: bool = output.JsonOption,
+    quiet: bool = output.QuietOption,
 ) -> None:
-    """hostme skill install [--path PATH] — записать встроенный SKILL.md туда, откуда его читает AI-агент.
+    """Copy this CLI's bundled skills into an AI tool's skill directory.
 
-    Источник правды — копия внутри установленного пакета (`hostme --ai` печатает
-    её же); после обновления hostme перезапусти, чтобы установленный skill не
-    расходился с реальным CLI.
+    The conventions skill and every extra skill the package ships, each into its own directory.
 
-    Example: hostme skill install
+    Example: {cli} skill install --tool claude-code
     """
-    result = services.install_skill(path)
-    output.success(result.pop("message"), **result)
+    from ..core.errors import InvalidArguments
+
+    if tool not in _TOOL_TARGETS:
+        raise InvalidArguments(f"Unknown --tool '{tool}'. Choose one of: {', '.join(_TOOL_TARGETS)}.")
+
+    chosen = _chosen(skill)
+    scope = "project" if project else "user"
+    paths = []
+    for item in chosen:
+        target_dir = _TOOL_TARGETS[tool][scope] / item.name
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target_path = target_dir / "SKILL.md"
+        target_path.write_text(item.text)
+        paths.append(str(target_path.resolve()))
+
+    data = {"tool": tool, "scope": scope, "path": paths[0]}
+    if len(paths) > 1:
+        data["paths"] = paths
+    output.emit_success(
+        ctx,
+        data,
+        render_human=lambda d: output.human.echo(
+            f"Installed skill for '{d['tool']}' ({d['scope']}) at " + "\n  ".join(d.get("paths", [d["path"]]))
+        ),
+    )
+
+
+@app.command("list")
+@output.guard
+def list_skills(
+    ctx: typer.Context,
+    json_output: bool = output.JsonOption,
+    quiet: bool = output.QuietOption,
+) -> None:
+    """List the agent skills this CLI bundles: name and description.
+
+    Example: {cli} skill list
+    """
+    found = [{"name": s.name, "description": s.description} for s in skills.bundled()]
+    output.emit_success(
+        ctx,
+        {"skills": found},
+        render_human=lambda d: output.human.echo("\n".join(f"{s['name']}: {s['description']}" for s in d["skills"])),
+    )

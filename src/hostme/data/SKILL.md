@@ -18,25 +18,22 @@ maintained by hand in `~/.claude/skills/` — see "Staying in sync" below.
 ## Install (if `hostme --version` fails)
 
 ```bash
-uv tool install "rb-hostme @ git+https://github.com/bolandeu/hostme.git@vX.Y.Z"
+uv tool install rb-hostme --index https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple
+```
+
+From the git tag instead:
+
+```bash
+uv tool install "rb-hostme @ git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/hostme.git@vX.Y.Z"
 ```
 
 Replace `vX.Y.Z` with the latest release tag (install from a tag, never a
-branch). The distribution is `rb-hostme`, the command stays `hostme`; an old
-install under the name `hostme` goes first: `uv tool uninstall hostme`.
+branch: [the Standard](https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator/src/branch/main/skills/cli-builder/reference/standard.md), Install).
+
 Same command on macOS and Linux (Windows: the CLI itself installs, but it
-shells out to `ssh`/`rsync`/`lftp`, which you'd need on PATH). Do not run from source unless asked to
+shells out to `ssh`/`rsync`/`lftp`, which you'd need on PATH);
+`uv tool upgrade rb-hostme` updates it. Do not run from source unless asked to
 develop the CLI.
-
-The repository is private. On an auth error (`Authentication failed`,
-`could not read Username`, `Repository not found`) do not ask for a token:
-run `gh auth status`; if it passes, `gh auth setup-git` and retry; if not,
-ask the user to run `gh auth login`. With SSH keys configured this works
-without any of that:
-
-```bash
-uv tool install "rb-hostme @ git+ssh://git@github.com/bolandeu/hostme.git@vX.Y.Z"
-```
 
 ## First: get the live command reference, don't guess
 
@@ -48,6 +45,10 @@ reference with examples and the list of what's explicitly NOT implemented:
 ```
 hostme help --json
 ```
+
+`hostme describe --json` gives the whole CLI as one OpenCLI document
+(commands, options, exit codes, env vars, data) — the bare document, no
+`{"ok": ...}` envelope.
 
 Trust that output over anything below if they conflict — this file can go
 stale, the CLI's own help cannot (it's rendered from the code that runs the
@@ -213,6 +214,6 @@ synced-out copy — after reinstalling a newer tag, resync it with:
 hostme skill install
 ```
 
-(`--path PATH` for somewhere else). If the installed copy and `hostme help
+(`--tool agents` for `~/.agents/skills/`, `--project` for the current project). If the installed copy and `hostme help
 --json` ever disagree, trust `help` and re-run `skill install` — don't
 hand-edit the installed copy.

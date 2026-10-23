@@ -13,6 +13,7 @@ app = output.group("Сторонние хостинги (ftp/sftp/ssh, без We
 @app.command("add")
 @output.guard
 def add(
+    ctx: typer.Context,
     name: Annotated[str, typer.Option("--name", help="Имя target'а (удобно — сам домен сайта).")],
     connection: Annotated[str, typer.Option("--connection", help="ssh (rsync) | sftp | ftp (lftp mirror).")],
     host: Annotated[str, typer.Option("--host", help="Хост хостинга.")],
@@ -39,12 +40,12 @@ def add(
     Example: hostme target add --name client.ru --connection sftp --host sftp.host.ru --user u123 --path www
     """
     result = services.add_target(name, connection, host, user, password, ssh_key, remote_path)
-    output.success(result.pop("message"), **result)
+    output.success(ctx, result.pop("message"), **result)
 
 
 @app.command("list")
 @output.guard
-def list_() -> None:
+def list_(ctx: typer.Context) -> None:
     """hostme target list — зарегистрированные target'ы (без паролей — только факт их наличия).
 
     Example: hostme target list --json
@@ -59,6 +60,7 @@ def list_() -> None:
 
     targets = config.load_targets()
     output.emit_success(
+        ctx,
         {
             "targets": [
                 {
@@ -81,6 +83,7 @@ def list_() -> None:
 @app.command("remove")
 @output.guard
 def remove(
+    ctx: typer.Context,
     name: Annotated[str, typer.Argument(help="Имя target'а из `hostme target list`.")],
     force: Annotated[bool, typer.Option("--force", help="Убрать, даже если на нём числятся сайты.")] = False,
 ) -> None:
@@ -92,4 +95,4 @@ def remove(
     Example: hostme target remove client.ru
     """
     result = services.remove_target(name, force)
-    output.success(result.pop("message"), **result)
+    output.success(ctx, result.pop("message"), **result)

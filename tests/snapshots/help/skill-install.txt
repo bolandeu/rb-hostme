@@ -1,17 +1,18 @@
 
  Usage: hostme skill install [OPTIONS]
 
- hostme skill install [--path PATH] — записать встроенный SKILL.md туда, откуда его читает
- AI-агент.
+ Copy this CLI's bundled skills into an AI tool's skill directory.
 
- Источник правды — копия внутри установленного пакета (`hostme --ai` печатает
- её же); после обновления hostme перезапусти, чтобы установленный skill не
- расходился с реальным CLI.
+ The conventions skill and every extra skill the package ships, each into its own directory.
 
- Example: hostme skill install
+ Example: hostme skill install --tool claude-code
 
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
-│ --path          <str>  Куда записать (по умолчанию — ~/.claude/skills/hostme/SKILL.md).          │
-│ --help  -h             Show this message and exit.                                               │
+│ --tool             <str>  Target AI tool: one of claude-code, agents. [default: claude-code]     │
+│ --project                 Install into the current project instead of the user-level directory.  │
+│ --skill            <str>  Install only this bundled skill (see `skill list`); by default all.    │
+│ --json                    Emit machine-readable JSON output.                                     │
+│ --quiet                   Suppress non-essential output.                                         │
+│ --help     -h             Show this message and exit.                                            │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
 

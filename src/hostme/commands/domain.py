@@ -13,6 +13,7 @@ app = output.group("Служебные (base) домены — для авто-�
 @app.command("add")
 @output.guard
 def add(
+    ctx: typer.Context,
     server_name: Annotated[str, typer.Argument(help="Имя сервера из `hostme server list`.")],
     domain: Annotated[str, typer.Argument(help="Домен, чей wildcard (*.domain) указывает на этот сервер.")],
     default: Annotated[bool, typer.Option("--default", help="Использовать для деплоя без явного домена.")] = False,
@@ -25,34 +26,38 @@ def add(
     Example: hostme domain add sites-first example.com --default
     """
     result = services.add_domain(server_name, domain, default)
-    output.success(result.pop("message"), **result)
+    output.success(ctx, result.pop("message"), **result)
 
 
 @app.command("default")
 @output.guard
-def default(domain: Annotated[str, typer.Argument(help="Уже зарегистрированный служебный домен.")]) -> None:
+def default(
+    ctx: typer.Context, domain: Annotated[str, typer.Argument(help="Уже зарегистрированный служебный домен.")]
+) -> None:
     """hostme domain default <domain> — сделать служебный домен дефолтным.
 
     Example: hostme domain default example.com
     """
     result = services.set_default_domain(domain)
-    output.success(result.pop("message"), **result)
+    output.success(ctx, result.pop("message"), **result)
 
 
 @app.command("remove")
 @output.guard
-def remove(domain: Annotated[str, typer.Argument(help="Служебный домен из `hostme domain list`.")]) -> None:
+def remove(
+    ctx: typer.Context, domain: Annotated[str, typer.Argument(help="Служебный домен из `hostme domain list`.")]
+) -> None:
     """hostme domain remove <domain> — убрать служебный домен из реестра (сайты на нём не трогаются).
 
     Example: hostme domain remove example.com
     """
     result = services.remove_domain(domain)
-    output.success(result.pop("message"), **result)
+    output.success(ctx, result.pop("message"), **result)
 
 
 @app.command("list")
 @output.guard
-def list_() -> None:
+def list_(ctx: typer.Context) -> None:
     """hostme domain list — служебные домены и какой сервер за каждым стоит.
 
     Example: hostme domain list
@@ -68,6 +73,7 @@ def list_() -> None:
 
     rows = services.list_domains()
     output.emit_success(
+        ctx,
         {"domains": [{"domain": d.name, "server": server_name, "default": d.default} for server_name, d in rows]},
         render_human=render,
     )

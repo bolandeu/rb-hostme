@@ -3,7 +3,7 @@ import sys
 import pytest
 
 from hostme import config
-from hostme.core.errors import InvalidArgumentsError
+from hostme.core.errors import InvalidArguments
 
 
 @pytest.fixture(autouse=True)
@@ -175,7 +175,7 @@ def test_check_collision_rejects_different_local_path(tmp_path):
         config.Site(domain="a.dev", server="vps1", local_path=str(existing_path)),
     ]
 
-    with pytest.raises(InvalidArgumentsError):
+    with pytest.raises(InvalidArguments):
         config.check_collision(sites, "a.dev", str(new_path))
 
 

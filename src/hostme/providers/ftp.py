@@ -4,7 +4,7 @@ import logging
 import subprocess
 
 from hostme.config import Target
-from hostme.core.errors import InvalidArgumentsError, ProviderError
+from hostme.core.errors import InvalidArguments, ProviderError
 
 DEFAULT_TIMEOUT = 300
 _log = logging.getLogger(__name__)
@@ -62,7 +62,7 @@ def mirror_to(local_path: str, target: Target, timeout: int = DEFAULT_TIMEOUT) -
     виден в `ps aux` всем локальным пользователям машины.
     """
     if not target.password:
-        raise InvalidArgumentsError(f"Target {target.name!r}: для connection={target.connection} нужен password")
+        raise InvalidArguments(f"Target {target.name!r}: для connection={target.connection} нужен password")
 
     local = local_path.rstrip("/") + "/"
     script = (
@@ -78,7 +78,7 @@ def mirror_from(target: Target, local_dir: str, timeout: int = DEFAULT_TIMEOUT) 
     на Target (см. cli._backup_target_before_deploy), не rollback как таковой.
     Без --delete: local_dir — свежая пустая директория под конкретный таймстамп."""
     if not target.password:
-        raise InvalidArgumentsError(f"Target {target.name!r}: для connection={target.connection} нужен password")
+        raise InvalidArguments(f"Target {target.name!r}: для connection={target.connection} нужен password")
 
     local = local_dir.rstrip("/") + "/"
     # lftp `mirror` без --reverse — как раз скачивание remote -> local.

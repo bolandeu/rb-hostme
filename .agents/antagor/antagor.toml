@@ -13,3 +13,20 @@ changelog = "CHANGELOG.md"
 deploy_command = "sh scripts/deploy.sh"
 gate = "remote"
 gate_status_url = "https://homeserver.tailee01ab.ts.net:3000/api/v1/repos/bolandeu/hostme/commits/{commit}/status"
+
+[connector]
+webhook_secret = "PLANE_WEBHOOK_SECRET_TOOLS"
+kind = "plane"
+base_url = "https://homeserver.tailee01ab.ts.net:8443"
+workspace = "tools"
+project_id = "2dc301e7-8539-431e-912d-02231984d441"
+humans = ["r.bolandau@gmail.com"]
+
+[connector.states]
+ideas = "Backlog"
+queue = "Todo"
+in_progress = "In Progress"
+in_review = "In Review"
+publish = "Publishing"
+done = "Done"
+cancelled = "Cancelled"

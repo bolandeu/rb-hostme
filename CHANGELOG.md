@@ -5,6 +5,16 @@ All notable changes to this project are documented here. Versions follow
 
 The changelog is written by `antagor publish`; don't edit it by hand.
 
+## v0.6.0 — 2026-10-23
+
+### Main
+
+- antagor init: project hostme (HOSTME)
+- antagor init: project hostme (HOSTME)
+- Template v1.27.1: update from v1.2.10
+- Шаблон: источник и repository_url — Gitea
+
+
 ## [0.5.3] - 2026-10-19
 
 ### Removed

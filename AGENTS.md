@@ -18,9 +18,10 @@ Pointers for agents. Antagor shows the changing state (statuses, branches, tasks
 
 Дальше по важности:
 - **[TODO.md](TODO.md)** — детальный план реализации по фазам. Перед тем как писать код, свериться, на какой фазе/пункте мы находимся, и отмечать пункты по мере выполнения.
-- **[docs/webinoly.md](docs/webinoly.md)** — полный референс команд Webinoly (устанавливается на серверах). Обращаться сюда, а не гадать/угадывать флаги.
-- **[docs/surge-cli.md](docs/surge-cli.md)** — референс команд surge.sh, на форму которых ориентируется CLI `hostme`.
-- **[WILDCARD-SSL.md](WILDCARD-SSL.md)** — пошаговая (проверенная вживую) инструкция по выпуску wildcard SSL, плюс раздел с реальными граблями и заметка про будущую автоматизацию через API регистратора/хостинга.
+- **[docs/usage/webinoly.md](docs/usage/webinoly.md)** — команды Webinoly, которые вызывает `hostme`, их форматы вывода и раскладка сайта. Обращаться сюда, а не гадать/угадывать флаги.
+- **[docs/usage/wildcard-ssl.md](docs/usage/wildcard-ssl.md)** — проверенная вживую процедура выпуска wildcard SSL для base-домена.
+- **[docs/research/](docs/research/)** — что и когда выяснилось на живой инфраструктуре (баги Webinoly, DNS Beget, форма команд surge.sh, SSH rate-limit).
+- **[docs/adr/](docs/adr/)** — решения и их причины.
 
 ## Skill для агентов (`~/.claude/skills/hostme/`)
 
@@ -28,11 +29,11 @@ Pointers for agents. Antagor shows the changing state (statuses, branches, tasks
 
 ## Проверенные на практике факты о Webinoly (не гадать, не перепроверять с нуля)
 
-Все подтверждённые вживую факты о поведении Webinoly (команды, форматы вывода, найденные баги вроде `open_file_cache`/прав на `releases/`, реальный MVP-путь для SSL) — **в `docs/webinoly.md`, раздел «Итог для Hostme»**. Не дублировать их здесь: этот файл про инструкции агенту, `docs/webinoly.md` — источник истины по самому Webinoly. Wildcard SSL и DNS-пропагация (Beget, шесть NS, диагностика) — отдельно в `WILDCARD-SSL.md`, включая раздел «История: что пошло не так».
+Команды, форматы вывода и раскладка сайта — **`docs/usage/webinoly.md`**. Найденные баги (`open_file_cache`, права на `releases/`, `httpauth -purge`, `403` у пустого сайта) — **`docs/research/2026-09-08-webinoly-behaviour.md`**. Не дублировать их здесь: этот файл про инструкции агенту. Wildcard SSL — `docs/usage/wildcard-ssl.md`, DNS-пропагация и шесть NS Beget — `docs/research/2026-09-08-wildcard-ssl-dns.md`.
 
 Что не про Webinoly, а про сам `hostme`/процесс работы над ним:
 
-- SSH-соединения переиспользуются через `ControlMaster`/`ControlPersist` (`src/hostme/providers/ssh.py`, см. комментарий у `_CONTROL_DIR`) — было поймано на реальном rate-limit/fail2ban от слишком частых коротких подключений подряд.
+- SSH-соединения переиспользуются через `ControlMaster`/`ControlPersist` (`src/hostme/providers/ssh.py`, см. комментарий у `_CONTROL_DIR`) — причина в ADR 0007, находка в `docs/research/2026-09-09-ssh-rate-limit.md`.
 - Текущее состояние (какие серверы/домены/сайты реально зарегистрированы и задеплоены) — **не хранить статикой в этом файле, оно меняется**: смотреть `hostme server list` / `hostme domain list` / `hostme list` (агент сам восстановит картину через сам инструмент, когда понадобится).
 
 ## Тестирование (не обязательно — приоритет на скорость)
@@ -78,8 +79,8 @@ Pointers for agents. Antagor shows the changing state (statuses, branches, tasks
 ## Стиль работы над кодом
 
 - Технологии зафиксированы в PRD §8: Python + uv (`uv python pin`), Typer, `ruamel.yaml`, `rich`, SSH/rsync через `subprocess` (не через paramiko/fabric — уважать `~/.ssh/config`).
-- Форма CLI-команд копирует surge.sh (`hostme <path> <domain>`, `hostme <domain> teardown` и т.п.) — не изобретать свой стиль команд, сверяться с `docs/surge-cli.md`.
-- Перед реализацией любого шага, завязанного на поведение Webinoly, сверяться с `docs/webinoly.md`; если там что-то не сходится с реальностью — перепроверять на `sites-first-beget` и обновлять и `docs/webinoly.md`, и этот файл (секция выше).
+- Форма CLI-команд копирует surge.sh (`hostme <path> <domain>`, `hostme <domain> teardown` и т.п.) — не изобретать свой стиль команд, сверяться с выжимкой `docs/research/2026-09-08-surge-cli.md`.
+- Перед реализацией любого шага, завязанного на поведение Webinoly, сверяться с `docs/usage/webinoly.md`; если там что-то не сходится с реальностью — перепроверять на `sites-first-beget` и обновлять и `docs/usage/webinoly.md`, и этот файл (секция выше).
 - TODO.md — источник истины по прогрессу; отмечать выполненные пункты по ходу работы, а не только в конце.
 - **Всегда следовать TODO.md**: перед началом работы — свериться, какой пункт делаем; после завершения пункта — отметить его выполненным в TODO.md и сделать отдельный git-коммит на этот пункт (не накапливать несколько пунктов в один коммит). Если по ходу реализации выясняется, что PRD.md/TODO.md устарели или ошибались в деталях (как уже было с флагами Webinoly) — поправить их в том же коммите, а не оставлять расхождение.
 

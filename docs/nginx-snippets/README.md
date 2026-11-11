@@ -43,7 +43,7 @@ hostme <domain> config --nginx-snippet docs/nginx-snippets/<файл>.conf
 даёт из коробки через `.htaccess`, у nginx — нет), кастомного `error_page 404`,
 и специфичных для конкретного сайта вещей (proxy_pass для API-путей и т.п.).
 
-## Технические ограничения (см. AGENTS.md/docs/webinoly.md)
+## Технические ограничения (см. AGENTS.md/docs/usage/webinoly.md)
 
 - Сниппет живёт на уровне `server{}`, **не в своём `location /`** — Webinoly
   уже объявил `location /` в основном конфиге сайта, второй в этом же

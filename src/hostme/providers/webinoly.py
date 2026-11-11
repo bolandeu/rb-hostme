@@ -1,3 +1,11 @@
+"""Провайдер Webinoly: единственное место, где hostme строит команды `site`, `httpauth`,
+`webinoly` и разбирает их вывод на сервере.
+
+Формы команд, форматы вывода и раскладка сайта — docs/usage/webinoly.md; найденные
+на живых серверах отклонения от документации — docs/research/2026-09-08-webinoly-behaviour.md.
+Наружу ошибки уходят только как WebinolyError.
+"""
+
 from __future__ import annotations
 
 import base64
@@ -57,7 +65,7 @@ def is_installed(server: Server) -> bool:
 
 
 def install(server: Server, mode: str = "-php") -> RemoteResult:
-    """Ставит Webinoly (см. docs/webinoly.md: -php ставится полностью неинтерактивно).
+    """Ставит Webinoly (см. docs/usage/webinoly.md: -php ставится полностью неинтерактивно).
 
     Идемпотентно: если Webinoly уже стоит, ничего не переустанавливает.
     """
@@ -153,7 +161,7 @@ def webroot(domain: str) -> str:
 
 
 def fix_ownership(server: Server, domain: str) -> RemoteResult:
-    """Обязательный шаг после заливки файлов (см. docs/webinoly.md): без него nginx отдаёт 403."""
+    """Обязательный шаг после заливки файлов (см. docs/usage/webinoly.md): без него nginx отдаёт 403."""
     return fix_ownership_path(server, webroot(domain))
 
 
@@ -263,7 +271,7 @@ def update_webinoly(server: Server) -> RemoteResult:
     """`hostme server update <name>` — обновляет только сам Webinoly (не пакеты
     сервера типа nginx/php, для этого `sudo stack ...`, не используется Hostme).
     Неинтерактивен (`webinoly -update` просто вызывает webinoly_update(), без
-    вопросов — тот же принцип, что и у install, docs/webinoly.md)."""
+    вопросов — тот же принцип, что и у install, docs/usage/webinoly.md)."""
     result = run_remote(server, "sudo webinoly -update", timeout=120)
     if not result.ok:
         raise WebinolyError(f"Не удалось обновить Webinoly на {server.name}: {_error_text(result)}", result)
@@ -324,7 +332,7 @@ def _cors_snippet_path(domain: str) -> str:
 
 
 def _render_cors_snippet(origins: list[str]) -> str:
-    """У Webinoly нет per-site CORS-флага (docs/webinoly.md, «Кастомный Nginx-конфиг»).
+    """У Webinoly нет per-site CORS-флага (docs/usage/webinoly.md, «Кастомный Nginx-конфиг»).
     Сниппет живёт на уровне server{} (НЕ location /) — location / уже объявлен самим
     Webinoly в основном конфиге сайта, второй location / в этом же server-блоке —
     ошибка nginx. На server-уровне add_header корректно наследуется в location /,
@@ -383,7 +391,7 @@ def custom_nginx_snippet_path(domain: str) -> str:
 
 def set_custom_nginx_snippet(server: Server, domain: str, content: str) -> RemoteResult:
     """`hostme <domain> config --nginx-snippet PATH` / `--no-nginx-snippet`.
-    Webinoly не даёт кастомных per-site nginx-настроек из коробки (docs/webinoly.md,
+    Webinoly не даёт кастомных per-site nginx-настроек из коробки (docs/usage/webinoly.md,
     «Кастомный Nginx-конфиг») — общий механизм для того, чего нет в стандартных
     флагах Hostme (config --cors/--redirect) и дефолтах (apply_site_defaults): кастомный error_page,
     что угодно ещё. В отличие от CORS-сниппета содержимое произвольное — за

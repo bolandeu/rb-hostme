@@ -27,7 +27,7 @@ if ! command -v ufw >/dev/null 2>&1; then
   apt-get install -y -qq ufw
 fi
 
-# Входящие порты по требованиям Webinoly (docs/webinoly.md):
+# Входящие порты по требованиям Webinoly (docs/usage/webinoly.md):
 # 22 SSH, 80/443 HTTP(S), 443/UDP (HTTP/3), 22222 админ-панель Webinoly.
 # Исходящие (25, 587, 11371) не трогаем — ufw по умолчанию разрешает весь исходящий трафик.
 ufw allow 22/tcp comment 'SSH' || true

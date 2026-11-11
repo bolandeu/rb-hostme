@@ -1033,7 +1033,7 @@
         "commands": [
           {
             "name": "add",
-            "description": "hostme domain add <server> <domain> [--default] — зарегистрировать служебный домен.\n\nПосле этого `hostme ./dist` без домена получает `<slug-папки>.<default-домен>`.\nDNS (wildcard A-запись) и wildcard-SSL настраиваются вручную — WILDCARD-SSL.md.\n\nExample: hostme domain add sites-first example.com --default",
+            "description": "hostme domain add <server> <domain> [--default] — зарегистрировать служебный домен.\n\nПосле этого `hostme ./dist` без домена получает `<slug-папки>.<default-домен>`.\nDNS (wildcard A-запись) и wildcard-SSL настраиваются вручную — docs/usage/wildcard-ssl.md.\n\nExample: hostme domain add sites-first example.com --default",
             "options": [
               {
                 "name": "--default",

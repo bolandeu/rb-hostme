@@ -1,3 +1,9 @@
+"""Команды группы `hostme domain`: регистрация служебных (base) доменов и выбор дефолтного.
+
+Домен здесь — не сайт, а база для авто-генерации поддоменов при деплое без явного домена;
+DNS и wildcard-SSL настраиваются вручную (docs/usage/wildcard-ssl.md).
+"""
+
 from __future__ import annotations
 
 from typing import Annotated
@@ -21,7 +27,7 @@ def add(
     """hostme domain add <server> <domain> [--default] — зарегистрировать служебный домен.
 
     После этого `hostme ./dist` без домена получает `<slug-папки>.<default-домен>`.
-    DNS (wildcard A-запись) и wildcard-SSL настраиваются вручную — WILDCARD-SSL.md.
+    DNS (wildcard A-запись) и wildcard-SSL настраиваются вручную — docs/usage/wildcard-ssl.md.
 
     Example: hostme domain add sites-first example.com --default
     """

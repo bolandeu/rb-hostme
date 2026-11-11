@@ -101,7 +101,7 @@ _COMMAND_REFERENCE: list[tuple[str, str]] = [
 _NOT_IMPLEMENTED_NOTE = (
     "Не реализовано в MVP: `hostme <domain> ssl` (подстановка своего сертификата), "
     "`hostme <domain> discard` (нет аналога — у нас нет preview-концепции), wildcard SSL "
-    "изнутри hostme (делается вручную по WILDCARD-SSL.md — DNS-01 требует ручного шага "
+    "изнутри hostme (делается вручную по docs/usage/wildcard-ssl.md — DNS-01 требует ручного шага "
     "с DNS-провайдером), git push-to-deploy, -proxy= сайты (вне скоупа — только html/php/статика). "
     "Для сайтов на target (сторонний хостинг): `auth`/`config`/`ssl`/`debug`/`revs`/`rollfore` "
     "не поддерживаются вовсе (Webinoly-специфичны) — только deploy/list/open/teardown/rollback. "

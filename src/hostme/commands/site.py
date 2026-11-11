@@ -206,7 +206,7 @@ def _render_site_config(d: dict) -> None:
     output.console.print(f"domain: {d['domain']}")
     output.console.print(f"server: {d['server']}")
     output.console.print(f"php: {d['php']}")
-    output.console.print(f"ssl: {d['ssl']}  (force-https: всегда включён вместе с SSL, см. docs/webinoly.md)")
+    output.console.print(f"ssl: {d['ssl']}  (force-https: всегда включён вместе с SSL, см. docs/usage/webinoly.md)")
     output.console.print(f"cors: {', '.join(d['cors']) or '(нет)'}")
     if d["redirects"]:
         for r in d["redirects"]:

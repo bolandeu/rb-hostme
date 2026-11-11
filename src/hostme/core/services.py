@@ -708,7 +708,7 @@ def update_site_config(
     if no_force_https:
         raise InvalidArguments(
             "Webinoly всегда включает редирект HTTP→HTTPS вместе с -ssl=on и не даёт его "
-            "отключить (см. docs/webinoly.md) — --no-force-https не поддерживается"
+            "отключить (см. docs/usage/webinoly.md) — --no-force-https не поддерживается"
         )
 
     sites = config.load_sites()
@@ -719,7 +719,7 @@ def update_site_config(
     if force_https and not (cors or no_cors or redirect or remove_redirect):
         return {
             "message": (
-                f"Force-https для {domain} уже всегда включён вместе с SSL (Webinoly, docs/webinoly.md) — "
+                f"Force-https для {domain} уже всегда включён вместе с SSL (Webinoly, docs/usage/webinoly.md) — "
                 f"ничего делать не нужно"
             ),
             "domain": domain,

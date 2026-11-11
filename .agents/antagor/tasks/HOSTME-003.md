@@ -32,6 +32,7 @@ worker_args: null
 class: mechanical
 decision: false
 visual: null
+review: true
 depends_on: []
 budget_usd: null
 epic: E-001

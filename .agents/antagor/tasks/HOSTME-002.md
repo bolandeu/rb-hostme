@@ -14,7 +14,6 @@ worker: pi
 type: docs
 owns_paths:
 - PRD.md
-- .agents/antagor/antagor.toml
 test_paths: []
 docs:
 - PRD.md
@@ -25,6 +24,7 @@ tools: []
 worker_args: null
 decision: false
 visual: null
+review: true
 depends_on: []
 budget_usd: null
 epic: E-001

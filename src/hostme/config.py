@@ -1,3 +1,7 @@
+"""Registry of servers, targets and sites in YAML, and the rules that read it: where settings and state live
+(docs/usage/config-and-state.md), which server a domain goes to, the auto-generated domain name, and the collision
+guard that keeps one domain on one local path."""
+
 from __future__ import annotations
 
 import shutil
@@ -17,7 +21,7 @@ SERVERS_FILE = CONFIG_DIR / "servers.yaml"
 SETTINGS_FILE = CONFIG_DIR / "settings.yaml"
 # Состояние (что пишет сам hostme при деплое) — стандарт §13, user_data_dir:
 # sites.yaml (+ sites.d/) с deployed_at и снепшоты Target-сайтов перед деплоем
-# (services._backup_target_before_deploy). Вне git-репозитория (PRD §8).
+# (services._backup_target_before_deploy). Вне git-репозитория (docs/usage/config-and-state.md).
 DATA_DIR = Path(user_data_dir("hostme", appauthor=False))
 SITES_FILE = DATA_DIR / "sites.yaml"
 TARGET_BACKUPS_DIR = DATA_DIR / "target-backups"
@@ -364,7 +368,7 @@ def default_server(servers: list[Server]) -> Server | None:
 
 
 def default_base_domain(servers: list[Server]) -> tuple[Server, BaseDomain] | None:
-    """Первый когда-либо зарегистрированный служебный домен (PRD, раздел 4)."""
+    """Первый когда-либо зарегистрированный служебный домен (docs/usage/servers-and-domains.md)."""
     for s in servers:
         for d in s.base_domains:
             if d.default:
@@ -386,7 +390,7 @@ def resolve_server(
     domain: str,
     explicit_server: str | None = None,
 ) -> Server | None:
-    """Порядок (PRD, раздел 4): --server > уже известный домен в sites.yaml > base_domains серверов."""
+    """Порядок (docs/usage/servers-and-domains.md): --server > уже известный домен в sites.yaml > base_domains серверов."""
     if explicit_server:
         return find_server(servers, explicit_server)
 
@@ -432,7 +436,7 @@ def slugify(name: str) -> str:
 
 
 def default_domain(local_path: str, servers: list[Server]) -> str | None:
-    """<slug(имя-папки)>.<первый зарегистрированный служебный домен> (PRD, раздел 2)."""
+    """<slug(имя-папки)>.<первый зарегистрированный служебный домен> (docs/usage/servers-and-domains.md)."""
     result = default_base_domain(servers)
     if result is None:
         return None

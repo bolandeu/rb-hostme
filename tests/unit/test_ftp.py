@@ -13,7 +13,7 @@ from hostme.providers import ftp
 # Подставной lftp на PATH: читает сценарий со stdin, пишет его в лог и делает
 # то же, что сделал бы lftp — но в локальной папке FAKE_LFTP_ROOT. FAKE_LFTP_FAIL_AT
 # роняет N-ю изменяющую команду, чтобы проверить «целиком или никак».
-FAKE_LFTP = '''#!{python}
+FAKE_LFTP = """#!{python}
 import os
 import shutil
 import sys
@@ -67,7 +67,8 @@ for raw in script.splitlines():
         print(f"fake lftp: падение на команде {steps}", file=sys.stderr)
         sys.exit(1)
     action()
-'''
+"""
+
 
 def make_target(**overrides) -> Target:
     defaults: dict[str, Any] = {
@@ -81,8 +82,10 @@ def make_target(**overrides) -> Target:
     defaults.update(overrides)
     return Target(**defaults)
 
+
 def fake_completed(returncode=0, stdout="", stderr=""):
     return subprocess.CompletedProcess(args=[], returncode=returncode, stdout=stdout, stderr=stderr)
+
 
 @pytest.fixture
 def fake_lftp(tmp_path, monkeypatch):
@@ -100,6 +103,7 @@ def fake_lftp(tmp_path, monkeypatch):
     monkeypatch.setenv("FAKE_LFTP_LOG", str(log))
     return remote_root, log
 
+
 @pytest.fixture
 def site_dir(tmp_path):
     site = tmp_path / "site"
@@ -107,6 +111,7 @@ def site_dir(tmp_path):
     (site / "index.html").write_text("<h1>new</h1>")
     (site / "style.css").write_text("body{}")
     return site
+
 
 def test_mirror_to_passes_credentials_via_stdin_not_argv():
     with patch("hostme.providers.ftp.subprocess.run", return_value=fake_completed()) as mock_run:
@@ -118,12 +123,14 @@ def test_mirror_to_passes_credentials_via_stdin_not_argv():
     assert "s3cr3t" in script  # пароль реально передан...
     assert "open -u u12345,s3cr3t sftp://host.example" in script  # ...именно в скрипте на stdin
 
+
 def test_mirror_to_uploads_into_staging_not_into_remote_path():
     with patch("hostme.providers.ftp.subprocess.run", return_value=fake_completed()) as mock_run:
         ftp.mirror_to("/local/path", make_target())
     upload = mock_run.call_args_list[0].kwargs["input"]
     assert "mirror --reverse --delete" in upload
     assert '"/local/path/" "/www.hostme-staging"' in upload
+
 
 def test_mirror_to_script_keeps_file_times():
     with patch("hostme.providers.ftp.subprocess.run", return_value=fake_completed()) as mock_run:
@@ -133,13 +140,16 @@ def test_mirror_to_script_keeps_file_times():
     assert "set ftp:use-site-utime2 yes" in script
     assert "--ignore-time" not in script
 
+
 def test_mirror_to_without_password_raises():
     with pytest.raises(CliError, match="password"):
         ftp.mirror_to("/local/path", make_target(password=None))
 
+
 def test_mirror_to_refuses_account_root_as_remote_path():
     with pytest.raises(CliError, match="remote_path"):
         ftp.mirror_to("/local/path", make_target(remote_path="/"))
+
 
 def test_mirror_to_raises_on_failure():
     with (
@@ -148,6 +158,7 @@ def test_mirror_to_raises_on_failure():
     ):
         ftp.mirror_to("/local/path", make_target())
 
+
 def test_mirror_to_timeout_raises():
     with (
         patch("hostme.providers.ftp.subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="lftp", timeout=5)),
@@ -155,12 +166,14 @@ def test_mirror_to_timeout_raises():
     ):
         ftp.mirror_to("/local/path", make_target(), timeout=5)
 
+
 def test_mirror_to_missing_lftp_raises():
     with (
         patch("hostme.providers.ftp.subprocess.run", side_effect=FileNotFoundError()),
         pytest.raises(ftp.FtpError, match="lftp"),
     ):
         ftp.mirror_to("/local/path", make_target())
+
 
 @pytest.mark.parametrize("connection", ["ftp", "sftp"])
 def test_mirror_to_swap_leaves_only_new_files_and_removes_stale_dirs(fake_lftp, site_dir, connection):
@@ -180,6 +193,7 @@ def test_mirror_to_swap_leaves_only_new_files_and_removes_stale_dirs(fake_lftp, 
     assert not (live / "legacy.html").exists()
     assert sorted(p.name for p in remote_root.iterdir()) == ["www"]
 
+
 def test_mirror_to_first_deploy_needs_no_live_directory(fake_lftp, site_dir):
     remote_root, _log = fake_lftp
 
@@ -187,6 +201,7 @@ def test_mirror_to_first_deploy_needs_no_live_directory(fake_lftp, site_dir):
 
     assert (remote_root / "www" / "index.html").read_text() == "<h1>new</h1>"
     assert sorted(p.name for p in remote_root.iterdir()) == ["www"]
+
 
 def test_mirror_to_failed_upload_keeps_previous_files(fake_lftp, site_dir, monkeypatch):
     remote_root, _log = fake_lftp
@@ -201,6 +216,7 @@ def test_mirror_to_failed_upload_keeps_previous_files(fake_lftp, site_dir, monke
     assert (live / "index.html").read_text() == "<h1>old</h1>"
     assert not (live / "style.css").exists()
 
+
 def test_mirror_to_failed_swap_returns_previous_files_and_raises(fake_lftp, site_dir, monkeypatch):
     remote_root, _log = fake_lftp
     live = remote_root / "www"
@@ -213,6 +229,7 @@ def test_mirror_to_failed_swap_returns_previous_files_and_raises(fake_lftp, site
 
     assert (live / "index.html").read_text() == "<h1>old</h1>"
     assert not (live / "style.css").exists()
+
 
 def test_check_target_maps_login_failure_to_invalid_and_keeps_password_off_argv():
     failed = fake_completed(1, stderr="ls: Login failed: 530 Login incorrect.")

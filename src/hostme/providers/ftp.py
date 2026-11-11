@@ -20,8 +20,10 @@ STAGING_SUFFIX = ".hostme-staging"
 OLD_SUFFIX = ".hostme-old"
 _log = logging.getLogger(__name__)
 
+
 class FtpError(ProviderError):
     provider = "lftp"
+
 
 def _lftp_quote(value: str) -> str:
     """lftp разбирает команды по своим (shell-подобным) правилам — двойные кавычки
@@ -29,11 +31,13 @@ def _lftp_quote(value: str) -> str:
     escaped = value.replace("\\", "\\\\").replace('"', '\\"')
     return f'"{escaped}"'
 
+
 def _remote_path(target: Target) -> str:
     # НЕ форсировать ведущий "/" — у многих shared-хостингов путь к сайту
     # относительный от домашней директории аккаунта (напр. "domain.ru/public_html"
     # у Beget), а не абсолютный. Уважаем то, что указано в remote_path как есть.
     return target.remote_path.rstrip("/") or "/"
+
 
 def _run_lftp(script: str, target: Target, timeout: int) -> None:
     # Скрипт целиком не логируем — в нём `open -u user,password`.
@@ -48,6 +52,7 @@ def _run_lftp(script: str, target: Target, timeout: int) -> None:
     if proc.returncode != 0:
         raise FtpError(f"lftp на {target.name} завершился с ошибкой: {(proc.stderr or proc.stdout).strip()}")
 
+
 def _open_script(target: Target) -> str:
     # lftp `-u user,pass` бьёт по первой запятой — запятая в пароле сломает парсинг,
     # известное ограничение (редкий случай, не стали городить экранирование под это).
@@ -61,8 +66,10 @@ def _open_script(target: Target) -> str:
         f"open -u {target.user},{target.password} {target.connection}://{target.host}\n"
     )
 
+
 def _script(target: Target, *commands: str) -> str:
     return _open_script(target) + "".join(command + "\n" for command in commands) + "quit\n"
+
 
 def _swap_paths(target: Target) -> tuple[str, str, str]:
     """(staging, live, old) — три пути в одной родительской папке; live — сам
@@ -75,6 +82,7 @@ def _swap_paths(target: Target) -> tuple[str, str, str]:
         )
     return live + STAGING_SUFFIX, live, live + OLD_SUFFIX
 
+
 def _rename(source: str, destination: str, target: Target, timeout: int) -> bool:
     """`mv` в lftp внутри одной родительской папки — rename на сервере, не копия.
     False — команда не прошла; для живого каталога это значит «его ещё нет»."""
@@ -84,6 +92,7 @@ def _rename(source: str, destination: str, target: Target, timeout: int) -> bool
         _log.debug("lftp %s: mv %s -> %s не прошёл: %s", target.name, source, destination, exc)
         return False
     return True
+
 
 def _swap(staging: str, live: str, old: str, target: Target, timeout: int) -> None:
     """live -> old, затем staging -> live. Если второй rename не прошёл, возвращаем
@@ -99,6 +108,7 @@ def _swap(staging: str, live: str, old: str, target: Target, timeout: int) -> No
         except FtpError as exc:
             # Сайт уже новый; остаток уберёт начало следующего деплоя.
             _log.warning("lftp %s: не удалось удалить %s: %s", target.name, old, exc)
+
 
 def mirror_to(local_path: str, target: Target, timeout: int = DEFAULT_TIMEOUT) -> None:
     """Заливка на Target с connection=ftp/sftp через lftp (та же `mirror --reverse
@@ -131,6 +141,7 @@ def mirror_to(local_path: str, target: Target, timeout: int = DEFAULT_TIMEOUT) -
     )
     _swap(staging, live, old, target, timeout)
 
+
 def mirror_from(target: Target, local_dir: str, timeout: int = DEFAULT_TIMEOUT) -> None:
     """Скачивает текущее содержимое remote_path в local_dir — бэкап перед деплоем
     на Target (см. cli._backup_target_before_deploy), не rollback как таковой.
@@ -143,13 +154,13 @@ def mirror_from(target: Target, local_dir: str, timeout: int = DEFAULT_TIMEOUT) 
     script = _script(target, f"mirror --verbose=0 {_lftp_quote(_remote_path(target))} {_lftp_quote(local)}")
     _run_lftp(script, target, timeout)
 
+
 def check_target(target: Target, timeout: float) -> tuple[str, str | None]:
     """Логин + листинг remote_path — дешёвая read-only проверка для `hostme auth status --check`."""
     if not target.password:
         return "invalid", f"для connection={target.connection} нужен password"
-    script = (
-        f"set net:timeout {int(timeout)}\nset net:max-retries 1\nset net:reconnect-interval-base 1\n"
-        + _script(target, f"cls -1 {_lftp_quote(_remote_path(target))}")
+    script = f"set net:timeout {int(timeout)}\nset net:max-retries 1\nset net:reconnect-interval-base 1\n" + _script(
+        target, f"cls -1 {_lftp_quote(_remote_path(target))}"
     )
     _log.debug("lftp %s@%s (%s): проверка доступа", target.user, target.host, target.connection)
     try:

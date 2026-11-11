@@ -1,7 +1,7 @@
 ---
 id: HOSTME-003
 title: Webinoly, wildcard SSL and surge references become records and living docs
-status: publish
+status: done
 attempts: 2
 blocked: false
 blocked_reason: null

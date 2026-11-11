@@ -5,6 +5,15 @@ All notable changes to this project are documented here. Versions follow
 
 The changelog is written by `antagor publish`; don't edit it by hand.
 
+## v0.6.3 — 2026-11-11
+
+### E-001 — Sort the five old docs into the four doc kinds
+
+Every tracked .md is one of the four kinds; `antagor layout check` has nothing to sort; every section of the five old docs has a destination (an idea, an ADR, a research record, a living doc) or the Human's yes to a drop.
+Time: 1.4h since the epic was approved
+
+- Webinoly, wildcard SSL and surge references become records and living docs (HOSTME-003)
+
 ## v0.6.2 — 2026-11-11
 
 ### E-001 — Sort the five old docs into the four doc kinds

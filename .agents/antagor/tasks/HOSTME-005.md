@@ -14,6 +14,7 @@ worker: pi
 type: feature
 owns_paths:
 - src/hostme/providers/ssh.py
+- src/hostme/core/services.py
 test_paths:
 - tests/unit/test_ssh.py
 docs:

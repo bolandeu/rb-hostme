@@ -5,6 +5,15 @@ All notable changes to this project are documented here. Versions follow
 
 The changelog is written by `antagor publish`; don't edit it by hand.
 
+## v0.6.5 — 2026-11-11
+
+### E-002 — Target deploy is whole or nothing, and pages keep their dates
+
+A deploy to a third-party host (ftp/sftp/ssh) leaves the live folder either fully old or fully new: a stopped or failed upload changes nothing the visitor sees. File times survive the upload, so a served page answers with the date of its built file.
+Time: 0.4h since the epic was approved
+
+- ftp/sftp target deploy: staging upload, rename swap, no mixed site (HOSTME-004)
+
 ## v0.6.4 — 2026-11-11
 
 ### E-002 — Target deploy is whole or nothing, and pages keep their dates

@@ -8,11 +8,11 @@
 
 `antagorapp.ru`: TXT-запись `_acme-challenge` добавили в панели Beget и сразу нажали `Enter`. certbot ответил:
 
-```text
+```
 Certbot failed to authenticate some domains (authenticator: manual):
   Detail: Incorrect TXT record "ixIXmtIs..." found at _acme-challenge.antagorapp.ru
   Detail: During secondary validation: Incorrect TXT record "kmoVBG2A..." found at _acme-challenge.antagorapp.ru
-```text
+```
 
 Причина: домен обслуживают шесть NS тремя кластерами — `ns1/ns2.beget.ru`, `ns1/ns2.beget.pro`, `ns1/ns2.beget.com`. Они синхронизируются не мгновенно: в момент проверки часть отдавала старое значение, часть новое. Let's Encrypt проверяет из двух сетевых точек (primary и secondary, защита от BGP-хайджека) и увидел два разных значения. Обе точки получили `unauthorized`.
 

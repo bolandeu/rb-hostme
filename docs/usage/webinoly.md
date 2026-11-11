@@ -6,9 +6,9 @@ Webinoly — установщик серверного стека и набор 
 
 `hostme server init` ставит Webinoly сам:
 
-```text
+```
 wget -qO weby qrok.es/wy && sudo bash weby -php
-```text
+```
 
 Режим `-php` (nginx + php-fpm, без базы) ставится полностью неинтерактивно: вопросов про email и БД на этом шаге нет. Версию можно закрепить: `sudo bash weby -php -ver=1.17.9`. Режимы `-nginx`, `-lemp`, `-clean` hostme не использует: `-lemp` тянет MySQL/MariaDB, а база вне скоупа.
 
@@ -28,11 +28,11 @@ wget -qO weby qrok.es/wy && sudo bash weby -php
 
 ## Раскладка сайта и releases
 
-```text
+```
 /var/www/<domain>/htdocs      симлинк -> releases/<таймстамп>
 /var/www/<domain>/releases/   релизы, владелец www-data:www-data
 /var/www/<domain>/*-nginx.conf   сниппеты сайта, Webinoly подключает сам
-```text
+```
 
 nginx-конфиг Webinoly жёстко ждёт `root /var/www/<domain>/htdocs`; сам конфиг не редактируется. Поэтому `htdocs` — симлинк на релиз, а `hostme` перекладывает его при деплое, rollback и rollfore (`switch_release`).
 
@@ -68,9 +68,9 @@ nginx-конфиг Webinoly жёстко ждёт `root /var/www/<domain>/htdocs
 
 `sudo site -list` печатает строки вида:
 
-```text
+```
  + e2edebug2.antagorapp.ru (HTML)(NoSSL)
-```text
+```
 
 Домен и отдельные скобочные группы подряд, без запятой между ними и без разделителя — `parse_site_list` разбирает именно эту форму.
 

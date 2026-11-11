@@ -329,7 +329,7 @@ def _cors_snippet_path(domain: str) -> str:
 
 
 def _render_cors_snippet(origins: list[str]) -> str:
-    """У Webinoly нет per-site CORS-флага (docs/usage/webinoly.md, «Кастомный Nginx-конфиг»).
+    """У Webinoly нет per-site CORS-флага (docs/usage/webinoly.md, «Свои nginx-сниппеты»).
     Сниппет живёт на уровне server{} (НЕ location /) — location / уже объявлен самим
     Webinoly в основном конфиге сайта, второй location / в этом же server-блоке —
     ошибка nginx. На server-уровне add_header корректно наследуется в location /,
@@ -389,7 +389,7 @@ def custom_nginx_snippet_path(domain: str) -> str:
 def set_custom_nginx_snippet(server: Server, domain: str, content: str) -> RemoteResult:
     """`hostme <domain> config --nginx-snippet PATH` / `--no-nginx-snippet`.
     Webinoly не даёт кастомных per-site nginx-настроек из коробки (docs/usage/webinoly.md,
-    «Кастомный Nginx-конфиг») — общий механизм для того, чего нет в стандартных
+    «Свои nginx-сниппеты») — общий механизм для того, чего нет в стандартных
     флагах Hostme (config --cors/--redirect) и дефолтах (apply_site_defaults): кастомный error_page,
     что угодно ещё. В отличие от CORS-сниппета содержимое произвольное — за
     корректность отвечает пользователь, но безопасность та же: nginx -t перед

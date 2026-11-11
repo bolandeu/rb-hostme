@@ -1,10 +1,7 @@
-"""Провайдер Webinoly: единственное место, где hostme строит команды `site`, `httpauth`,
-`webinoly` и разбирает их вывод на сервере.
-
-Формы команд, форматы вывода и раскладка сайта — docs/usage/webinoly.md; найденные
-на живых серверах отклонения от документации — docs/research/2026-09-08-webinoly-behaviour.md.
-Наружу ошибки уходят только как WebinolyError.
-"""
+"""Webinoly CLI on a server, wrapped: install, site create/delete, SSL, HTTP Basic Auth, releases layout, nginx snippets.
+Every call goes over ssh (`providers/ssh.py`); a failure comes out as `ProviderError`. Why Webinoly and not our own
+nginx: docs/adr/0001-webinoly-manages-the-servers.md. Command shapes, output formats and the site layout it must
+respect: docs/usage/webinoly.md; the live deviations from the public docs: docs/research/2026-09-08-webinoly-behaviour.md."""
 
 from __future__ import annotations
 
@@ -172,7 +169,7 @@ def fix_ownership_path(server: Server, path: str) -> RemoteResult:
     return result
 
 
-# --- releases/rollback (TODO 3.2) -------------------------------------------
+# --- releases/rollback -------------------------------------------
 #
 # Webinoly жёстко ожидает root в /var/www/<domain>/htdocs (это генерируемый им же
 # nginx-конфиг, руками не трогаем) — поэтому вместо настоящей директории htdocs
@@ -279,7 +276,7 @@ def update_webinoly(server: Server) -> RemoteResult:
 
 
 def set_http_auth(server: Server, domain: str, username: str, password: str) -> RemoteResult:
-    """`hostme <domain> auth --user U --pass P` (раздел 5 PRD). Логин/пароль уходят
+    """`hostme <domain> auth --user U --pass P` (docs/usage/product.md). Логин/пароль уходят
     в команду через shlex.quote — они приходят от пользователя (CLI-аргумент), и
     без экранирования это была бы command injection в свою же root-сессию по SSH."""
     creds = shlex.quote(f"[{username},{password}]")

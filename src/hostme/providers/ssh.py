@@ -1,3 +1,11 @@
+"""SSH и rsync через системные бинарники: единственное место, где hostme запускает `ssh`/`rsync`.
+
+Почему через subprocess, а не paramiko — ADR 0002: так работают `~/.ssh/config`, агент и ключи
+пользователя. Ошибки наружу уходят только как `ProviderError`. Соединение переиспользуется
+через ControlMaster (см. `_CONTROL_DIR`), потому что поток коротких подключений подряд ловил
+rate-limit/fail2ban на реальном сервере.
+"""
+
 from __future__ import annotations
 
 import hashlib
@@ -17,7 +25,7 @@ LONG_TIMEOUT = 300  # server init / webinoly install
 
 # Много коротких SSH-подключений подряд (site_exists → create_site → enable_ssl →
 # rsync → chown за один deploy) поймали rate-limit/fail2ban на реальном сервере
-# (AGENTS.md, TODO.md 1.2). Фикс — переиспользовать одно соединение через
+# (AGENTS.md). Фикс — переиспользовать одно соединение через
 # ControlMaster/ControlPersist: первая команда поднимает мультиплексирующий сокет,
 # все последующие (в т.ч. rsync через -e) переиспользуют его без нового хендшейка.
 _CONTROL_DIR = Path.home() / ".cache" / "hostme" / "ssh-control"

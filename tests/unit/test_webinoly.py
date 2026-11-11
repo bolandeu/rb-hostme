@@ -238,7 +238,7 @@ def test_fix_ownership_raises_on_failure():
 
 
 # --- httpauth / redirects: экранирование пароля/аргументов через shlex.quote ---
-# критично для безопасности (см. AGENTS.md/PRD §9) — регрессия здесь означает
+# критично для безопасности (см. docs/usage/security.md) — регрессия здесь означает
 # command injection через --pass/--user/--redirect.
 
 

@@ -684,7 +684,7 @@ def set_http_auth(domain: str, user: str | None, password: str | None, off: bool
         raise InvalidArguments("Укажи --user и --pass, либо --off чтобы снять защиту")
 
     webinoly.set_http_auth(server, domain, user, password)
-    # Пароль на сервер уже ушёл в открытом виде (PRD §13.2 — решено: `--pass` в
+    # Пароль на сервер уже ушёл в открытом виде (ADR 0005 — решено: `--pass` в
     # аргументе командной строки ок для MVP, single user/локальная машина) —
     # локально в реестре его не храним, только факт защиты и логин.
     site.password_protect = {"enabled": True, "user": user}

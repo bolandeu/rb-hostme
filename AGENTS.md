@@ -14,18 +14,17 @@ Pointers for agents. Antagor shows the changing state (statuses, branches, tasks
 
 ## Что это за проект
 
-`hostme` — личный аналог surge.sh: CLI на Python/uv, который деплоит статические сайты и простые PHP-скрипты на собственные VPS (через [Webinoly](https://webinoly.com/)) одной командой, с поддержкой нескольких серверов и доменов. Полная спецификация — **[PRD.md](PRD.md)**, читай его первым для любой содержательной работы над проектом.
+`hostme` — личный аналог surge.sh: CLI на Python/uv, который деплоит статические сайты и простые PHP-скрипты на собственные VPS (через [Webinoly](https://webinoly.com/)) одной командой, с поддержкой нескольких серверов и доменов. Что это за продукт и чего он не делает — **[docs/usage/product.md](docs/usage/product.md)**, читать первым для любой содержательной работы над проектом.
 
 Дальше по важности:
-- **[TODO.md](TODO.md)** — детальный план реализации по фазам. Перед тем как писать код, свериться, на какой фазе/пункте мы находимся, и отмечать пункты по мере выполнения.
-- **[docs/usage/webinoly.md](docs/usage/webinoly.md)** — команды Webinoly, которые вызывает `hostme`, их форматы вывода и раскладка сайта. Обращаться сюда, а не гадать/угадывать флаги.
-- **[docs/usage/wildcard-ssl.md](docs/usage/wildcard-ssl.md)** — проверенная вживую процедура выпуска wildcard SSL для base-домена.
+- **[docs/usage/](docs/usage/)** — живая документация по темам: серверы и домены, настройки и реестр, контракт для агента, безопасность, команды Webinoly и процедура wildcard SSL.
 - **[docs/research/](docs/research/)** — что и когда выяснилось на живой инфраструктуре (баги Webinoly, DNS Beget, форма команд surge.sh, SSH rate-limit).
-- **[docs/adr/](docs/adr/)** — решения и их причины.
+- **[docs/adr/](docs/adr/)** — решения и их причины (тех-стек, хранение вне репозитория, секреты, форма команд, wildcard и SSH).
+- План и прогресс — не файл в репозитории, а Antagor: идеи (`antagor idea list`), задачи и эпики (`.agents/antagor/`), доска (`antagor board`). Файл-бэклог в репозитории не заводить: он расходится с кодом.
 
 ## Skill для агентов (`~/.claude/skills/hostme/`)
 
-Существует **глобальный** (не в этом репозитории) Claude Code skill `hostme` — `~/.claude/skills/hostme/SKILL.md`. Он не про разработку самого `hostme`, а про его *использование* другими агентами в других проектах, которым нужно задеплоить артефакт (раздел 2 PRD). Источник правды — **`src/hostme/data/SKILL.md`** в этом репозитории (bundled в пакет; `hostme --ai` печатает его, `hostme skill install` копирует в `~/.claude/skills/hostme/`). Если меняется CLI-грамматика (`_translate_argv` в `cli.py`), `hostme help --json`, или общее поведение `--json`/`--confirm`/exit-кодов — править bundled-копию и после установки перезапускать `hostme skill install`; глобальную копию руками не редактировать. Skill намеренно тонкий: не дублирует список команд (его даёт голый `hostme` из docstring'ов команд), только конвенции и неочевидную грамматику.
+Существует **глобальный** (не в этом репозитории) Claude Code skill `hostme` — `~/.claude/skills/hostme/SKILL.md`. Он не про разработку самого `hostme`, а про его *использование* другими агентами в других проектах, которым нужно задеплоить артефакт (см. [docs/usage/product.md](docs/usage/product.md)). Источник правды — **`src/hostme/data/SKILL.md`** в этом репозитории (bundled в пакет; `hostme --ai` печатает его, `hostme skill install` копирует в `~/.claude/skills/hostme/`). Если меняется CLI-грамматика (`_translate_argv` в `cli.py`), `hostme help --json`, или общее поведение `--json`/`--confirm`/exit-кодов — править bundled-копию и после установки перезапускать `hostme skill install`; глобальную копию руками не редактировать. Skill намеренно тонкий: не дублирует список команд (его даёт голый `hostme` из docstring'ов команд), только конвенции и неочевидную грамматику.
 
 ## Проверенные на практике факты о Webinoly (не гадать, не перепроверять с нуля)
 
@@ -39,14 +38,15 @@ Pointers for agents. Antagor shows the changing state (statuses, branches, tasks
 ## Тестирование (не обязательно — приоритет на скорость)
 
 
-- Уже существующие тесты (`tests/unit/`, `tests/e2e/`) не удалять — они рабочие и уже ловили реальные баги (права `www-data`, формат `sudo site -list`), просто не наращивать этот объём без явного запроса.
+- Уже существующие тесты (`tests/unit/`, `tests/e2e/`) не удалять — они рабочие и уже ловили реальные баги (права `www-data`, формат `sudo site -list`), просто не наращивать этот объём без явного запроса. Порог покрытия — `fail_under` в `pyproject.toml`; цифру в тексте не держать, она менялась.
 - Если всё же пишешь e2e — команда запуска не изменилась: `HOSTME_E2E_HOST=... HOSTME_E2E_USER=root HOSTME_E2E_BASE_DOMAIN=antagorapp.ru uv run pytest -m e2e` (по умолчанию скипается, см. `tests/conftest.py`).
 
 ## Безопасность / что нельзя коммитить
 
-- `~/.config/hostme/*.yaml` (реестр серверов/сайтов, будущее состояние инструмента) — вне репозитория по дизайну (PRD §8), туда не заглядывать при коммитах.
+- `~/.config/hostme/*.yaml` (реестр серверов/сайтов, будущее состояние инструмента) — вне репозитория по дизайну ([ADR 0003](docs/adr/0003-settings-and-state-outside-the-repository.md)), туда не заглядывать при коммитах.
 - API-ключи (например, попытка авторизации в Beget API) — если появятся рабочие креды, хранить вне репозитория, не в `docs/`.
-- Итоги секьюрити-ревью (права на конфиг, хранение `ssh_key`/пароля, принятые риски) — **PRD.md §9**, не дублировать здесь.
+- Реестр в `~/.config/hostme` и `user_data_dir("hostme")` — живые данные владельца, а не песочница. Тесты и прогоны их не трогают: работа с реестром из кода — только read-modify-write (`load_sites` → изменить → `save_sites`), никогда запись файла целиком собранным в тесте списком. Так уже терялись реальные записи `sites.yaml`.
+- Итоги секьюрити-ревью (права на конфиг, хранение `ssh_key`/пароля, принятые риски) — **[docs/usage/security.md](docs/usage/security.md)**, не дублировать здесь.
 
 ## Архитектура (cli-builder) и проверка
 
@@ -56,7 +56,7 @@ Pointers for agents. Antagor shows the changing state (statuses, branches, tasks
 - `providers/` — ssh/rsync/lftp/Webinoly/HTTP-проба: единственное место с `subprocess`/`urllib`; ошибки наружу только как `ProviderError`.
 - `output/` — human/json-вывод, `guard` (на каждой команде, команда получает `ctx` первым), `group`, `require_confirmation` (гейт `--confirm`, `--yes`/`-y` — алиасы). Режимы `--json/--quiet/--verbose/--non-interactive/--dry-run` — в `ctx.obj`; сервисам, которым они нужны, команда передаёт `ctx`.
 - `credentials/manager.py` — пароли target'ов: сначала env `HOSTME_DEPLOY_<NAME>_PASSWORD`, потом OS keychain `hostme:<name>` (keychain необязателен — на headless-сервере его нет, это не ошибка); в `servers.yaml` секретов нет. `credentials/health.py` — `hostme auth status` (стандарт §8): запись `server:<имя>` (ssh-ключ, файл) и `target:<имя>` на каждый объект реестра; проверки `--check` — в `providers/ssh.py`/`ftp.py` (`check_*`, 10 с).
-- Настройки — `~/.config/hostme` (PRD §8, путь одинаков на macOS и Linux); состояние (`sites.yaml`, `sites.d/`, `target-backups/`) — `platformdirs.user_data_dir("hostme")` (стандарт §13). Перенос со старого места — `config.migrate_legacy_data()` в root-callback.
+- Настройки — `~/.config/hostme` (путь одинаков на macOS и Linux); состояние (`sites.yaml`, `sites.d/`, `target-backups/`) — `platformdirs.user_data_dir("hostme")` (стандарт §13, [docs/usage/config-and-state.md](docs/usage/config-and-state.md)). Перенос со старого места — `config.migrate_legacy_data()` в root-callback.
 - `hostme <domain> auth` (HTTP Basic Auth сайта) внутри называется `http-auth` — имя `auth` занято группой `auth status`; перевод — `_DOMAIN_SUBCOMMAND_TARGETS` в `cli.py`.
 
 ## Проверка и релиз
@@ -78,11 +78,12 @@ Pointers for agents. Antagor shows the changing state (statuses, branches, tasks
 
 ## Стиль работы над кодом
 
-- Технологии зафиксированы в PRD §8: Python + uv (`uv python pin`), Typer, `ruamel.yaml`, `rich`, SSH/rsync через `subprocess` (не через paramiko/fabric — уважать `~/.ssh/config`).
-- Форма CLI-команд копирует surge.sh (`hostme <path> <domain>`, `hostme <domain> teardown` и т.п.) — не изобретать свой стиль команд, сверяться с выжимкой `docs/research/2026-09-08-surge-cli.md`.
+- Технологии зафиксированы: Python + uv (`uv python pin`), Typer, `ruamel.yaml`, `rich`, SSH/rsync через `subprocess` (не через paramiko/fabric — уважать `~/.ssh/config`). Причина — [ADR 0002](docs/adr/0002-stack-python-uv-typer-and-system-ssh.md).
+- Форма CLI-команд копирует surge.sh (`hostme <path> <domain>`, `hostme <domain> teardown` и т.п.) — не изобретать свой стиль команд, сверяться с выжимкой `docs/research/2026-09-08-surge-cli.md`. Причина — [ADR 0004](docs/adr/0004-surge-command-grammar.md).
 - Перед реализацией любого шага, завязанного на поведение Webinoly, сверяться с `docs/usage/webinoly.md`; если там что-то не сходится с реальностью — перепроверять на `sites-first-beget` и обновлять и `docs/usage/webinoly.md`, и этот файл (секция выше).
-- TODO.md — источник истины по прогрессу; отмечать выполненные пункты по ходу работы, а не только в конце.
-- **Всегда следовать TODO.md**: перед началом работы — свериться, какой пункт делаем; после завершения пункта — отметить его выполненным в TODO.md и сделать отдельный git-коммит на этот пункт (не накапливать несколько пунктов в один коммит). Если по ходу реализации выясняется, что PRD.md/TODO.md устарели или ошибались в деталях (как уже было с флагами Webinoly) — поправить их в том же коммите, а не оставлять расхождение.
+- Перед началом работы и после неё состояние смотрит Antagor (`antagor board`), а не файл в репозитории. Одна задача — одна ветка и один результат; задачи, идеи и их связь ведёт Antagor.
+- Меняешь `[project.scripts]` в `pyproject.toml` — сразу `uv tool install --editable . --force`: editable-режим не перегенерирует launcher, и `hostme` из PATH продолжит звать старый entry point (так однажды день ушёл на «сломанную» surge-грамматику).
+- Флаг Webinoly сверять с шапкой `Options:`/`Arguments:` самого скрипта на сервере (`/usr/bin/site`, `/usr/bin/httpauth`, ...), а не только с публичной докой: у `httpauth` флага `-purge` нет вовсе, а ошибки Webinoly пишет в stdout, не в stderr. Найденный баг — в `docs/research/2026-09-08-webinoly-behaviour.md`.
 
 ## Architect only
 

@@ -2,7 +2,7 @@
 
 Личный аналог [surge.sh](https://surge.sh/): CLI на Python/uv, который одной командой деплоит статические сайты и простые PHP-скрипты на собственные VPS (через [Webinoly](https://webinoly.com/)), с поддержкой нескольких серверов и доменов.
 
-Полная спецификация — **[PRD.md](PRD.md)**. План реализации — **[TODO.md](TODO.md)**. Для AI-агентов, работающих в этом репозитории — **[AGENTS.md](AGENTS.md)**.
+Документация по продукту — **[docs/usage/](docs/usage/)**: что такое hostme и чего он не делает, серверы и домены, настройки и реестр, контракт для агента, безопасность. Решения и их причины — **[docs/adr/](docs/adr/)**. Для AI-агентов, работающих в этом репозитории — **[AGENTS.md](AGENTS.md)**.
 
 ## Установка
 
@@ -39,7 +39,7 @@ uv tool install --editable .
 ## Требования к серверу перед `server add`/`server init`
 
 - Чистый Ubuntu Server 24.04/26.04 LTS (arm64 или x86_64), минимум 512MB RAM — `hostme server init` сам ставит Webinoly (nginx+php-fpm), но ОС должна быть готова заранее
-- Открытые порты (входящие как минимум): `22/TCP` (SSH), `80/TCP` и `443/TCP+UDP` (HTTP/HTTPS/HTTP3). Подробный список (включая исходящие для почты/GPG) — [docs/usage/webinoly.md](docs/usage/webinoly.md), раздел «Установка»
+- Открытые порты (входящие как минимум): `22/TCP` (SSH), `80/TCP` и `443/TCP+UDP` (HTTP/HTTPS/HTTP3). Подробный список (включая исходящие для почты/GPG) — [docs/usage/webinoly.md](docs/usage/webinoly.md), раздел «Установка стека»
 - SSH-пользователь (обычно `root`) должен пускать по ключу (`ssh_key` в `hostme server add`) и иметь **passwordless sudo** — `hostme`/Webinoly не умеют отвечать на запрос пароля sudo
 - Перед первым `server init`: `sudo apt update && sudo apt -y upgrade` (и по-хорошему `reboot`) — руками, `hostme` этого не делает
 
@@ -94,4 +94,5 @@ uvx --from "git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator
 `[[tool.rb.external]]` с кодом, сборка+установка колеса, правила Standard,
 gitleaks и osv-scanner, если установлены). Работа и релизы — через Antagor
 (`antagor publish` пишет CHANGELOG.md и ставит тег). Версия только из
-git-тега, `version =` в pyproject нет.
+git-тега, `version =` в pyproject нет. План и прогресс — в Antagor: `antagor board`
+показывает задачи и их статусы, идеи — `antagor idea list`; файла-бэклога в репозитории нет.

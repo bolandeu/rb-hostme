@@ -377,11 +377,19 @@ def default_base_domain(servers: list[Server]) -> tuple[Server, BaseDomain] | No
 
 
 def resolve_server_for_domain(servers: list[Server], domain: str) -> Server | None:
-    for s in servers:
-        for d in s.base_domains:
-            if domain == d.name or domain.endswith(f".{d.name}"):
-                return s
-    return None
+    """Единственный сервер, чей base-домен совпал с доменом (точное имя или суффикс).
+
+    Похожие base-домены (один домен у двух серверов, или `shared.dev` вместе с
+    `blog.shared.dev`) дают два совпадения — это ошибка, а не порядок списка:
+    деплой не должен уйти на сервер, которого человек не выбирал (ADR 0011).
+    """
+    matches = [s for s in servers if any(domain == d.name or domain.endswith(f".{d.name}") for d in s.base_domains)]
+    if len(matches) > 1:
+        names = ", ".join(s.name for s in matches)
+        raise InvalidArguments(
+            f"Домен {domain} подходит сразу нескольким серверам ({names}). Укажи сервер явно: --server <имя>."
+        )
+    return matches[0] if matches else None
 
 
 def resolve_server(

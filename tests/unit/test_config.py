@@ -239,6 +239,35 @@ def test_resolve_server_falls_back_to_base_domain_suffix_match():
     assert result is vps1
 
 
+def test_resolve_server_refuses_two_servers_claiming_one_base_domain():
+    config.save_servers(
+        [
+            make_server("vps1", base_domains=[config.BaseDomain("shared.dev", default=True)]),
+            make_server("vps2", base_domains=[config.BaseDomain("shared.dev")]),
+        ]
+    )
+
+    with pytest.raises(InvalidArguments) as exc:
+        config.resolve_server(config.load_servers(), [], "new.shared.dev")
+
+    assert "vps1" in str(exc.value) and "vps2" in str(exc.value)
+    assert "--server" in str(exc.value)
+
+
+def test_resolve_server_refuses_two_base_domains_matching_one_subdomain():
+    config.save_servers(
+        [
+            make_server("vps1", base_domains=[config.BaseDomain("shared.dev", default=True)]),
+            make_server("vps2", base_domains=[config.BaseDomain("blog.shared.dev")]),
+        ]
+    )
+
+    with pytest.raises(InvalidArguments) as exc:
+        config.resolve_server(config.load_servers(), [], "new.blog.shared.dev")
+
+    assert "vps1" in str(exc.value) and "vps2" in str(exc.value)
+
+
 def test_resolve_server_returns_none_when_nothing_matches():
     assert config.resolve_server([make_server()], [], "unrelated.com") is None
 

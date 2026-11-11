@@ -5,6 +5,15 @@ All notable changes to this project are documented here. Versions follow
 
 The changelog is written by `antagor publish`; don't edit it by hand.
 
+## v0.6.7 — 2026-11-11
+
+### E-004 — Contract under test: ambiguous server resolve and the agent shell
+
+The rule that picks a server for an ambiguous domain is decided, tested and written down; the agent contract has a record of a real non-TTY run with its exit codes.
+Time: 0.1h since the epic was approved
+
+- Ambiguous server resolve: decide, test, document (HOSTME-009)
+
 ## v0.6.6 — 2026-11-11
 
 ### E-002 — Target deploy is whole or nothing, and pages keep their dates

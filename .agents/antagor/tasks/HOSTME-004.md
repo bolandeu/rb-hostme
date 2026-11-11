@@ -1,7 +1,7 @@
 ---
 id: HOSTME-004
 title: 'ftp/sftp target deploy: staging upload, rename swap, no mixed site'
-status: queue
+status: in_review
 attempts: 1
 blocked: false
 blocked_reason: null

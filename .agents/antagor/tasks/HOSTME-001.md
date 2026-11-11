@@ -1,7 +1,7 @@
 ---
 id: HOSTME-001
 title: PRD.md sections go to living docs, ADRs and ideas
-status: queue
+status: in_review
 attempts: 0
 blocked: false
 blocked_reason: null
@@ -18,7 +18,13 @@ owns_paths:
 - docs/usage
 - AGENTS.md
 - README.md
-test_paths: []
+- src/hostme/commands/help.py
+- src/hostme/config.py
+- src/hostme/core/services.py
+- src/hostme/data/SKILL.md
+- src/hostme/providers/webinoly.py
+test_paths:
+- tests/unit/test_webinoly.py
 docs:
 - PRD.md
 - docs/adr/

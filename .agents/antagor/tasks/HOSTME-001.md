@@ -1,7 +1,7 @@
 ---
 id: HOSTME-001
 title: PRD.md sections go to living docs, ADRs and ideas
-status: in_review
+status: publish
 attempts: 1
 blocked: false
 blocked_reason: null

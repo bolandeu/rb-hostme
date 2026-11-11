@@ -1,7 +1,7 @@
 ---
 id: HOSTME-003
 title: Webinoly, wildcard SSL and surge references become records and living docs
-status: in_review
+status: queue
 attempts: 1
 blocked: false
 blocked_reason: null
@@ -70,3 +70,15 @@ The report is a table: each section of each file -> its destination.
 - No code or CLI behaviour change; no new Webinoly checks run against a server.
 - Do not edit .agents/antagor/antagor.toml: the [docs] living lines go in your report.
 - Nothing is dropped without the Human's yes: leave a to-drop section in the report.
+
+## Feedback
+
+### Attempt 1: the Architect's verdict
+
+Your branch is based on main before v0.6.2 (HOSTME-001/002 landed there): PRD.md and TODO.md must stay deleted, and a plain merge has 4 conflicts. Bring main into your branch and resolve them this way:
+1. `git merge main` in your worktree.
+2. AGENTS.md — main's version is the rewrite from HOSTME-001/002 (no PRD.md, no TODO.md, docs under docs/usage/ and docs/adr/). Keep main's text; only re-apply your own pointer edits on top (docs/usage/webinoly.md, docs/usage/wildcard-ssl.md, docs/research/...).
+3. WILDCARD-SSL.md and docs/webinoly.md — take your deletion (git rm). main's side only changed 6 lines each, pointers from HOSTME-002; the files are gone by design.
+4. src/hostme/providers/webinoly.py — keep both: main's renamed pointers (docs/usage/webinoly.md) and your new module docstring.
+5. Do not reintroduce PRD.md/TODO.md, keep ADR numbers 0007-0009.
+Then `uv run pytest -q tests/unit` (219 passed before) and keep tests/snapshots/help/ in step with any docstring change.

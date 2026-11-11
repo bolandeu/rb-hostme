@@ -1,12 +1,9 @@
 """
 E2E-проверка реального сервера через Webinoly напрямую (SSH, через hostme.providers.ssh),
-без CLI hostme — до тех пор, пока в hostme нет команды deploy/teardown (см.
-TODO.md, 1.6-1.7), эти тесты автоматизируют то, что раньше проверялось вручную
-(TODO.md, 1.8).
+без CLI hostme: эти тесты автоматизируют то, что раньше проверялось вручную.
 
-Как только появятся `hostme <path> <domain>` и `hostme <domain> teardown`,
-эти тесты нужно переписать на вызов самого CLI (subprocess до `hostme`),
-а не на hostme.providers.ssh напрямую — см. TODO.md.
+Переписать их на вызов самого CLI (subprocess до `hostme`), а не на
+hostme.providers.ssh напрямую — idea `HOSTME-IDEA-009`.
 
 Запуск:
   HOSTME_E2E_HOST=212.67.13.95 HOSTME_E2E_USER=root HOSTME_E2E_BASE_DOMAIN=antagorapp.ru \

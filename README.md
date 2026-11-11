@@ -94,4 +94,5 @@ uvx --from "git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator
 `[[tool.rb.external]]` с кодом, сборка+установка колеса, правила Standard,
 gitleaks и osv-scanner, если установлены). Работа и релизы — через Antagor
 (`antagor publish` пишет CHANGELOG.md и ставит тег). Версия только из
-git-тега, `version =` в pyproject нет.
+git-тега, `version =` в pyproject нет. План и прогресс — в Antagor: `antagor board`
+показывает задачи и их статусы, идеи — `antagor idea list`; файла-бэклога в репозитории нет.

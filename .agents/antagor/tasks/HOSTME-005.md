@@ -1,7 +1,7 @@
 ---
 id: HOSTME-005
 title: 'ssh target deploy: staging upload, rename swap, no mixed site'
-status: queue
+status: publish
 attempts: 0
 blocked: false
 blocked_reason: null

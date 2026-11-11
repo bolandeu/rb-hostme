@@ -1,7 +1,7 @@
 ---
 id: HOSTME-002
 title: TODO.md items become ideas; the done ones go
-status: queue
+status: in_review
 attempts: 0
 blocked: false
 blocked_reason: null
@@ -16,7 +16,15 @@ owns_paths:
 - TODO.md
 - AGENTS.md
 - README.md
-test_paths: []
+- WILDCARD-SSL.md
+- docs/webinoly.md
+- scripts/provision-server.sh
+- src/hostme/config.py
+- src/hostme/providers/ssh.py
+- src/hostme/providers/webinoly.py
+test_paths:
+- tests/e2e/test_webinoly_smoke.py
+- tests/unit/test_config.py
 docs:
 - TODO.md
 - AGENTS.md

@@ -8,4 +8,4 @@ status: new
 benefit: Smaller pages and faster loading for every hosted site.
 ---
 
-nginx on the hosting is built without the Brotli module (docs/webinoly.md), so pages go only with gzip. Add Brotli when the module can be added.
+nginx on the hosting is built without the Brotli module (docs/webinoly.md), so pages go only with gzip. Narrow: hostme does not touch the server build — it checks whether the running nginx has Brotli and, when it does, serves the site with brotli on; adding the module to a Webinoly server is a separate ops decision of the Human (how, in docs/webinoly.md).

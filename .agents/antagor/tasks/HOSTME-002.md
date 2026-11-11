@@ -1,7 +1,7 @@
 ---
 id: HOSTME-002
 title: TODO.md items become ideas; the done ones go
-status: ideas
+status: queue
 attempts: 0
 blocked: false
 blocked_reason: null
@@ -9,7 +9,7 @@ phase: null
 tests_hash: null
 publish_stage: null
 created_by: architect
-approved_by: null
+approved_by: human
 worker: pi
 type: docs
 owns_paths:

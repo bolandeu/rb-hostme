@@ -1,7 +1,7 @@
 ---
 id: HOSTME-003
 title: Webinoly, wildcard SSL and surge references become records and living docs
-status: queue
+status: in_review
 attempts: 0
 blocked: false
 blocked_reason: null
@@ -17,6 +17,15 @@ owns_paths:
 - WILDCARD-SSL.md
 - AGENTS.md
 - README.md
+- scripts/provision-server.sh
+- src/hostme/commands/domain.py
+- src/hostme/commands/help.py
+- src/hostme/commands/site.py
+- src/hostme/core/services.py
+- src/hostme/data/nginx-defaults.conf
+- src/hostme/providers/webinoly.py
+- tests/snapshots/describe.json
+- tests/snapshots/help/domain-add.txt
 test_paths: []
 docs:
 - docs/webinoly.md

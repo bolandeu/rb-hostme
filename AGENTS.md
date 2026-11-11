@@ -17,12 +17,10 @@ Pointers for agents. Antagor shows the changing state (statuses, branches, tasks
 `hostme` — личный аналог surge.sh: CLI на Python/uv, который деплоит статические сайты и простые PHP-скрипты на собственные VPS (через [Webinoly](https://webinoly.com/)) одной командой, с поддержкой нескольких серверов и доменов. Что это за продукт и чего он не делает — **[docs/usage/product.md](docs/usage/product.md)**, читать первым для любой содержательной работы над проектом.
 
 Дальше по важности:
-- **[docs/usage/](docs/usage/)** — живая документация по темам: серверы и домены, настройки и реестр, контракт для агента, безопасность.
-- **[docs/adr/](docs/adr/)** — решения и их причины (тех-стек, хранение вне репозитория, секреты, форма команд).
+- **[docs/usage/](docs/usage/)** — живая документация по темам: серверы и домены, настройки и реестр, контракт для агента, безопасность, команды Webinoly и процедура wildcard SSL.
+- **[docs/research/](docs/research/)** — что и когда выяснилось на живой инфраструктуре (баги Webinoly, DNS Beget, форма команд surge.sh, SSH rate-limit).
+- **[docs/adr/](docs/adr/)** — решения и их причины (тех-стек, хранение вне репозитория, секреты, форма команд, wildcard и SSH).
 - План и прогресс — не файл в репозитории, а Antagor: идеи (`antagor idea list`), задачи и эпики (`.agents/antagor/`), доска (`antagor board`). Файл-бэклог в репозитории не заводить: он расходится с кодом.
-- **[docs/webinoly.md](docs/webinoly.md)** — полный референс команд Webinoly (устанавливается на серверах). Обращаться сюда, а не гадать/угадывать флаги.
-- **[docs/surge-cli.md](docs/surge-cli.md)** — референс команд surge.sh, на форму которых ориентируется CLI `hostme`.
-- **[WILDCARD-SSL.md](WILDCARD-SSL.md)** — пошаговая (проверенная вживую) инструкция по выпуску wildcard SSL, плюс раздел с реальными граблями и заметка про будущую автоматизацию через API регистратора/хостинга.
 
 ## Skill для агентов (`~/.claude/skills/hostme/`)
 
@@ -30,11 +28,11 @@ Pointers for agents. Antagor shows the changing state (statuses, branches, tasks
 
 ## Проверенные на практике факты о Webinoly (не гадать, не перепроверять с нуля)
 
-Все подтверждённые вживую факты о поведении Webinoly (команды, форматы вывода, найденные баги вроде `open_file_cache`/прав на `releases/`, реальный MVP-путь для SSL) — **в `docs/webinoly.md`, раздел «Итог для Hostme»**. Не дублировать их здесь: этот файл про инструкции агенту, `docs/webinoly.md` — источник истины по самому Webinoly. Wildcard SSL и DNS-пропагация (Beget, шесть NS, диагностика) — отдельно в `WILDCARD-SSL.md`, включая раздел «История: что пошло не так».
+Команды, форматы вывода и раскладка сайта — **`docs/usage/webinoly.md`**. Найденные баги (`open_file_cache`, права на `releases/`, `httpauth -purge`, `403` у пустого сайта) — **`docs/research/2026-09-08-webinoly-behaviour.md`**. Не дублировать их здесь: этот файл про инструкции агенту. Wildcard SSL — `docs/usage/wildcard-ssl.md`, DNS-пропагация и шесть NS Beget — `docs/research/2026-09-08-wildcard-ssl-dns.md`.
 
 Что не про Webinoly, а про сам `hostme`/процесс работы над ним:
 
-- SSH-соединения переиспользуются через `ControlMaster`/`ControlPersist` (`src/hostme/providers/ssh.py`, см. комментарий у `_CONTROL_DIR`) — было поймано на реальном rate-limit/fail2ban от слишком частых коротких подключений подряд.
+- SSH-соединения переиспользуются через `ControlMaster`/`ControlPersist` (`src/hostme/providers/ssh.py`, см. комментарий у `_CONTROL_DIR`) — причина в ADR 0007, находка в `docs/research/2026-09-09-ssh-rate-limit.md`.
 - Текущее состояние (какие серверы/домены/сайты реально зарегистрированы и задеплоены) — **не хранить статикой в этом файле, оно меняется**: смотреть `hostme server list` / `hostme domain list` / `hostme list` (агент сам восстановит картину через сам инструмент, когда понадобится).
 
 ## Тестирование (не обязательно — приоритет на скорость)
@@ -81,11 +79,11 @@ Pointers for agents. Antagor shows the changing state (statuses, branches, tasks
 ## Стиль работы над кодом
 
 - Технологии зафиксированы: Python + uv (`uv python pin`), Typer, `ruamel.yaml`, `rich`, SSH/rsync через `subprocess` (не через paramiko/fabric — уважать `~/.ssh/config`). Причина — [ADR 0002](docs/adr/0002-stack-python-uv-typer-and-system-ssh.md).
-- Форма CLI-команд копирует surge.sh (`hostme <path> <domain>`, `hostme <domain> teardown` и т.п.) — не изобретать свой стиль команд, сверяться с `docs/surge-cli.md`. Причина — [ADR 0004](docs/adr/0004-surge-command-grammar.md).
-- Перед реализацией любого шага, завязанного на поведение Webinoly, сверяться с `docs/webinoly.md`; если там что-то не сходится с реальностью — перепроверять на `sites-first-beget` и обновлять и `docs/webinoly.md`, и этот файл (секция выше).
+- Форма CLI-команд копирует surge.sh (`hostme <path> <domain>`, `hostme <domain> teardown` и т.п.) — не изобретать свой стиль команд, сверяться с выжимкой `docs/research/2026-09-08-surge-cli.md`. Причина — [ADR 0004](docs/adr/0004-surge-command-grammar.md).
+- Перед реализацией любого шага, завязанного на поведение Webinoly, сверяться с `docs/usage/webinoly.md`; если там что-то не сходится с реальностью — перепроверять на `sites-first-beget` и обновлять и `docs/usage/webinoly.md`, и этот файл (секция выше).
 - Перед началом работы и после неё состояние смотрит Antagor (`antagor board`), а не файл в репозитории. Одна задача — одна ветка и один результат; задачи, идеи и их связь ведёт Antagor.
 - Меняешь `[project.scripts]` в `pyproject.toml` — сразу `uv tool install --editable . --force`: editable-режим не перегенерирует launcher, и `hostme` из PATH продолжит звать старый entry point (так однажды день ушёл на «сломанную» surge-грамматику).
-- Флаг Webinoly сверять с шапкой `Options:`/`Arguments:` самого скрипта на сервере (`/usr/bin/site`, `/usr/bin/httpauth`, ...), а не только с публичной докой: у `httpauth` флага `-purge` нет вовсе, а ошибки Webinoly пишет в stdout, не в stderr. Найденный баг — в `docs/webinoly.md`.
+- Флаг Webinoly сверять с шапкой `Options:`/`Arguments:` самого скрипта на сервере (`/usr/bin/site`, `/usr/bin/httpauth`, ...), а не только с публичной докой: у `httpauth` флага `-purge` нет вовсе, а ошибки Webinoly пишет в stdout, не в stderr. Найденный баг — в `docs/research/2026-09-08-webinoly-behaviour.md`.
 
 ## Architect only
 

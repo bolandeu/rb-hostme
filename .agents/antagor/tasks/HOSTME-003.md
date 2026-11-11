@@ -1,7 +1,7 @@
 ---
 id: HOSTME-003
 title: Webinoly, wildcard SSL and surge references become records and living docs
-status: in_review
+status: queue
 attempts: 2
 blocked: false
 blocked_reason: null
@@ -82,3 +82,14 @@ Your branch is based on main before v0.6.2 (HOSTME-001/002 landed there): PRD.md
 4. src/hostme/providers/webinoly.py — keep both: main's renamed pointers (docs/usage/webinoly.md) and your new module docstring.
 5. Do not reintroduce PRD.md/TODO.md, keep ADR numbers 0007-0009.
 Then `uv run pytest -q tests/unit` (219 passed before) and keep tests/snapshots/help/ in step with any docstring change.
+
+### Attempt 2: the Architect's verdict
+
+The review found blockers; close each:
+
+- [blocker] `docs/usage/webinoly.md`: the closing code fences are written as ` ```text ` (lines 11, 35, 73). A CommonMark closing fence must not carry an info string, so ` ```text ` does not close the block opened at line 9 — it is literal content, and the rest of the file renders as one giant code block. Failing case: any CommonMark renderer (verified with commonmark.py on the exact file: exactly 1 `<pre><code>` block, its content swallows the prose after line 9). Fix: closing fences become bare ` ``` `.
+- [blocker] `docs/research/2026-09-08-wildcard-ssl-dns.md:15`: same defect — the block opened at line 11 runs to end of file; the «Первый прогон упал на рассинхроне NS» prose after line 15 renders as code. Failing case: same renderer check.
+
+Minor remarks of the review: optional, if they do not widen the task:
+
+- [minor] wrong `src/hostme/providers/webinoly.py:332,392`: the docstrings point to «Кастомный Nginx-конфиг» in `docs/usage/webinoly.md`, but that section does not exist in the new living doc — it became «Свои nginx-сниппеты». The file path is fixed, the section name is stale — «Then delete the three files and fix every pointer to them (AGENTS.md, README.md, code docstrings, skills under src/hostme/data/).»

@@ -1,7 +1,7 @@
 ---
 id: HOSTME-004
 title: 'ftp/sftp target deploy: staging upload, rename swap, no mixed site'
-status: ideas
+status: queue
 attempts: 0
 blocked: false
 blocked_reason: null
@@ -9,7 +9,8 @@ phase: null
 tests_hash: null
 publish_stage: null
 created_by: architect
-approved_by: null
+approved_by: human
+approved_words: Согласован
 worker: pi
 type: feature
 owns_paths:

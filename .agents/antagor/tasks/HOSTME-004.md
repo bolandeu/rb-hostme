@@ -1,7 +1,7 @@
 ---
 id: HOSTME-004
 title: 'ftp/sftp target deploy: staging upload, rename swap, no mixed site'
-status: queue
+status: publish
 attempts: 0
 blocked: false
 blocked_reason: null
@@ -15,6 +15,7 @@ worker: pi
 type: feature
 owns_paths:
 - src/hostme/providers/ftp.py
+- docs/usage/servers-and-domains.md
 test_paths:
 - tests/unit/test_ftp.py
 docs:

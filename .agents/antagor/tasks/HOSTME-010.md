@@ -1,7 +1,7 @@
 ---
 id: HOSTME-010
 title: 'Agent-shell run: record the contract in action'
-status: publish
+status: done
 attempts: 0
 blocked: false
 blocked_reason: null

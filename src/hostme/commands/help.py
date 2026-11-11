@@ -25,7 +25,7 @@ Usage нарисует второе — не верить). Полный спр�
 """
 
 # Полный справочник — источник и для `hostme help` (человеку/агенту без доступа к
-# репозиторию), и для README/Claude Code skill'а поверх hostme (PRD раздел 2).
+# репозиторию), и для README/Claude Code skill'а поверх hostme (docs/usage/product.md).
 # Если команда здесь есть, она должна работать; чего нет в MVP, помечено явно.
 _COMMAND_REFERENCE: list[tuple[str, str]] = [
     ("hostme <path> [domain] [--server NAME]", "деплой/обновление сайта (без слова deploy)"),

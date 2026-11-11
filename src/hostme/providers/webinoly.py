@@ -1,3 +1,7 @@
+"""Webinoly CLI on a server, wrapped: install, site create/delete, SSL, HTTP Basic Auth, releases layout, nginx snippets.
+Every call goes over ssh (`providers/ssh.py`); a failure comes out as `ProviderError`. Why Webinoly and not our own
+nginx: docs/adr/0001-webinoly-manages-the-servers.md."""
+
 from __future__ import annotations
 
 import base64
@@ -271,7 +275,7 @@ def update_webinoly(server: Server) -> RemoteResult:
 
 
 def set_http_auth(server: Server, domain: str, username: str, password: str) -> RemoteResult:
-    """`hostme <domain> auth --user U --pass P` (раздел 5 PRD). Логин/пароль уходят
+    """`hostme <domain> auth --user U --pass P` (docs/usage/product.md). Логин/пароль уходят
     в команду через shlex.quote — они приходят от пользователя (CLI-аргумент), и
     без экранирования это была бы command injection в свою же root-сессию по SSH."""
     creds = shlex.quote(f"[{username},{password}]")

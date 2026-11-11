@@ -1,7 +1,7 @@
 ---
 id: HOSTME-009
 title: 'Ambiguous server resolve: decide, test, document'
-status: queue
+status: in_review
 attempts: 0
 blocked: false
 blocked_reason: null

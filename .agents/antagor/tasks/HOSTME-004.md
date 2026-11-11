@@ -2,7 +2,7 @@
 id: HOSTME-004
 title: 'ftp/sftp target deploy: staging upload, rename swap, no mixed site'
 status: queue
-attempts: 0
+attempts: 1
 blocked: false
 blocked_reason: null
 phase: null
@@ -15,6 +15,7 @@ worker: pi
 type: feature
 owns_paths:
 - src/hostme/providers/ftp.py
+- docs/usage/servers-and-domains.md
 test_paths:
 - tests/unit/test_ftp.py
 docs:
@@ -76,3 +77,67 @@ Reuse the lftp script shape, _lftp_quote and _run_lftp in providers/ftp.py; back
 
 - The ssh target path (its own task) and any change to server deploys.
 - Rollback command for targets; client-side retry logic.
+
+## Feedback
+
+### Attempt 1: the project's full check failed after the merge
+
+The project's full check fails with this task merged into main, and passes without it: your change broke something elsewhere. Merge main into your branch and fix it within the task, or say what is outside it with `antagor inbox add`.
+
+- `uvx --from "git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git@v1.27.3#subdirectory=gate" rb-release check`
+
+```
+release: gate step 'ruff format --check' failed:
+…
+_to_uploads_into_staging_not_into_remote_path():
+--------------------------------------------------------------------------------
+133 |
+134 +
+135 | def test_mirror_to_script_keeps_file_times():
+--------------------------------------------------------------------------------
+142 |
+143 +
+144 | def test_mirror_to_without_password_raises():
+145 |     with pytest.raises(CliError, match="password"):
+146 |         ftp.mirror_to("/local/path", make_target(password=None))
+147 |
+148 +
+149 | def test_mirror_to_refuses_account_root_as_remote_path():
+150 |     with pytest.raises(CliError, match="remote_path"):
+151 |         ftp.mirror_to("/local/path", make_target(remote_path="/"))
+152 |
+153 +
+154 | def test_mirror_to_raises_on_failure():
+--------------------------------------------------------------------------------
+160 |
+161 +
+162 | def test_mirror_to_timeout_raises():
+--------------------------------------------------------------------------------
+168 |
+169 +
+170 | def test_mirror_to_missing_lftp_raises():
+--------------------------------------------------------------------------------
+176 |
+177 +
+178 | @pytest.mark.parametrize("connection", ["ftp", "sftp"])
+--------------------------------------------------------------------------------
+195 |
+196 +
+197 | def test_mirror_to_first_deploy_needs_no_live_directory(fake_lftp, site_dir):
+--------------------------------------------------------------------------------
+204 |
+205 +
+206 | def test_mirror_to_failed_upload_keeps_previous_files(fake_lftp, site_dir, monkeypatch):
+--------------------------------------------------------------------------------
+218 |
+219 +
+220 | def test_mirror_to_failed_swap_returns_previous_files_and_raises(fake_lftp, site_dir, monkeypatch):
+--------------------------------------------------------------------------------
+232 |
+233 +
+234 | def test_check_target_maps_login_failure_to_invalid_and_keeps_password_off_argv():
+    |
+
+2 files would be reformatted, 110 files already formatted
+release: code failed
+```

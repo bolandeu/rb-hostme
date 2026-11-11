@@ -3,7 +3,8 @@
 Почему через subprocess, а не paramiko — ADR 0002: так работают `~/.ssh/config`, агент и ключи
 пользователя. Ошибки наружу уходят только как `ProviderError`. Соединение переиспользуется
 через ControlMaster (см. `_CONTROL_DIR`), потому что поток коротких подключений подряд ловил
-rate-limit/fail2ban на реальном сервере.
+rate-limit/fail2ban на реальном сервере. Заливка на Target идёт через staging-каталог и
+переименование: живой сайт меняется целиком или никак.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ import os
 import shlex
 import subprocess
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from hostme.config import Server, Target
@@ -153,6 +155,10 @@ def _target_remote_path(target: Target) -> str:
     return target.remote_path.rstrip("/") + "/" if target.remote_path.strip("/") else target.remote_path
 
 
+STAGING_MARKER = ".hostme-staging-"
+OLD_MARKER = ".hostme-old-"
+
+
 def _target_ssh_transport(target: Target) -> tuple[str, dict[str, str] | None]:
     """rsh-команда для rsync `-e` + env под connection=ssh Target — общее и для
     заливки (deploy), и для скачивания (бэкап перед деплоем, см. cli.py).
@@ -180,17 +186,25 @@ def _target_ssh_transport(target: Target) -> tuple[str, dict[str, str] | None]:
     return rsh, env
 
 
-def _run_target_rsync(args: list[str], target: Target, timeout: int, env: dict[str, str] | None) -> RemoteResult:
+def _run_target_command(
+    args: list[str],
+    target: Target,
+    timeout: int,
+    env: dict[str, str] | None,
+    program: str,
+) -> RemoteResult:
+    """Один запуск внешней программы от имени Target — общий env (пароль в
+    SSHPASS), таймаут и разбор сбоя для rsync и ssh."""
     _log.debug("%s", shlex.join(args))  # пароль сюда не попадает — он в env SSHPASS, не в argv
     try:
         proc = subprocess.run(args, capture_output=True, text=True, timeout=timeout, env=env, check=False)
     except subprocess.TimeoutExpired as exc:
-        raise SshError(f"rsync на {target.name} не завершился за {timeout}с") from exc
+        raise SshError(f"{program} на {target.name} не завершился за {timeout}с") from exc
     except FileNotFoundError as exc:
         # sshpass отсутствующим тут не поймать: его запускает сам rsync как
         # дочерний процесс (через -e), а не Python напрямую — эта ветка бывает
-        # только если не найден сам rsync.
-        raise SshError("Команда `rsync` не найдена в системе") from exc
+        # только если не найдена сама программа.
+        raise SshError(f"Команда `{args[0]}` не найдена в системе") from exc
 
     result = RemoteResult(stdout=proc.stdout, stderr=proc.stderr, returncode=proc.returncode)
     if not result.ok:
@@ -198,21 +212,74 @@ def _run_target_rsync(args: list[str], target: Target, timeout: int, env: dict[s
         if target.password and not target.ssh_key and "sshpass" in result.stderr.lower():
             hint = " (похоже, не установлен sshpass — нужен для password-based SSH на Target)"
         raise SshError(
-            f"rsync на {target.name} завершился с ошибкой: {proc.stderr.strip()}{hint}",
+            f"{program} на {target.name} завершился с ошибкой: {proc.stderr.strip()}{hint}",
             result=result,
         )
     return result
 
 
+def _run_target_rsync(args: list[str], target: Target, timeout: int, env: dict[str, str] | None) -> RemoteResult:
+    return _run_target_command(args, target, timeout, env, "rsync")
+
+
+def run_target_remote(target: Target, command: str, timeout: int = DEFAULT_TIMEOUT) -> RemoteResult:
+    """Команда на Target по ssh — тот же транспорт, что у rsync (ключ или sshpass
+    через _target_ssh_transport), поэтому переименования едут тем же путём, что и
+    заливка: второго способа зайти на хост нет."""
+    rsh, env = _target_ssh_transport(target)
+    args = [*shlex.split(rsh), f"{target.user}@{target.host}", command]
+    return _run_target_command(args, target, timeout, env, "ssh")
+
+
+def _swap_paths(target: Target) -> tuple[str, str, str]:
+    """Живой каталог, staging и old — соседи в одном родительском каталоге, чтобы
+    переименование было атомарным (та же файловая система). Относительный
+    remote_path остаётся относительным: у shared-хостингов каталога сайта от
+    корня нет (см. _target_remote_path)."""
+    live = _target_remote_path(target).rstrip("/")
+    if not live:
+        raise InvalidArguments(
+            f"Target {target.name!r}: remote_path указывает на корень — нужен каталог сайта "
+            f"(например /www или domain.ru/public_html): заливку в корень нельзя сделать "
+            f"целой или никакой"
+        )
+    ts = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+    return live, f"{live}{STAGING_MARKER}{ts}", f"{live}{OLD_MARKER}{ts}"
+
+
+def _swap_staging_into_live(target: Target, live: str, staging: str, old: str) -> None:
+    """Меняет staging и живой каталог местами двумя `mv` и убирает old вместе со
+    stale-каталогами прошлых неудачных прогонов. Один ssh-вызов: поток коротких
+    подключений — тот самый rate-limit, из-за которого у Server есть
+    ControlMaster. Второй `mv` не удался — возвращаем old на место и падаем в
+    SshError: посетитель видит прежний сайт. Первый деплой — живой папки ещё нет,
+    переименовывать нечего."""
+    q = shlex.quote
+    command = (
+        f"if [ -d {q(live)} ]; then mv {q(live)} {q(old)}; fi; "
+        f"if ! mv {q(staging)} {q(live)}; then mv {q(old)} {q(live)}; exit 1; fi; "
+        f"rm -rf {q(live + OLD_MARKER)}* {q(live + STAGING_MARKER)}*"
+    )
+    run_target_remote(target, command, timeout=LONG_TIMEOUT)
+
+
 def rsync_to_target(local_path: str, target: Target, timeout: int = LONG_TIMEOUT) -> RemoteResult:
     """Заливка на Target с connection=ssh — тот же rsync, что и у Server, но без
     ControlMaster (Target — обычно один rsync-вызов на деплой, не серия команд,
-    как у Webinoly-пайплайна) и без ssh_key-only допущения (см. _target_ssh_transport)."""
+    как у Webinoly-пайплайна) и без ssh_key-only допущения (см. _target_ssh_transport).
+
+    Живой сайт меняется целиком или никак: rsync кладёт файлы в соседнюю
+    staging-папку `<live>.hostme-staging-<ts>`, затем она меняется местами с живой
+    (`live -> old`, `staging -> live`), а old убирается. Сбой посреди заливки
+    оставляет живой каталог нетронутым: посетитель видит прежние файлы."""
     rsh, env = _target_ssh_transport(target)
+    live, staging, old = _swap_paths(target)
     local = local_path.rstrip("/") + "/"
-    destination = f"{target.user}@{target.host}:{_target_remote_path(target)}"
+    destination = f"{target.user}@{target.host}:{staging}/"
     args = ["rsync", "-az", "--delete", "-e", rsh, local, destination]
-    return _run_target_rsync(args, target, timeout, env)
+    result = _run_target_rsync(args, target, timeout, env)
+    _swap_staging_into_live(target, live, staging, old)
+    return result
 
 
 def rsync_from_target(target: Target, local_dir: str, timeout: int = LONG_TIMEOUT) -> RemoteResult:

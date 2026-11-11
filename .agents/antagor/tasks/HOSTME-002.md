@@ -1,7 +1,7 @@
 ---
 id: HOSTME-002
 title: TODO.md items become ideas; the done ones go
-status: publish
+status: done
 attempts: 0
 blocked: false
 blocked_reason: null

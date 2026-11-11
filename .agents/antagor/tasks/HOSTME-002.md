@@ -35,7 +35,10 @@ tool: null
 pr: null
 ---
 
-Declare in .agents/antagor/antagor.toml under [docs] living: PRD.md, WILDCARD-SSL.md, docs/surge-cli.md, docs/webinoly.md. In PRD.md drop what is a plan rather than a spec: the phased plan and the open questions; an item that is still real becomes an idea with `antagor idea add` and the PRD keeps no backlog. Run `antagor layout check` at the end. Report: each of the four docs -> living, and for every section of PRD.md that left -> the idea number it became or the reason it died.
+PRD.md is a spec, but it also holds a plan: the phased plan and the open questions.
+The four docs are already declared living by the Architect on main; do not touch the Antagor config.
+In PRD.md drop what is a plan rather than a spec: the phased plan and the open questions; an item that is still real becomes an idea with `antagor idea add`, and the PRD keeps no backlog.
+Run `antagor layout check` at the end.
 
 ## Acceptance
 
@@ -50,3 +53,4 @@ Declare in .agents/antagor/antagor.toml under [docs] living: PRD.md, WILDCARD-SS
 
 - No rewrite of the technical facts of webinoly.md, surge-cli.md or WILDCARD-SSL.md
 - No code change
+- No edit of the Antagor config

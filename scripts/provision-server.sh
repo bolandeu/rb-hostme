@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Провижининг чистого Ubuntu-сервера под Hostme: firewall + Webinoly (-php режим, без MySQL).
-# Черновик для будущей `hostme server init` (см. TODO.md, Phase 1.3) — пока запускается руками через SSH.
+# Черновик ручного провижининга сервера по SSH: `hostme server init` делает это сам.
 #
 # Использование:
 #   ./scripts/provision-server.sh <ssh-host-alias-или-user@host>

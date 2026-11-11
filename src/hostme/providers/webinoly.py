@@ -168,7 +168,7 @@ def fix_ownership_path(server: Server, path: str) -> RemoteResult:
     return result
 
 
-# --- releases/rollback (TODO 3.2) -------------------------------------------
+# --- releases/rollback -------------------------------------------
 #
 # Webinoly жёстко ожидает root в /var/www/<domain>/htdocs (это генерируемый им же
 # nginx-конфиг, руками не трогаем) — поэтому вместо настоящей директории htdocs

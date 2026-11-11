@@ -89,7 +89,7 @@ class Site:
     # Относительный путь include-файла (sites.d/*.yaml), откуда сайт был прочитан
     # load_sites(); None значит "живёт в главном sites.yaml". Используется только
     # save_sites(), чтобы писать обновление обратно в тот же файл, а не всегда в
-    # главный (раздел 2.5 TODO). Не сериализуется в сам YAML.
+    # главный. Не сериализуется в сам YAML.
     source_file: str | None = field(default=None, compare=False, repr=False)
 
 
@@ -331,7 +331,7 @@ def save_sites(sites: list[Site]) -> None:
     """Каждый сайт пишется обратно в тот файл, откуда его прочитал load_sites()
     (главный sites.yaml или include-файл из sites.d/) — иначе сайт, once заведённый
     в отдельный include-файл вручную, при первом же обновлении из hostme переехал
-    бы в главный sites.yaml (раздел 2.5 TODO)."""
+    бы в главный sites.yaml."""
     SITES_FILE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     by_file: dict[str, list[Site]] = {}
     main_sites: list[Site] = []

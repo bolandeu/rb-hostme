@@ -293,7 +293,7 @@ def test_load_sites_follows_include(isolated_config):
 
 
 def test_save_sites_writes_back_to_originating_include_file(isolated_config):
-    # Раздел 2.5 TODO: сайт, прочитанный из sites.d/*.yaml, должен обновляться
+    # Include-файлы: сайт, прочитанный из sites.d/*.yaml, должен обновляться
     # там же, а не переезжать в главный sites.yaml при первом же save_sites().
     isolated_config.mkdir(parents=True, exist_ok=True)
     included = isolated_config / "sites.d" / "personal.yaml"

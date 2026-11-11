@@ -1,7 +1,7 @@
 ---
 id: HOSTME-006
 title: 'Target deploy docs: swap, idempotence, page dates'
-status: in_review
+status: publish
 attempts: 0
 blocked: false
 blocked_reason: null

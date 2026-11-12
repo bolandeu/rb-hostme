@@ -1,7 +1,7 @@
 ---
 id: HOSTME-011
 title: Pin typer below 0.29 so a fresh install starts
-status: queue
+status: in_review
 attempts: 0
 blocked: false
 blocked_reason: null

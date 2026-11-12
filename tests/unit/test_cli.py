@@ -1,7 +1,10 @@
 import json
+import tomllib
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from packaging.requirements import Requirement
 from typer.testing import CliRunner
 
 from hostme import output
@@ -9,6 +12,17 @@ from hostme.cli import _translate_argv, app, main
 from hostme.core.errors import InvalidArguments, StateError
 
 runner = CliRunner()
+
+
+def test_typer_requirement_refuses_0_29() -> None:
+    # Чистый uv tool install подтянул typer 0.29.1, и CLI падал на импорте:
+    # skill.py собирает TyperOption по API 0.27.x. Верхняя граница держит установку на 0.27.x.
+    root = Path(__file__).resolve().parents[2]
+    project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    requirement = next(Requirement(raw) for raw in project["dependencies"] if Requirement(raw).name == "typer")
+    assert requirement.specifier.contains("0.27.2")
+    assert not requirement.specifier.contains("0.28.0")
+    assert not requirement.specifier.contains("0.29.1")
 
 
 def _invoke(argv: list[str]):

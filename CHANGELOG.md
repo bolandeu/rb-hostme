@@ -5,6 +5,24 @@ All notable changes to this project are documented here. Versions follow
 
 The changelog is written by `antagor publish`; don't edit it by hand.
 
+## v0.6.12 — 2026-11-12
+
+### E-003 — E2E through the CLI on a real server
+
+The paths a foreign project walks — deploy, PHP site, server add, server init, SSL — are covered by tests that call the hostme CLI itself, on a real server, and pass.
+Time: 0.8h since the epic was approved
+
+- E2E from zero: server add, server init, deploy, SSL (HOSTME-008)
+
+## v0.6.11 — 2026-11-12
+
+### E-003 — E2E through the CLI on a real server
+
+The paths a foreign project walks — deploy, PHP site, server add, server init, SSL — are covered by tests that call the hostme CLI itself, on a real server, and pass.
+Time: 0.1h since the epic was approved
+
+- E2E through the CLI: smoke rewrite and a PHP site (HOSTME-007)
+
 ## v0.6.10 — 2026-11-12
 
 ### E-005 — Hostme works on a fresh Ubuntu 26.04 machine

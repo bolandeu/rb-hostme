@@ -1,7 +1,7 @@
 ---
 id: HOSTME-008
 title: 'E2E from zero: server add, server init, deploy, SSL'
-status: queue
+status: done
 attempts: 0
 blocked: false
 blocked_reason: null
@@ -15,6 +15,7 @@ worker: pi
 type: chore
 owns_paths:
 - tests/e2e/
+- tests/conftest.py
 test_paths:
 - tests/e2e/
 docs: none

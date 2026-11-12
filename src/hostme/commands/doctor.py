@@ -5,7 +5,7 @@ from __future__ import annotations
 import typer
 
 from .. import output
-from ..core import services
+from ..core.doctor import run_doctor
 from ..core.version import DEV_VERSION, installed_version
 
 _ICONS = {"ok": "[green]✔[/green]", "warn": "[yellow]![/yellow]", "fail": "[red]✖[/red]"}
@@ -18,7 +18,7 @@ def doctor(
     quiet: bool = output.QuietOption,
     verbose: bool = output.VerboseOption,
 ) -> None:
-    """hostme doctor — проверка окружения без обращения к серверам.
+    """hostme doctor — проверка локального окружения и реестров (без обращения к серверам).
 
     Бинарии (ssh/rsync/lftp/sshpass — по тому, что реально нужно зарегистрированным
     серверам и target'ам), права и читаемость реестров (servers.yaml в ~/.config/hostme,
@@ -29,7 +29,7 @@ def doctor(
 
     Example: hostme doctor --json
     """
-    report = services.run_doctor()
+    report = run_doctor()
     checks: list[dict] = [{"name": "python", "ok": True, "status": "ok"}]
     checks.append({"name": "cli_version", "ok": True, "status": "ok", "detail": installed_version() or DEV_VERSION})
     report["checks"] = checks + report["checks"]

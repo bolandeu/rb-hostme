@@ -1,13 +1,17 @@
 
  Usage: hostme config [OPTIONS] {domain}
 
- hostme <domain> config [--cors ORIGIN ...] [--redirect FROM=TO] [--nginx-snippet PATH] ... —
- настройки сайта; без флагов печатает текущие.
+ hostme <domain> config [--cors ORIGIN ...] [--redirect FROM=TO] [--nginx-snippet PATH]
+ [--php|--html] ... — настройки сайта; без флагов печатает текущие.
 
  Только свои серверы (Webinoly). Все изменения обратимы соответствующим
- --no-*/--remove-* флагом.
+ --no-*/--remove-* флагом, кроме смены типа сайта: Webinoly не меняет тип на
+ месте — hostme снимает копию каталога сайта, пересоздаёт сайт с другим типом
+ и возвращает контент и сертификат. Сайт недоступен, пока идёт смена, поэтому
+ нужен --confirm; сбой возвращает прежний тип и контент. Сайт уже этого типа —
+ ничего не меняется.
 
- Example: hostme landing.example.com config --redirect /old=/new
+ Example: hostme landing.example.com config --php --confirm
 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
 │ *    domain      <str>  Домен сайта из `hostme list`. [required]                                 │
@@ -21,6 +25,10 @@
 │ --no-force-https                   Не поддерживается: Webinoly не отключает редирект на HTTPS.   │
 │ --nginx-snippet             <str>  Локальный .conf → кастомный nginx-сниппет сайта.              │
 │ --no-nginx-snippet                 Убрать кастомный сниппет.                                     │
+│ --php                              Сменить тип живого сайта на PHP: контент и SSL остаются.      │
+│ --html                             Сменить тип живого сайта на HTML: контент и SSL остаются.     │
+│ --confirm,--yes     -y             Подтвердить деструктивное действие без вопроса (обязателен    │
+│                                    вместе с --non-interactive/--json).                           │
 │ --help              -h             Show this message and exit.                                   │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
 

@@ -6,10 +6,11 @@ import pytest
 from hostme.config import BaseDomain, Server, Site, Target
 from hostme.core import services
 from hostme.core.errors import Aborted, CliError, InvalidArguments
+from hostme.providers import webinoly
 
 
 def make_target(**overrides) -> Target:
-    defaults = {
+    defaults: dict[str, Any] = {
         "name": "top-ved.ru",
         "connection": "ssh",
         "host": "host.example",
@@ -315,54 +316,66 @@ def test_require_unique_name_rejects_existing_target() -> None:
     ):
         services.require_unique_name("ext1")
 
+# --- config --php/--html — смена типа живого сайта. Логика пересоздания сайта
+# живёт в провайдере (tests/unit/test_webinoly.py); здесь — решение сервиса:
+# тот же тип, гейт подтверждения, dry-run, запись в реестр.
 
-# --- doctor — не должен обращаться к удалённым серверам ---
-
-
-def test_doctor_reports_ok_when_binaries_and_config_present() -> None:
+def _config_site(ctx, **kwargs) -> dict:
+    site = make_site(server="vps1")
+    server = make_server(name="vps1")
+    params = {"php": False, "html": False, "confirm": True}
+    params.update(kwargs)
     with (
-        patch("hostme.core.services.config.CONFIG_DIR") as mock_dir,
-        patch("hostme.core.services.config.load_servers", return_value=[]),
-        patch("hostme.core.services.config.load_targets", return_value=[]),
-        patch("hostme.core.services.config.load_sites", return_value=[]),
-        patch("hostme.core.services.shutil.which", return_value="/usr/bin/tool"),
+        patch("hostme.core.services.config.load_sites", return_value=[site]),
+        patch("hostme.core.services.config.load_servers", return_value=[server]),
+        patch("hostme.core.services.config.save_sites") as mock_save,
+        patch("hostme.core.services.webinoly.site_info") as mock_info,
+        patch("hostme.core.services.webinoly.switch_site_type") as mock_switch,
     ):
-        mock_dir.exists.return_value = True
-        mock_dir.stat.return_value.st_mode = 0o700
-        result = services.run_doctor()
-    assert result["healthy"] is True
-    names = [c["name"] for c in result["checks"]]
-    assert "ssh" in names
-    assert "rsync" in names
+        mock_info.return_value = webinoly.SiteInfo(
+            domain="a.dev", tags=["PHP"] if params["way"] == "php" else ["HTML"]
+        )
+        result = services.update_site_config(
+            ctx, "a.dev", [], False, [], [], False, False, None, False, params["php"], params["html"], params["confirm"]
+        )
+    return {**result, "saved": mock_save.called, "switched": mock_switch.call_args}
 
+def test_config_same_site_type_changes_nothing(make_ctx) -> None:
+    result = _config_site(make_ctx(), php=True, way="php")
+    assert result["message"] == "Сайт a.dev уже php — ничего не менялось"
+    assert result["switched"] is None
+    assert result["saved"] is False
 
-def test_doctor_fails_when_required_binary_missing() -> None:
+def test_config_switch_needs_confirmation_in_non_interactive_mode(make_ctx) -> None:
+    ctx = make_ctx(json=True)
+    site = make_site(server="vps1")
+    server = make_server(name="vps1")
     with (
-        patch("hostme.core.services.config.CONFIG_DIR") as mock_dir,
-        patch("hostme.core.services.config.load_servers", return_value=[]),
-        patch("hostme.core.services.config.load_targets", return_value=[]),
-        patch("hostme.core.services.config.load_sites", return_value=[]),
-        patch("hostme.core.services.shutil.which", return_value=None),
+        patch("hostme.core.services.config.load_sites", return_value=[site]),
+        patch("hostme.core.services.config.load_servers", return_value=[server]),
+        patch("hostme.core.services.webinoly.site_info", return_value=webinoly.SiteInfo(domain="a.dev", tags=["HTML"])),
+        patch("hostme.core.services.webinoly.switch_site_type") as mock_switch,
+        pytest.raises(InvalidArguments, match="--confirm"),
     ):
-        mock_dir.exists.return_value = True
-        mock_dir.stat.return_value.st_mode = 0o700
-        result = services.run_doctor()
-    assert result["healthy"] is False
+        services.update_site_config(ctx, "a.dev", [], False, [], [], False, False, None, False, True, False, False)
+    mock_switch.assert_not_called()
 
+def test_config_switch_writes_new_type_to_registry(make_ctx) -> None:
+    result = _config_site(make_ctx(), php=True, way="html")
+    assert result["message"] == "Тип сайта a.dev сменён на php"
+    assert result["switched"][0][2] == "php"
+    assert result["site"].php is True
+    assert result["saved"] is True
 
-def test_doctor_requires_lftp_only_when_ftp_targets_registered() -> None:
-    target = make_target(name="ext1", connection="sftp")
+def test_config_switch_dry_run_does_not_touch_server(make_ctx) -> None:
+    result = _config_site(make_ctx(dry_run=True), php=True, way="html")
+    assert result["dry_run"] is True
+    assert result["switched"] is None
+
+def test_config_php_and_html_together_are_rejected(make_ctx) -> None:
+    site = make_site(server="vps1")
     with (
-        patch("hostme.core.services.config.CONFIG_DIR") as mock_dir,
-        patch("hostme.core.services.config.load_servers", return_value=[]),
-        patch("hostme.core.services.config.load_targets", return_value=[target]),
-        patch("hostme.core.services.config.load_sites", return_value=[]),
-        patch("hostme.core.services.shutil.which", side_effect=lambda b: None if b == "lftp" else "/usr/bin/" + b),
+        patch("hostme.core.services.config.load_sites", return_value=[site]),
+        pytest.raises(InvalidArguments, match="--php и --html"),
     ):
-        mock_dir.exists.return_value = True
-        mock_dir.stat.return_value.st_mode = 0o700
-        result = services.run_doctor()
-    checks_by_name = {c["name"]: c for c in result["checks"]}
-    assert "lftp" in checks_by_name
-    assert checks_by_name["lftp"]["status"] == "fail"
-    assert result["healthy"] is False
+        services.update_site_config(make_ctx(), "a.dev", [], False, [], [], False, False, None, False, True, True, True)

@@ -172,8 +172,11 @@ specific call later.
 `teardown` deletes the site on the server (files + revokes SSL) and removes
 it from the registry — irreversible. `rollback`/`maintenance` are reversible
 (a symlink swap on the server, or a target backup restore). `config
---no-cors` / `--remove-redirect` are also reversible. Reversible doesn't mean
-"skip asking" — it means a mistake is recoverable, not that it's low-stakes.
+--no-cors` / `--remove-redirect` are also reversible. `config --php` / `--html`
+(switch a live site between HTML and PHP) is gated by `--confirm`: the site is
+down while the switch runs, though a failure restores the previous type and
+content. Reversible doesn't mean "skip asking" — it means a mistake is
+recoverable, not that it's low-stakes.
 
 ## `--target`: third-party hosting, NOT the user's own VPS
 

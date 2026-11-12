@@ -2,7 +2,9 @@
 targets. Команды в commands/ — только парсинг аргументов и вызов функций
 отсюда; сюда же попадает единая точка подтверждения деструктивных операций
 (`output.require_confirmation`, раздел 10 architecture.md). Функции, которым
-нужен режим вывода (dry-run, подтверждение, прогресс), получают `ctx` команды."""
+нужен режим вывода (dry-run, подтверждение, прогресс), получают `ctx` команды.
+Проверки `hostme doctor` живут отдельно (`core/doctor.py`); им отсюда нужен только
+`target_backup_snapshots` — список локальных снепшотов target'а."""
 
 from __future__ import annotations
 
@@ -241,7 +243,7 @@ def _target_backup_dir(target_name: str) -> Path:
     return config.TARGET_BACKUPS_DIR / target_name
 
 
-def _target_backup_snapshots(target_name: str) -> list[Path]:
+def target_backup_snapshots(target_name: str) -> list[Path]:
     backups_dir = _target_backup_dir(target_name)
     if not backups_dir.is_dir():
         return []
@@ -258,7 +260,7 @@ def _snapshot_time(snapshot: Path) -> datetime:
 def _prune_target_backups(target_name: str, policy: config.BackupPolicy | None = None) -> list[Path]:
     """Политика config.BackupPolicy; самый свежий снепшот не трогаем никогда."""
     policy = policy or config.load_backup_policy()
-    snapshots = _target_backup_snapshots(target_name)
+    snapshots = target_backup_snapshots(target_name)
     older = snapshots[:-1]
     expired = set(snapshots[: -policy.keep])
     if policy.max_age_days is not None:
@@ -268,18 +270,6 @@ def _prune_target_backups(target_name: str, policy: config.BackupPolicy | None =
     for old in removed:
         shutil.rmtree(old, ignore_errors=True)
     return removed
-
-
-def _dir_size(path: Path) -> int:
-    return sum(f.stat().st_size for f in path.rglob("*") if f.is_file() and not f.is_symlink())
-
-
-def _human_size(size: float) -> str:
-    for unit in ("Б", "КБ", "МБ"):
-        if size < 1024:
-            return f"{size:.0f} {unit}" if unit == "Б" else f"{size:.1f} {unit}"
-        size /= 1024
-    return f"{size:.1f} ГБ"
 
 
 def _backup_target_before_deploy(ctx: typer.Context, target: config.Target) -> None:
@@ -423,15 +413,7 @@ def deploy(
     if is_new_site:
         output.progress(ctx, f"Создаю сайт {domain} ({site_type}) на {server.name}...")
         webinoly.create_site(server, domain, site_type)
-
-        base_domain = next(
-            (d.name for d in server.base_domains if domain != d.name and domain.endswith(f".{d.name}")),
-            None,
-        )
-        if base_domain is not None:
-            webinoly.enable_ssl(server, domain, add_to_wildcard=base_domain)
-        else:
-            webinoly.enable_ssl(server, domain)
+        webinoly.enable_ssl_for_site(server, domain)
 
     # Пишем в реестр сразу после создания сайта на сервере (deployed_at ещё None) —
     # если rsync/chown ниже упадёт, сайт всё равно останется виден в `list`/`teardown`,
@@ -520,7 +502,7 @@ def rollback_target(target: config.Target) -> None:
     """Одношаговый откат для Target — нет полноценной истории с указателем
     "текущей" позиции, как у Webinoly-releases (там она на сервере, тут только
     локальные снепшоты) — просто заливаем самый свежий локальный бэкап обратно."""
-    snapshots = _target_backup_snapshots(target.name)
+    snapshots = target_backup_snapshots(target.name)
     if not snapshots:
         raise StateError(f"У target {target.name!r} нет локальных бэкапов для отката")
     snapshot = snapshots[-1]
@@ -693,6 +675,7 @@ def set_http_auth(domain: str, user: str | None, password: str | None, off: bool
 
 
 def update_site_config(
+    ctx: typer.Context,
     domain: str,
     cors: list[str],
     no_cors: bool,
@@ -702,6 +685,9 @@ def update_site_config(
     no_force_https: bool,
     nginx_snippet: str | None,
     no_nginx_snippet: bool,
+    php: bool,
+    html: bool,
+    confirm: bool,
 ) -> dict:
     """message=None в результате значит "изменений не запрошено" — вызывающий
     код должен напечатать текущий конфиг (result["site"]) вместо success."""
@@ -729,6 +715,10 @@ def update_site_config(
     if nginx_snippet and no_nginx_snippet:
         raise InvalidArguments("--nginx-snippet и --no-nginx-snippet вместе не имеют смысла")
 
+    if php and html:
+        raise InvalidArguments("--php и --html вместе не имеют смысла")
+    site_type: webinoly.SiteType | None = "php" if php else "html" if html else None
+
     snippet_content: str | None = None
     if nginx_snippet:
         snippet_path = Path(nginx_snippet).expanduser()
@@ -737,12 +727,40 @@ def update_site_config(
         snippet_content = snippet_path.read_text()
 
     has_changes = (
-        bool(cors) or no_cors or bool(redirect) or bool(remove_redirect) or bool(nginx_snippet) or no_nginx_snippet
+        bool(cors)
+        or no_cors
+        or bool(redirect)
+        or bool(remove_redirect)
+        or bool(nginx_snippet)
+        or no_nginx_snippet
+        or site_type is not None
     )
     if not has_changes:
         return {"message": None, "domain": domain, "site": site}
 
     _site, server = require_site_server(domain)
+
+    switched = False
+    if site_type is not None:
+        current = webinoly.site_info(server, domain)
+        if current is None:
+            raise StateError(f"Сайта {domain} нет на сервере {server.name} — смену типа делать не на чем")
+        if current.is_php == (site_type == "php"):
+            return {"message": f"Сайт {domain} уже {site_type} — ничего не менялось", "domain": domain, "site": site}
+        if output.is_dry_run(ctx):
+            return {
+                "message": f"(dry-run) Сменил бы тип {domain} на {site_type}, изменений не внесено",
+                "domain": domain,
+                "dry_run": True,
+            }
+        output.require_confirmation(
+            ctx,
+            f"Смена типа сайта {domain} на {site_type} (сайт недоступен между удалением и проверкой)",
+            confirm,
+        )
+        webinoly.switch_site_type(server, domain, site_type)
+        site.php = site_type == "php"
+        switched = True
 
     for pair in redirect:
         frm, sep, to = pair.partition("=")
@@ -769,7 +787,8 @@ def update_site_config(
         webinoly.set_custom_nginx_snippet(server, domain, snippet_content)
 
     config.save_sites(sites)
-    return {"message": f"Настройки {domain} обновлены", "domain": domain, "site": site}
+    message = f"Тип сайта {domain} сменён на {site_type}" if switched else f"Настройки {domain} обновлены"
+    return {"message": message, "domain": domain, "site": site}
 
 
 def get_debug_info(domain: str, error: bool, lines: int) -> dict:
@@ -777,122 +796,3 @@ def get_debug_info(domain: str, error: bool, lines: int) -> dict:
     status = http.head_status(domain)
     log_output = webinoly.tail_log(server, domain, error=error, lines=lines)
     return {"domain": domain, "http_status": status, "log": log_output}
-
-
-# --- doctor -----------------------------------------------------------------
-
-
-def _check(name: str, status: str, detail: str) -> dict:
-    # `ok` — по Standard, Health; `warn` — не провал (healthy остаётся true).
-    return {"name": name, "ok": status != "fail", "status": status, "detail": detail}
-
-
-def run_doctor() -> dict:
-    """Проверки окружения/конфига без обращения к удалённым серверам (быстро,
-    безопасно вызывать часто) — права на ~/.config/hostme/, читаемость
-    реестров, наличие бинарей, нужных выбранным serverʼам/targetʼам."""
-    checks: list[dict] = []
-
-    if config.CONFIG_DIR.exists():
-        mode = config.CONFIG_DIR.stat().st_mode & 0o777
-        checks.append(
-            _check(
-                "config_dir",
-                "ok" if mode == 0o700 else "warn",
-                f"{config.CONFIG_DIR} (права {oct(mode)})" if mode != 0o700 else str(config.CONFIG_DIR),
-            )
-        )
-    else:
-        checks.append(
-            _check("config_dir", "warn", f"{config.CONFIG_DIR} ещё не создан (будет создан при первой команде)")
-        )
-
-    try:
-        servers = config.load_servers()
-        checks.append(_check("servers_yaml", "ok", f"{len(servers)} серверов"))
-    except Exception as exc:  # noqa: BLE001
-        servers = []
-        checks.append(_check("servers_yaml", "fail", str(exc)))
-
-    try:
-        targets = config.load_targets()
-        checks.append(_check("targets_yaml", "ok", f"{len(targets)} target'ов"))
-    except Exception as exc:  # noqa: BLE001
-        targets = []
-        checks.append(_check("targets_yaml", "fail", str(exc)))
-
-    try:
-        sites = config.load_sites()
-        checks.append(_check("sites_yaml", "ok", f"{len(sites)} сайтов ({config.SITES_FILE})"))
-    except Exception as exc:  # noqa: BLE001
-        checks.append(_check("sites_yaml", "fail", str(exc)))
-
-    backups_check, backups_info = _target_backups_report()
-    checks.append(backups_check)
-
-    # Имена литералами — release.py сверяет их с [[tool.rb.external]] (стандарт §12).
-    for binary, path in (("ssh", shutil.which("ssh")), ("rsync", shutil.which("rsync"))):
-        checks.append(_check(binary, "ok" if path else "fail", path or f"`{binary}` не найден в PATH"))
-
-    needs_lftp = any(t.connection in ("ftp", "sftp") for t in targets)
-    if needs_lftp:
-        path = shutil.which("lftp")
-        checks.append(
-            _check("lftp", "ok" if path else "fail", path or "`lftp` не найден в PATH (нужен для ftp/sftp target'ов)")
-        )
-
-    needs_sshpass = any(t.connection == "ssh" and t.password and not t.ssh_key for t in targets)
-    if needs_sshpass:
-        path = shutil.which("sshpass")
-        checks.append(
-            _check(
-                "sshpass",
-                "ok" if path else "fail",
-                path or "`sshpass` не найден в PATH (нужен для password-based SSH target'ов)",
-            )
-        )
-
-    for server in servers:
-        key_path = Path(server.ssh_key).expanduser()
-        checks.append(
-            _check(
-                f"ssh_key:{server.name}",
-                "ok" if key_path.exists() else "warn",
-                str(key_path) if key_path.exists() else f"{key_path} не найден локально",
-            )
-        )
-    for target in targets:
-        if target.ssh_key:
-            key_path = Path(target.ssh_key).expanduser()
-            checks.append(
-                _check(
-                    f"ssh_key:{target.name}",
-                    "ok" if key_path.exists() else "warn",
-                    str(key_path) if key_path.exists() else f"{key_path} не найден локально",
-                )
-            )
-
-    ok = not any(c["status"] == "fail" for c in checks)
-    return {"healthy": ok, "checks": checks, "data_dir": str(config.DATA_DIR), "target_backups": backups_info}
-
-
-def _target_backups_report() -> tuple[dict, dict]:
-    """(check для doctor, сводка для JSON: путь, байты, снепшоты, политика)."""
-    backups_dir = config.TARGET_BACKUPS_DIR
-    snapshots = (
-        sum(len(_target_backup_snapshots(t.name)) for t in backups_dir.iterdir() if t.is_dir())
-        if backups_dir.is_dir()
-        else 0
-    )
-    size = _dir_size(backups_dir) if backups_dir.is_dir() else 0
-    info: dict = {"path": str(backups_dir), "bytes": size, "snapshots": snapshots}
-    try:
-        policy = config.load_backup_policy()
-    except InvalidArguments as exc:
-        return _check("target_backups", "fail", str(exc)), info
-    info["policy"] = {"keep": policy.keep, "max_age_days": policy.max_age_days}
-    policy_text = f"храним последние {policy.keep}" + (
-        f", не старше {policy.max_age_days} дн." if policy.max_age_days else ""
-    )
-    detail = f"{backups_dir} — {_human_size(size)}, снепшотов: {snapshots}; {policy_text}"
-    return _check("target_backups", "ok", detail), info

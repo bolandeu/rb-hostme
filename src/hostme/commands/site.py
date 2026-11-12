@@ -234,17 +234,40 @@ def site_config(
         str | None, typer.Option("--nginx-snippet", help="Локальный .conf → кастомный nginx-сниппет сайта.")
     ] = None,
     no_nginx_snippet: Annotated[bool, typer.Option("--no-nginx-snippet", help="Убрать кастомный сниппет.")] = False,
+    php: Annotated[
+        bool, typer.Option("--php", help="Сменить тип живого сайта на PHP: контент и SSL остаются.")
+    ] = False,
+    html: Annotated[
+        bool, typer.Option("--html", help="Сменить тип живого сайта на HTML: контент и SSL остаются.")
+    ] = False,
+    confirm: ConfirmOption = False,
 ) -> None:
-    """hostme <domain> config [--cors ORIGIN ...] [--redirect FROM=TO] [--nginx-snippet PATH] ... — настройки сайта; без флагов печатает текущие.
+    """hostme <domain> config [--cors ORIGIN ...] [--redirect FROM=TO] [--nginx-snippet PATH] [--php|--html] ... — настройки сайта; без флагов печатает текущие.
 
     Только свои серверы (Webinoly). Все изменения обратимы соответствующим
-    --no-*/--remove-* флагом.
+    --no-*/--remove-* флагом, кроме смены типа сайта: Webinoly не меняет тип на
+    месте — hostme снимает копию каталога сайта, пересоздаёт сайт с другим типом
+    и возвращает контент и сертификат. Сайт недоступен, пока идёт смена, поэтому
+    нужен --confirm; сбой возвращает прежний тип и контент. Сайт уже этого типа —
+    ничего не меняется.
 
-    Example: hostme landing.example.com config --redirect /old=/new
+    Example: hostme landing.example.com config --php --confirm
     """
     domain = config.normalize_domain(domain)
     result = services.update_site_config(
-        domain, cors, no_cors, redirect, remove_redirect, force_https, no_force_https, nginx_snippet, no_nginx_snippet
+        ctx,
+        domain,
+        cors,
+        no_cors,
+        redirect,
+        remove_redirect,
+        force_https,
+        no_force_https,
+        nginx_snippet,
+        no_nginx_snippet,
+        php,
+        html,
+        confirm,
     )
     if result["message"] is None:
         site: config.Site = result["site"]

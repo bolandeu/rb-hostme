@@ -1,7 +1,7 @@
 ---
 id: HOSTME-008
 title: 'E2E from zero: server add, server init, deploy, SSL'
-status: in_review
+status: publish
 attempts: 0
 blocked: false
 blocked_reason: null

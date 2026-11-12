@@ -1,7 +1,7 @@
 ---
 id: HOSTME-011
 title: Pin typer below 0.29 so a fresh install starts
-status: ideas
+status: queue
 attempts: 0
 blocked: false
 blocked_reason: null
@@ -9,7 +9,8 @@ phase: null
 tests_hash: null
 publish_stage: null
 created_by: architect
-approved_by: null
+approved_by: human
+approved_words: Запускай
 worker: pi
 type: bugfix
 owns_paths:

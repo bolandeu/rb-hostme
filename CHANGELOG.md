@@ -5,6 +5,16 @@ All notable changes to this project are documented here. Versions follow
 
 The changelog is written by `antagor publish`; don't edit it by hand.
 
+## v0.6.13 — 2026-11-12
+
+### E-006 — Switch the type of a live site between HTML and PHP
+
+One command flips a live site between HTML and PHP. The content stays, the certificate stays, the site comes back up on the same URLs, and the operator does not touch the server by hand.
+Time: 0.7h since the epic was approved
+
+- Switch a live site between HTML and PHP from the config command (HOSTME-013)
+- Ruff format the Webinoly provider after HOSTME-013 (HOSTME-016)
+
 ## v0.6.12 — 2026-11-12
 
 ### E-003 — E2E through the CLI on a real server

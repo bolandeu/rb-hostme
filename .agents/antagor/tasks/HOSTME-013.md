@@ -1,7 +1,7 @@
 ---
 id: HOSTME-013
 title: Switch a live site between HTML and PHP from the config command
-status: publish
+status: done
 attempts: 0
 blocked: false
 blocked_reason: null

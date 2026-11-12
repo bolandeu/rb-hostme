@@ -1,4 +1,4 @@
-"""Webinoly CLI on a server, wrapped: install (with a post-install check that the stack really arrived), site create/delete, SSL, HTTP Basic Auth, releases layout, nginx snippets.
+"""Webinoly CLI on a server, wrapped: install (with a post-install check that the stack really arrived), site create/delete, SSL, HTTP Basic Auth, releases layout, switching a live site between HTML and PHP (snapshot, recreate, restore), nginx snippets.
 Every call goes over ssh (`providers/ssh.py`); a failure comes out as `ProviderError`. Why Webinoly and not our own
 nginx: docs/adr/0001-webinoly-manages-the-servers.md. Command shapes, output formats and the site layout it must
 respect: docs/usage/webinoly.md; the live deviations from the public docs: docs/research/2026-09-08-webinoly-behaviour.md."""
@@ -121,8 +121,11 @@ def list_sites(server: Server) -> list[SiteInfo]:
     return parse_site_list(result.stdout)
 
 
+def site_info(server: Server, domain: str) -> SiteInfo | None:
+    return next((s for s in list_sites(server) if s.domain == domain), None)
+
 def site_exists(server: Server, domain: str) -> bool:
-    return any(s.domain == domain for s in list_sites(server))
+    return site_info(server, domain) is not None
 
 
 _PLACEHOLDER_HTML = (
@@ -175,6 +178,18 @@ def enable_ssl(
         raise WebinolyError(f"Не удалось включить SSL для {domain} на {server.name}: {_error_text(result)}", result)
     return result
 
+
+def wildcard_base_domain(server: Server, domain: str) -> str | None:
+    """Base-домен, под которым лежит домен сайта. `-add-to-wildcard` берёт только
+    один уровень поддомена (docs/usage/webinoly.md) — глубже не привязываем."""
+    return next((d.name for d in server.base_domains if domain != d.name and domain.endswith(f".{d.name}")), None)
+
+def enable_ssl_for_site(server: Server, domain: str) -> RemoteResult:
+    """SSL так, как его включает первый деплой: домен под base-доменом идёт в уже
+    выпущенный wildcard-сертификат, остальные получают свой от certbot. Одна точка
+    на деплой, смену типа сайта и возврат прежнего состояния после сбоя."""
+    base = wildcard_base_domain(server, domain)
+    return enable_ssl(server, domain, add_to_wildcard=base) if base else enable_ssl(server, domain)
 
 def delete_site(server: Server, domain: str, revoke_ssl: bool = True) -> RemoteResult:
     revoke = "-revoke=on" if revoke_ssl else "-revoke=off"
@@ -290,6 +305,99 @@ def prune_releases(server: Server, domain: str, keep: int = _KEEP_RELEASES) -> R
         raise WebinolyError(f"Не удалось почистить старые релизы {domain}: {_error_text(result)}", result)
     return result
 
+
+# --- смена типа живого сайта ---------------------------------------
+#
+# Webinoly не меняет тип сайта на месте (docs/usage/webinoly.md): только удаление
+# и создание заново. Удаление уносит весь каталог сайта — контент, релизы,
+# заглушку, сниппеты, — а сертификат остаётся только при -revoke=off. Поэтому
+# сначала снимок каталога рядом с сайтом; он же — источник для отката.
+# Почему так, а не ручной правкой nginx: docs/adr/0012-switch-a-live-site-type-by-recreate.md.
+
+_SITE_TYPE_BACKUP_SUFFIX = ".hostme-type-backup"
+
+def site_dir(domain: str) -> str:
+    return f"/var/www/{domain}"
+
+def switch_site_type(server: Server, domain: str, site_type: SiteType) -> None:
+    """Сменить тип живого сайта (html <-> php), не теряя контент и сертификат:
+    снимок каталога, удаление без отзыва сертификата, создание с новым типом,
+    возврат снимка, привязка прежнего сертификата, проверка постусловия. Любая
+    ошибка на пути возвращает прежний тип и содержимое и выходит наружу ошибкой.
+    """
+    current = site_info(server, domain)
+    if current is None:
+        raise WebinolyError(f"Сайта {domain} на {server.name} нет — менять тип не на чем")
+    previous: SiteType = "php" if current.is_php else "html"
+
+    snapshot = _snapshot_site_dir(server, domain)
+    try:
+        _recreate_site(server, domain, site_type)
+        _restore_site_dir(server, domain, snapshot)
+        enable_ssl_for_site(server, domain)
+        _verify_site_type(server, domain, site_type)
+    except WebinolyError as exc:
+        _restore_previous_site(server, domain, previous, snapshot, exc)
+        raise
+    run_remote(server, f"rm -rf {shlex.quote(snapshot)}")
+
+def _snapshot_site_dir(server: Server, domain: str) -> str:
+    snapshot = f"{site_dir(domain)}{_SITE_TYPE_BACKUP_SUFFIX}"
+    command = f"rm -rf {shlex.quote(snapshot)} && cp -a {shlex.quote(site_dir(domain))} {shlex.quote(snapshot)}"
+    result = run_remote(server, command)
+    if not result.ok:
+        raise WebinolyError(
+            f"Не удалось снять снимок каталога {domain} на {server.name}: {_error_text(result)}", result
+        )
+    return snapshot
+
+def _recreate_site(server: Server, domain: str, site_type: SiteType) -> None:
+    """Удалить сайт, сохранив сертификат (-revoke=off), и создать заново с нужным типом."""
+    delete_site(server, domain, revoke_ssl=False)
+    create_site(server, domain, site_type)
+
+def _restore_site_dir(server: Server, domain: str, snapshot: str) -> None:
+    """Вернуть каталог сайта из снимка: контент, релизы и сниппеты на место,
+    htdocs снова указывает на свой релиз, nginx перезагружен (open_file_cache)."""
+    command = f"rm -rf {shlex.quote(site_dir(domain))} && cp -a {shlex.quote(snapshot)} {shlex.quote(site_dir(domain))}"
+    result = run_remote(server, command)
+    if not result.ok:
+        raise WebinolyError(f"Не удалось вернуть содержимое {domain} из снимка: {_error_text(result)}", result)
+    fix_ownership_path(server, site_dir(domain))
+    ensure_releases_layout(server, domain)
+    _reload_nginx(server, domain, action="возврат содержимого сайта")
+
+def _verify_site_type(server: Server, domain: str, site_type: SiteType) -> None:
+    """Постусловие смены: на сервере нужный тип, сертификат на месте, htdocs сайта
+    снова открывается и указывает в релиз. Не сошлось — вызывающий откатывает."""
+    info = site_info(server, domain)
+    if info is None or info.is_php != (site_type == "php"):
+        raise WebinolyError(f"После смены типа {domain} на {server.name} тип остался прежним")
+    if not info.has_ssl:
+        raise WebinolyError(f"После смены типа {domain} на {server.name} нет HTTPS: сертификат не вернулся")
+    result = run_remote(server, f"readlink -e {shlex.quote(webroot(domain))}")
+    if not result.ok or not result.stdout.strip():
+        raise WebinolyError(
+            f"После смены типа {domain} на {server.name} htdocs не открывается: {_error_text(result)}", result
+        )
+
+def _restore_previous_site(
+    server: Server, domain: str, site_type: SiteType, snapshot: str, cause: WebinolyError
+) -> None:
+    """Вернуть прежний тип и содержимое после сбоя. Если вернуть не удалось —
+    наружу идёт ошибка об этом: сайт остался в промежуточном виде, нужен ручной
+    разбор, а снимок каталога оставлен на сервере."""
+    try:
+        info = site_info(server, domain)
+        if info is None or info.is_php != (site_type == "php"):
+            _recreate_site(server, domain, site_type)
+        _restore_site_dir(server, domain, snapshot)
+        enable_ssl_for_site(server, domain)
+    except WebinolyError as rollback_error:
+        raise WebinolyError(
+            f"Смена типа {domain} на {server.name} провалилась ({cause}); вернуть прежнее состояние "
+            f"тоже не удалось ({rollback_error}); снимок каталога сайта — {snapshot}"
+        ) from cause
 
 def enable_sftp(server: Server) -> RemoteResult:
     return run_remote(server, "sudo webinoly -sftp=on")

@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from hostme.config import Server
+from hostme.config import BaseDomain, Server
 from hostme.providers import webinoly
 from hostme.providers.ssh import RemoteResult
 
@@ -491,3 +491,87 @@ def test_tail_log_error_flag():
     with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
         webinoly.tail_log(SERVER, "a.dev", error=True)
     assert "-error" in mock_run.call_args[0][1]
+
+# --- смена типа живого сайта: снимок -> удаление без отзыва -> создание ->
+# возврат снимка -> сертификат -> проверка; сбой возвращает прежнее ---
+
+HTML_SSL_LIST = " + a.dev (HTML)(SSL)\n"
+PHP_SSL_LIST = " + a.dev (PHP)(SSL)\n"
+HTDOCS_TARGET = "/var/www/a.dev/releases/20260101000000\n"
+
+def _switch_runner(commands: list[str], site_lists: list[str], failing: str | None = None):
+    """Подмена run_remote: пишет команды в список и отвечает по их смыслу.
+    `failing` — подстрока команды, на которой сервер отвечает ошибкой (один раз)."""
+
+    def runner(_server, command, **_kwargs) -> RemoteResult:
+        commands.append(command)
+        if failing is not None and failing in command:
+            return fail("Webinoly: failed to remove site")
+        if command == "sudo site -list":
+            return ok(site_lists.pop(0))
+        if command.startswith("readlink -e"):
+            return ok(HTDOCS_TARGET)
+        return ok()
+
+    return runner
+
+def test_switch_site_type_keeps_content_and_certificate():
+    commands: list[str] = []
+    runner = _switch_runner(commands, [HTML_SSL_LIST, PHP_SSL_LIST])
+    with patch("hostme.providers.webinoly.run_remote", side_effect=runner):
+        webinoly.switch_site_type(SERVER, "a.dev", "php")
+
+    snapshot = next(cmd for cmd in commands if cmd.startswith("rm -rf") and "cp -a" in cmd)
+    removal = commands.index("sudo site a.dev -delete=force -revoke=off")
+    creation = commands.index("sudo site a.dev -php")
+    restore = next(i for i, cmd in enumerate(commands) if "cp -a /var/www/a.dev.hostme-type-backup" in cmd)
+    # Снимок снят до удаления, сертификат при удалении не отозван, сайт создан
+    # с новым типом, и только потом содержимое вернулось из снимка.
+    assert commands.index(snapshot) < removal < creation < restore
+    assert "sudo site a.dev -ssl=on" in commands
+    assert any(cmd.startswith("readlink -e /var/www/a.dev/htdocs") for cmd in commands)
+    # Каталог-снимок убран только после проверки постусловия.
+    assert commands[-1] == "rm -rf /var/www/a.dev.hostme-type-backup"
+
+def test_switch_site_type_restores_previous_type_and_content_when_removal_fails():
+    commands: list[str] = []
+    runner = _switch_runner(commands, [HTML_SSL_LIST, HTML_SSL_LIST], failing="-delete=force")
+    with (
+        patch("hostme.providers.webinoly.run_remote", side_effect=runner),
+        pytest.raises(webinoly.WebinolyError, match="failed to remove site"),
+    ):
+        webinoly.switch_site_type(SERVER, "a.dev", "php")
+
+    # Сайт остался прежнего типа (php-версию не создавали), содержимое вернули
+    # из снимка, и снимок оставили для ручного разбора.
+    assert "sudo site a.dev -php" not in commands
+    assert any("cp -a /var/www/a.dev.hostme-type-backup /var/www/a.dev" in cmd for cmd in commands)
+    assert not any(cmd == "rm -rf /var/www/a.dev.hostme-type-backup" for cmd in commands)
+
+def test_switch_site_type_rolls_back_when_new_type_does_not_take():
+    commands: list[str] = []
+    # Сервер после смены всё ещё отвечает HTML: постусловие не выполнено.
+    runner = _switch_runner(commands, [HTML_SSL_LIST, HTML_SSL_LIST, HTML_SSL_LIST])
+    with (
+        patch("hostme.providers.webinoly.run_remote", side_effect=runner),
+        pytest.raises(webinoly.WebinolyError, match="тип остался прежним"),
+    ):
+        webinoly.switch_site_type(SERVER, "a.dev", "php")
+
+    # Откат вернул содержимое и сертификат; сайт снова создаётся с прежним типом
+    # только когда сервер сообщает чужой тип (здесь он и так HTML — не нужно).
+    assert any("cp -a /var/www/a.dev.hostme-type-backup /var/www/a.dev" in cmd for cmd in commands)
+    assert "sudo site a.dev -ssl=on" in commands
+
+def test_enable_ssl_for_site_binds_domain_under_base_to_wildcard():
+    server = Server(
+        name="vps1", host="1.2.3.4", user="root", ssh_key="~/.ssh/id", base_domains=[BaseDomain(name="a.dev", default=True)]
+    )
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
+        webinoly.enable_ssl_for_site(server, "landing.a.dev")
+    assert mock_run.call_args[0][1] == "sudo site landing.a.dev -ssl=on -add-to-wildcard=a.dev"
+
+def test_enable_ssl_for_site_issues_own_certificate_without_base_domain():
+    with patch("hostme.providers.webinoly.run_remote", return_value=ok()) as mock_run:
+        webinoly.enable_ssl_for_site(SERVER, "a.dev")
+    assert mock_run.call_args[0][1] == "sudo site a.dev -ssl=on"

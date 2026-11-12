@@ -69,6 +69,29 @@ nginx-конфиг Webinoly жёстко ждёт `root /var/www/<domain>/htdocs
 
 Пустой `htdocs` без `autoindex` отдаёт `403`, не `404`. Поэтому `create_site` сразу кладёт заглушку `index.html`/`index.php` («Сайт в разработке»).
 
+## Смена типа живого сайта (html ⇄ php)
+
+Webinoly не меняет тип сайта на месте — только удаление и создание заново с флагом `-php`/`-html` (`hostme <domain> config --php`/`--html`). Удаление уносит **весь** каталог `/var/www/<domain>`: контент с релизами, заглушку, `hostme-*-nginx.conf` сниппеты, конфиг сайта. Сертификат остаётся только при `-revoke=off`.
+
+Поэтому `switch_site_type` делает шаги по порядку:
+
+```
+1 снимок      cp -a /var/www/<domain> /var/www/<domain>.hostme-type-backup
+2 удаление    sudo site <domain> -delete=force -revoke=off      сертификат остаётся
+3 создание    sudo site <domain> -php | -html
+4 возврат     cp -a снимок -> /var/www/<domain>, chown, releases-схема, reload
+5 SSL         sudo site <domain> -ssl=on [-add-to-wildcard=<base>]
+6 проверка    тип в `site -list`, `NoSSL` нет, htdocs открывается
+     |                    |
+   сошлось             не сошлось
+     |                    |
+  снимок удалён     откат: прежний тип и содержимое из снимка, ошибка наружу
+```
+
+Сайт уже нужного типа — `switch_site_type` не вызывается, команда сообщает это и выходит с кодом 0. Смена требует `--confirm`: сайт недоступен между шагами 2 и 6. Не удалось вернуть прежнее состояние — ошибка об этом, снимок остаётся на сервере для ручного разбора. Почему так: `docs/adr/0012-switch-a-live-site-type-by-recreate.md`.
+
+MySQL-база и настройки PHP удалённого сайта не сохраняются: Webinoly создаёт их заново (в скоупе `hostme` базы нет).
+
 ## Команды, которые вызывает hostme
 
 | `hostme` | Webinoly |
@@ -86,6 +109,7 @@ nginx-конфиг Webinoly жёстко ждёт `root /var/www/<domain>/htdocs
 | `hostme <domain> config --redirect` | `sudo site <domain> -redirection -from=<path> -to=<url> -http-code=<код>` |
 | `hostme <domain> config --remove-redirect` | `sudo site <domain> -redirection -delete -from=<path>` |
 | `hostme <domain> debug` | `sudo log <domain>` и `sudo log <domain> -error` |
+| `hostme <domain> config --php` / `--html` | снимок каталога сайта, `sudo site <domain> -delete=force -revoke=off`, `sudo site <domain> -php`/`-html`, возврат снимка, `sudo site <domain> -ssl=on` |
 | `server update` | `sudo webinoly -update` |
 
 `-ssl=on` всегда включает и редирект HTTP→HTTPS; отдельного флага, чтобы оставить HTTP, у Webinoly нет. Поэтому `hostme` отказывает на `--no-force-https`.

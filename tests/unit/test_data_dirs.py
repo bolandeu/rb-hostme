@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from hostme import config
-from hostme.core import services
+from hostme.core import doctor, services
 from hostme.core.errors import InvalidArguments
 
 
@@ -88,7 +88,7 @@ def test_prune_keeps_last_n():
     removed = services._prune_target_backups("ext1", config.BackupPolicy(keep=2))
 
     assert len(removed) == 2
-    assert len(services._target_backup_snapshots("ext1")) == 2
+    assert len(services.target_backup_snapshots("ext1")) == 2
 
 
 def test_prune_by_age_but_never_the_newest():
@@ -102,10 +102,10 @@ def test_prune_by_age_but_never_the_newest():
     services._prune_target_backups("ext1", policy)
     services._prune_target_backups("ext2", policy)
 
-    assert [p.name for p in services._target_backup_snapshots("ext1")] == [
+    assert [p.name for p in services.target_backup_snapshots("ext1")] == [
         (now - timedelta(days=1)).strftime("%Y%m%d%H%M%S")
     ]
-    assert len(services._target_backup_snapshots("ext2")) == 1
+    assert len(services.target_backup_snapshots("ext2")) == 1
 
 
 def test_prune_reads_policy_from_settings():
@@ -116,7 +116,7 @@ def test_prune_reads_policy_from_settings():
 
     services._prune_target_backups("ext1")
 
-    assert len(services._target_backup_snapshots("ext1")) == 1
+    assert len(services.target_backup_snapshots("ext1")) == 1
 
 
 # --- doctor ------------------------------------------------------------------
@@ -125,7 +125,7 @@ def test_prune_reads_policy_from_settings():
 def test_doctor_reports_backups_path_and_size():
     _snapshot("ext1", datetime.now(UTC))
 
-    report = services.run_doctor()
+    report = doctor.run_doctor()
 
     check = next(c for c in report["checks"] if c["name"] == "target_backups")
     assert check["status"] == "ok"
@@ -138,7 +138,7 @@ def test_doctor_reports_backups_path_and_size():
 def test_doctor_fails_on_bad_policy():
     _write_settings("target_backups:\n  keep: 0\n")
 
-    report = services.run_doctor()
+    report = doctor.run_doctor()
 
     check = next(c for c in report["checks"] if c["name"] == "target_backups")
     assert check["status"] == "fail"

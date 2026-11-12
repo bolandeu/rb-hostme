@@ -1,7 +1,7 @@
 
  Usage: hostme doctor [OPTIONS]
 
- hostme doctor — проверка окружения без обращения к серверам.
+ hostme doctor — проверка локального окружения и реестров (без обращения к серверам).
 
  Бинарии (ssh/rsync/lftp/sshpass — по тому, что реально нужно зарегистрированным
  серверам и target'ам), права и читаемость реестров (servers.yaml в ~/.config/hostme,

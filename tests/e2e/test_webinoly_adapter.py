@@ -8,7 +8,6 @@ test_webinoly.py мокают run_remote и не ловят реальный в�
 """
 
 import contextlib
-import os
 import subprocess
 import time
 import uuid
@@ -20,13 +19,6 @@ from hostme.providers import webinoly
 from hostme.providers.ssh import run_remote
 
 pytestmark = pytest.mark.e2e
-
-
-@pytest.fixture
-def base_domain() -> str:
-    domain = os.environ.get("HOSTME_E2E_BASE_DOMAIN")
-    assert domain, "HOSTME_E2E_BASE_DOMAIN не задан"
-    return domain
 
 
 @pytest.fixture

@@ -3,11 +3,11 @@ id: HOSTME-016
 title: Ruff format the Webinoly provider after HOSTME-013
 status: publish
 attempts: 0
-blocked: true
-blocked_reason: environment_broken
+blocked: false
+blocked_reason: null
 phase: null
 tests_hash: null
-publish_stage: gate
+publish_stage: null
 created_by: architect
 approved_by: human
 worker: pi

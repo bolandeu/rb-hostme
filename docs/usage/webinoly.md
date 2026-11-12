@@ -14,6 +14,32 @@ wget -qO weby qrok.es/wy && sudo bash weby -php
 
 Требования: Ubuntu Server 24.04/26.04 LTS (arm64 или x86_64), минимум 512 MB RAM. Перед установкой руками: `sudo apt update && sudo apt -y upgrade`, желательно `reboot`.
 
+## Проверка после установки
+
+Код возврата `bash weby -php` ничего не доказывает: установщик идёт без `set -e`. Когда `webinoly.tar` скачался не целиком, `tar` пишет `Unexpected EOF`, в каталоге установки остаются два файла, а `weby` всё равно печатает `installed successfully` и падает позже на `app_purge: command not found` (случай 2026-11-12, `docs/research/2026-09-08-webinoly-behaviour.md`).
+
+Поэтому после установки проверяется постусловие — три команды на сервере:
+
+| Команда | Что доказывает |
+|---|---|
+| `command -v webinoly` | сам Webinoly |
+| `command -v nginx` | веб-сервер |
+| `command -v php` | PHP-FPM |
+
+```
+hostme server init / scripts/provision-server.sh
+   |
+   +-- bash weby -php            код 0 ничего не значит
+   |
+   +-- command -v webinoly nginx php   все три есть?
+         |                    |
+        да                  нет
+         |                    |
+     готово          неполная установка, ошибка
+```
+
+Нет хотя бы одной — установка неполная. `hostme` поднимает `WebinolyError` (exit-код `PROVIDER_ERROR`, 5) с текстом «установка Webinoly неполная: нет <имена>, вероятно обрезан архив webinoly.tar» и с результатом `webinoly -version`; `scripts/provision-server.sh` печатает те же факты и выходит с кодом 1. Повтор установки без исправления сети даёт ту же ошибку.
+
 Порты:
 
 | Порт | Направление | Назначение |

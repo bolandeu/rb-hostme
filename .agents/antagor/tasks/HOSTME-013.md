@@ -3,11 +3,11 @@ id: HOSTME-013
 title: Switch a live site between HTML and PHP from the config command
 status: publish
 attempts: 0
-blocked: true
-blocked_reason: environment_broken
+blocked: false
+blocked_reason: null
 phase: null
 tests_hash: null
-publish_stage: gate
+publish_stage: null
 created_by: architect
 approved_by: human
 approved_words: Все согласовано.

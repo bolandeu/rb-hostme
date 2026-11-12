@@ -16,6 +16,7 @@ owns_paths:
 - src/hostme/commands/site.py
 - src/hostme/core/services.py
 - src/hostme/providers/webinoly.py
+- tests/snapshots
 test_paths:
 - tests/unit/test_services.py
 - tests/unit/test_webinoly.py

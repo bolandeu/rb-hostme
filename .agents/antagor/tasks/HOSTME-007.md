@@ -1,7 +1,7 @@
 ---
 id: HOSTME-007
 title: 'E2E through the CLI: smoke rewrite and a PHP site'
-status: publish
+status: done
 attempts: 0
 blocked: false
 blocked_reason: null

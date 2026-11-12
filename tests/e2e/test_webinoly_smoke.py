@@ -1,68 +1,58 @@
-"""
-E2E-проверка реального сервера через Webinoly напрямую (SSH, через hostme.providers.ssh),
-без CLI hostme: эти тесты автоматизируют то, что раньше проверялось вручную.
+"""The static deploy a foreign project does, walked through the CLI on a real server.
 
-Переписать их на вызов самого CLI (subprocess до `hostme`), а не на
-hostme.providers.ssh напрямую — idea `HOSTME-IDEA-009`.
+Every call goes to the real `hostme` in a subprocess (tests/e2e/conftest.py): the surge
+grammar (`hostme <path> <domain>`), the guard, the exit codes and the `--json` envelope
+are what is under test here. Fails when the served bytes differ from the folder.
 
 Запуск:
   HOSTME_E2E_HOST=212.67.13.95 HOSTME_E2E_USER=root HOSTME_E2E_BASE_DOMAIN=antagorapp.ru \
-  uv run pytest -m e2e
+  uv run pytest -m e2e tests/e2e/test_webinoly_smoke.py
 """
 
-import os
+import json
 import subprocess
-import time
 import uuid
+from collections.abc import Callable
+from pathlib import Path
 
 import pytest
-
-from hostme.config import Server
-from hostme.providers import ssh
 
 pytestmark = pytest.mark.e2e
 
 
-@pytest.fixture
-def base_domain() -> str:
-    domain = os.environ.get("HOSTME_E2E_BASE_DOMAIN")
-    assert domain, "HOSTME_E2E_BASE_DOMAIN не задан (напр. antagorapp.ru)"
-    return domain
+def test_static_site_full_lifecycle(
+    cli: Callable[..., subprocess.CompletedProcess[str]],
+    e2e_server: str,
+    cli_domain: str,
+    tmp_path: Path,
+    web_get: Callable[[str], str],
+) -> None:
+    site_dir = tmp_path / "site"
+    site_dir.mkdir()
+    page = f"<html><body><h1>{uuid.uuid4().hex}</h1></body></html>"
+    (site_dir / "index.html").write_text(page)
 
+    deploy = cli(str(site_dir), cli_domain, "--server", e2e_server, "--json")
+    assert deploy.returncode == 0, deploy.stderr
+    payload = json.loads(deploy.stdout)
+    # json.loads already proves stdout is one clean object, with no progress lines in it.
+    assert payload["ok"] is True
+    assert payload["url"] == f"https://{cli_domain}"
 
-@pytest.fixture
-def test_domain(real_server: Server, base_domain: str):
-    name = f"e2e-{uuid.uuid4().hex[:8]}.{base_domain}"
-    yield name
-    ssh.run_remote(real_server, f"sudo site {name} -delete=force -revoke=on")
+    assert web_get(payload["url"]) == page
 
+    listing = cli("list", "--json")
+    assert listing.returncode == 0, listing.stderr
+    assert cli_domain in [site["domain"] for site in json.loads(listing.stdout)["sites"]]
 
-def test_static_site_full_lifecycle(real_server: Server, base_domain: str, test_domain: str) -> None:
-    create = ssh.run_remote(real_server, f"sudo site {test_domain} -html")
-    assert create.ok, create.stderr
+    # The guard on a destructive command: no --confirm, no TTY — exit 2 and the error envelope.
+    refused = cli(cli_domain, "teardown", "--json")
+    assert refused.returncode == 2
+    error = json.loads(refused.stdout)
+    assert error["ok"] is False
+    assert error["error"]["code"] == "INVALID_ARGUMENTS"
 
-    ssl = ssh.run_remote(
-        real_server,
-        f"sudo site {test_domain} -ssl=on -add-to-wildcard={base_domain}",
-    )
-    assert ssl.ok, ssl.stderr
-
-    marker = uuid.uuid4().hex
-    upload = ssh.run_remote(
-        real_server,
-        f"echo '{marker}' | sudo tee /var/www/{test_domain}/htdocs/index.html "
-        f"&& sudo chown -R www-data:www-data /var/www/{test_domain}/htdocs",
-    )
-    assert upload.ok, upload.stderr
-
-    time.sleep(2)
-    curl = subprocess.run(
-        ["curl", "-s", "--max-time", "15", f"https://{test_domain}"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert marker in curl.stdout
-
-    listing = ssh.run_remote(real_server, "sudo site -list")
-    assert test_domain in listing.stdout
+    teardown = cli(cli_domain, "teardown", "--confirm", "--json")
+    assert teardown.returncode == 0, teardown.stderr
+    listing = cli("list", "--json")
+    assert cli_domain not in [site["domain"] for site in json.loads(listing.stdout)["sites"]]

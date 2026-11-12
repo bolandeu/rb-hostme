@@ -5,6 +5,15 @@ All notable changes to this project are documented here. Versions follow
 
 The changelog is written by `antagor publish`; don't edit it by hand.
 
+## v0.6.9 — 2026-11-12
+
+### E-005 — Hostme works on a fresh Ubuntu 26.04 machine
+
+A fresh machine gets a working hostme: the CLI starts right after a tool install, and a server init that half-installed Webinoly fails loudly instead of reporting success.
+Time: 0h since the epic was approved
+
+- Pin typer below 0.29 so a fresh install starts (HOSTME-011)
+
 ## v0.6.8 — 2026-11-11
 
 ### E-004 — Contract under test: ambiguous server resolve and the agent shell

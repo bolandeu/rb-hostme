@@ -1,7 +1,7 @@
 ---
 id: HOSTME-007
 title: 'E2E through the CLI: smoke rewrite and a PHP site'
-status: ideas
+status: queue
 attempts: 0
 blocked: false
 blocked_reason: null
@@ -9,7 +9,8 @@ phase: null
 tests_hash: null
 publish_stage: null
 created_by: architect
-approved_by: null
+approved_by: human
+approved_words: нет на этой сносим на чистую где только что делали
 worker: pi
 type: chore
 owns_paths:

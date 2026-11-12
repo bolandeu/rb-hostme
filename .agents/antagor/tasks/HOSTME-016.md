@@ -1,7 +1,7 @@
 ---
 id: HOSTME-016
 title: Ruff format the Webinoly provider after HOSTME-013
-status: in_review
+status: publish
 attempts: 0
 blocked: false
 blocked_reason: null

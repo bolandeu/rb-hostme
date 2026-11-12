@@ -1,7 +1,7 @@
 ---
 id: HOSTME-016
 title: Ruff format the Webinoly provider after HOSTME-013
-status: ideas
+status: queue
 attempts: 0
 blocked: false
 blocked_reason: null
@@ -9,7 +9,7 @@ phase: null
 tests_hash: null
 publish_stage: null
 created_by: architect
-approved_by: null
+approved_by: human
 worker: pi
 type: chore
 owns_paths:

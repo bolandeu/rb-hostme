@@ -90,12 +90,39 @@ def test_install_skips_when_already_installed():
 
 
 def test_install_runs_installer_when_missing():
-    with patch("hostme.providers.webinoly.run_remote", side_effect=[fail(), ok()]) as mock_run:
+    with patch("hostme.providers.webinoly.run_remote", side_effect=[fail(), ok(), ok("")]) as mock_run:
         webinoly.install(SERVER, mode="-php")
 
     install_command = mock_run.call_args_list[1][0][1]
     assert "bash weby -php" in install_command
     assert webinoly.INSTALL_URL in install_command
+
+
+def test_install_reports_success_when_post_condition_holds():
+    # Установщик напечатал успех, и все три команды стека на сервере есть.
+    with patch("hostme.providers.webinoly.run_remote", side_effect=[fail(), ok("installed successfully"), ok("")]):
+        result = webinoly.install(SERVER)
+
+    assert result.ok is True
+
+
+def test_install_raises_when_webinoly_nginx_and_php_are_absent():
+    # Случай сисадмина: webinoly.tar скачался на ~12 KB из 829440 B, tar выдал
+    # Unexpected EOF, а weby без set -e всё равно напечатал "installed successfully".
+    install_output = ok("installed successfully\napp_purge: command not found")
+    with (
+        patch(
+            "hostme.providers.webinoly.run_remote",
+            side_effect=[fail(), install_output, ok("webinoly\nnginx\nphp\n"), ok("")],
+        ),
+        pytest.raises(webinoly.WebinolyError, match="неполная") as raised,
+    ):
+        webinoly.install(SERVER)
+
+    message = str(raised.value)
+    assert "webinoly, nginx, php" in message
+    assert "webinoly.tar" in message
+    assert "webinoly -version" in message
 
 
 def test_update_webinoly():

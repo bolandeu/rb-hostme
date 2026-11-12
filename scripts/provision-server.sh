@@ -54,6 +54,24 @@ else
   bash weby -php
 fi
 
+# Постусловие: weby без `set -e` печатает "installed successfully", даже если
+# webinoly.tar скачался не целиком (tar: Unexpected EOF) — тогда стека нет.
+echo "--- Проверка установки Webinoly ---"
+missing=()
+for cmd in webinoly nginx php; do
+  command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
+done
+if (( ${#missing[@]} > 0 )); then
+  version_out="$(webinoly -version 2>/dev/null || true)"
+  if [[ -z "$version_out" ]]; then
+    version_out="тоже пустой ответ"
+  fi
+  echo "ОШИБКА: установка Webinoly неполная: нет ${missing[*]}, вероятно обрезан архив webinoly.tar; webinoly -version — $version_out" >&2
+  echo "Проверьте сеть на сервере и повторите запуск." >&2
+  exit 1
+fi
+echo "Стек на месте: webinoly, nginx, php."
+
 echo "--- SFTP для www-data ---"
 webinoly -sftp=on || true
 

@@ -1,4 +1,4 @@
-"""Webinoly CLI on a server, wrapped: install, site create/delete, SSL, HTTP Basic Auth, releases layout, nginx snippets.
+"""Webinoly CLI on a server, wrapped: install (with a post-install check that the stack really arrived), site create/delete, SSL, HTTP Basic Auth, releases layout, nginx snippets.
 Every call goes over ssh (`providers/ssh.py`); a failure comes out as `ProviderError`. Why Webinoly and not our own
 nginx: docs/adr/0001-webinoly-manages-the-servers.md. Command shapes, output formats and the site layout it must
 respect: docs/usage/webinoly.md; the live deviations from the public docs: docs/research/2026-09-08-webinoly-behaviour.md."""
@@ -61,10 +61,40 @@ def is_installed(server: Server) -> bool:
     return result.ok
 
 
+# Постусловие установки: без этих команд стек не работает, что бы ни сказал
+# установщик (docs/usage/webinoly.md, «Проверка после установки»).
+_REQUIRED_COMMANDS = ("webinoly", "nginx", "php")
+
+
+def missing_commands(server: Server) -> list[str]:
+    """Каких команд из стека на сервере нет: установщик weby идёт без `set -e`,
+    поэтому при оборванном скачивании webinoly.tar он печатает «installed
+    successfully» и падает позже (docs/research/2026-09-08-webinoly-behaviour.md)."""
+    names = " ".join(_REQUIRED_COMMANDS)
+    result = run_remote(server, f'for cmd in {names}; do command -v "$cmd" >/dev/null 2>&1 || echo "$cmd"; done')
+    return [name for name in result.stdout.split() if name in _REQUIRED_COMMANDS]
+
+
+def verify_install(server: Server) -> None:
+    """Постусловие установки: код возврата `bash weby` ничего не доказывает.
+    Нет любой команды стека — установка неполная и дальше идти нельзя."""
+    missing = missing_commands(server)
+    if not missing:
+        return
+    version = run_remote(server, "webinoly -version")
+    version_note = version.stdout.strip() or "тоже пустой ответ"
+    raise WebinolyError(
+        f"Установка Webinoly на {server.name} неполная: нет {', '.join(missing)}, "
+        f"вероятно обрезан архив webinoly.tar; `webinoly -version` — {version_note}",
+        version,
+    )
+
+
 def install(server: Server, mode: str = "-php") -> RemoteResult:
     """Ставит Webinoly (см. docs/usage/webinoly.md: -php ставится полностью неинтерактивно).
 
-    Идемпотентно: если Webinoly уже стоит, ничего не переустанавливает.
+    Идемпотентно: если Webinoly уже стоит, ничего не переустанавливает. Код возврата
+    установщика ничего не доказывает — после него проверяется постусловие.
     """
     if is_installed(server):
         return run_remote(server, "webinoly -version")
@@ -73,6 +103,7 @@ def install(server: Server, mode: str = "-php") -> RemoteResult:
     result = run_remote(server, command, timeout=300)
     if not result.ok:
         raise WebinolyError(f"Установка Webinoly на {server.name} провалилась: {_error_text(result)}", result)
+    verify_install(server)
     return result
 
 

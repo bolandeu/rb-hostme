@@ -10,6 +10,7 @@ parallel = 4
 
 [review]
 required_types = ["feature", "bugfix"]  # chore and docs: the short path without review
+worker = "pi-glm"  # a different model from the worker's pi/deepseek-4.1-flash: the reviewer must not be the author
 
 [publish]
 versioning = "semver"
@@ -38,3 +39,7 @@ cancelled = "Cancelled"
 
 [daemon]
 enabled = true
+
+[workers.pi-glm]
+kind = "pi"
+args = []

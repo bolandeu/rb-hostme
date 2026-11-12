@@ -5,6 +5,15 @@ All notable changes to this project are documented here. Versions follow
 
 The changelog is written by `antagor publish`; don't edit it by hand.
 
+## v0.6.10 — 2026-11-12
+
+### E-005 — Hostme works on a fresh Ubuntu 26.04 machine
+
+A fresh machine gets a working hostme: the CLI starts right after a tool install, and a server init that half-installed Webinoly fails loudly instead of reporting success.
+Time: 0.1h since the epic was approved
+
+- Refuse to call a half-installed Webinoly a success (HOSTME-012)
+
 ## v0.6.9 — 2026-11-12
 
 ### E-005 — Hostme works on a fresh Ubuntu 26.04 machine

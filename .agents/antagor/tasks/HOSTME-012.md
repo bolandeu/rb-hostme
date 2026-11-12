@@ -1,7 +1,7 @@
 ---
 id: HOSTME-012
 title: Refuse to call a half-installed Webinoly a success
-status: queue
+status: in_review
 attempts: 0
 blocked: false
 blocked_reason: null

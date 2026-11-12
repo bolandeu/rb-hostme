@@ -50,24 +50,34 @@ def cli(tmp_path: Path) -> Cli:
 
 
 @pytest.fixture
-def e2e_server(cli: Cli, e2e_host: str) -> str:
+def server_add(cli: Cli, e2e_host: str) -> Callable[[str], None]:
+    """`hostme server add` for the e2e host under the given name, as the default server."""
+
+    def add(name: str) -> None:
+        # expanduser here: inside the subprocess HOME is the throwaway folder, and ~ would point there.
+        key = str(Path(os.environ.get("HOSTME_E2E_SSH_KEY", "~/.ssh/bolandau")).expanduser())
+        added = cli(
+            "server",
+            "add",
+            "--name",
+            name,
+            "--host",
+            e2e_host,
+            "--user",
+            os.environ.get("HOSTME_E2E_USER", "root"),
+            "--key",
+            key,
+            "--default",
+        )
+        assert added.returncode == 0, added.stderr
+
+    return add
+
+
+@pytest.fixture
+def e2e_server(server_add: Callable[[str], None], cli: Cli) -> str:
     """Register the test server through the CLI, plus its base domain when HOSTME_E2E_BASE_DOMAIN is set."""
-    # expanduser here: inside the subprocess HOME is the throwaway folder, and ~ would point there.
-    key = str(Path(os.environ.get("HOSTME_E2E_KEY", "~/.ssh/bolandau")).expanduser())
-    added = cli(
-        "server",
-        "add",
-        "--name",
-        "e2e",
-        "--host",
-        e2e_host,
-        "--user",
-        os.environ.get("HOSTME_E2E_USER", "root"),
-        "--key",
-        key,
-        "--default",
-    )
-    assert added.returncode == 0, added.stderr
+    server_add("e2e")
     base = os.environ.get("HOSTME_E2E_BASE_DOMAIN")
     if base:
         domain = cli("domain", "add", "e2e", base, "--default")

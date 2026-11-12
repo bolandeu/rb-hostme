@@ -15,6 +15,8 @@ type: bugfix
 owns_paths:
 - src/hostme/core/services.py
 - src/hostme/providers/webinoly.py
+- src/hostme/commands/server.py
+- src/hostme/commands/site.py
 test_paths:
 - tests/unit/test_webinoly.py
 - tests/unit/test_services.py

@@ -20,6 +20,7 @@ def make_target(**overrides) -> Target:
     defaults.update(overrides)
     return Target(**defaults)
 
+
 def test_doctor_reports_ok_when_binaries_and_config_present() -> None:
     with (
         patch("hostme.core.doctor.config.CONFIG_DIR") as mock_dir,
@@ -36,6 +37,7 @@ def test_doctor_reports_ok_when_binaries_and_config_present() -> None:
     assert "ssh" in names
     assert "rsync" in names
 
+
 def test_doctor_fails_when_required_binary_missing() -> None:
     with (
         patch("hostme.core.doctor.config.CONFIG_DIR") as mock_dir,
@@ -48,6 +50,7 @@ def test_doctor_fails_when_required_binary_missing() -> None:
         mock_dir.stat.return_value.st_mode = 0o700
         result = doctor.run_doctor()
     assert result["healthy"] is False
+
 
 def test_doctor_requires_lftp_only_when_ftp_targets_registered() -> None:
     target = make_target(name="ext1", connection="sftp")

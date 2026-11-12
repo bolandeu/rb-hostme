@@ -17,8 +17,10 @@ def _check(name: str, status: str, detail: str) -> dict:
     # `ok` — по Standard, Health; `warn` — не провал (healthy остаётся true).
     return {"name": name, "ok": status != "fail", "status": status, "detail": detail}
 
+
 def _dir_size(path: Path) -> int:
     return sum(f.stat().st_size for f in path.rglob("*") if f.is_file() and not f.is_symlink())
+
 
 def _human_size(size: float) -> str:
     for unit in ("Б", "КБ", "МБ"):
@@ -26,6 +28,7 @@ def _human_size(size: float) -> str:
             return f"{size:.0f} {unit}" if unit == "Б" else f"{size:.1f} {unit}"
         size /= 1024
     return f"{size:.1f} ГБ"
+
 
 def run_doctor() -> dict:
     """Проверки окружения/конфига без обращения к удалённым серверам (быстро,
@@ -114,6 +117,7 @@ def run_doctor() -> dict:
 
     ok = not any(c["status"] == "fail" for c in checks)
     return {"healthy": ok, "checks": checks, "data_dir": str(config.DATA_DIR), "target_backups": backups_info}
+
 
 def _target_backups_report() -> tuple[dict, dict]:
     """(check для doctor, сводка для JSON: путь, байты, снепшоты, политика)."""

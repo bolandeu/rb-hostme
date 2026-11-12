@@ -124,6 +124,7 @@ def list_sites(server: Server) -> list[SiteInfo]:
 def site_info(server: Server, domain: str) -> SiteInfo | None:
     return next((s for s in list_sites(server) if s.domain == domain), None)
 
+
 def site_exists(server: Server, domain: str) -> bool:
     return site_info(server, domain) is not None
 
@@ -184,12 +185,14 @@ def wildcard_base_domain(server: Server, domain: str) -> str | None:
     один уровень поддомена (docs/usage/webinoly.md) — глубже не привязываем."""
     return next((d.name for d in server.base_domains if domain != d.name and domain.endswith(f".{d.name}")), None)
 
+
 def enable_ssl_for_site(server: Server, domain: str) -> RemoteResult:
     """SSL так, как его включает первый деплой: домен под base-доменом идёт в уже
     выпущенный wildcard-сертификат, остальные получают свой от certbot. Одна точка
     на деплой, смену типа сайта и возврат прежнего состояния после сбоя."""
     base = wildcard_base_domain(server, domain)
     return enable_ssl(server, domain, add_to_wildcard=base) if base else enable_ssl(server, domain)
+
 
 def delete_site(server: Server, domain: str, revoke_ssl: bool = True) -> RemoteResult:
     revoke = "-revoke=on" if revoke_ssl else "-revoke=off"
@@ -316,8 +319,10 @@ def prune_releases(server: Server, domain: str, keep: int = _KEEP_RELEASES) -> R
 
 _SITE_TYPE_BACKUP_SUFFIX = ".hostme-type-backup"
 
+
 def site_dir(domain: str) -> str:
     return f"/var/www/{domain}"
+
 
 def switch_site_type(server: Server, domain: str, site_type: SiteType) -> None:
     """Сменить тип живого сайта (html <-> php), не теряя контент и сертификат:
@@ -341,6 +346,7 @@ def switch_site_type(server: Server, domain: str, site_type: SiteType) -> None:
         raise
     run_remote(server, f"rm -rf {shlex.quote(snapshot)}")
 
+
 def _snapshot_site_dir(server: Server, domain: str) -> str:
     snapshot = f"{site_dir(domain)}{_SITE_TYPE_BACKUP_SUFFIX}"
     command = f"rm -rf {shlex.quote(snapshot)} && cp -a {shlex.quote(site_dir(domain))} {shlex.quote(snapshot)}"
@@ -351,10 +357,12 @@ def _snapshot_site_dir(server: Server, domain: str) -> str:
         )
     return snapshot
 
+
 def _recreate_site(server: Server, domain: str, site_type: SiteType) -> None:
     """Удалить сайт, сохранив сертификат (-revoke=off), и создать заново с нужным типом."""
     delete_site(server, domain, revoke_ssl=False)
     create_site(server, domain, site_type)
+
 
 def _restore_site_dir(server: Server, domain: str, snapshot: str) -> None:
     """Вернуть каталог сайта из снимка: контент, релизы и сниппеты на место,
@@ -366,6 +374,7 @@ def _restore_site_dir(server: Server, domain: str, snapshot: str) -> None:
     fix_ownership_path(server, site_dir(domain))
     ensure_releases_layout(server, domain)
     _reload_nginx(server, domain, action="возврат содержимого сайта")
+
 
 def _verify_site_type(server: Server, domain: str, site_type: SiteType) -> None:
     """Постусловие смены: на сервере нужный тип, сертификат на месте, htdocs сайта
@@ -380,6 +389,7 @@ def _verify_site_type(server: Server, domain: str, site_type: SiteType) -> None:
         raise WebinolyError(
             f"После смены типа {domain} на {server.name} htdocs не открывается: {_error_text(result)}", result
         )
+
 
 def _restore_previous_site(
     server: Server, domain: str, site_type: SiteType, snapshot: str, cause: WebinolyError
@@ -398,6 +408,7 @@ def _restore_previous_site(
             f"Смена типа {domain} на {server.name} провалилась ({cause}); вернуть прежнее состояние "
             f"тоже не удалось ({rollback_error}); снимок каталога сайта — {snapshot}"
         ) from cause
+
 
 def enable_sftp(server: Server) -> RemoteResult:
     return run_remote(server, "sudo webinoly -sftp=on")

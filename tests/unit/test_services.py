@@ -316,9 +316,11 @@ def test_require_unique_name_rejects_existing_target() -> None:
     ):
         services.require_unique_name("ext1")
 
+
 # --- config --php/--html — смена типа живого сайта. Логика пересоздания сайта
 # живёт в провайдере (tests/unit/test_webinoly.py); здесь — решение сервиса:
 # тот же тип, гейт подтверждения, dry-run, запись в реестр.
+
 
 def _config_site(ctx, **kwargs) -> dict:
     site = make_site(server="vps1")
@@ -332,19 +334,19 @@ def _config_site(ctx, **kwargs) -> dict:
         patch("hostme.core.services.webinoly.site_info") as mock_info,
         patch("hostme.core.services.webinoly.switch_site_type") as mock_switch,
     ):
-        mock_info.return_value = webinoly.SiteInfo(
-            domain="a.dev", tags=["PHP"] if params["way"] == "php" else ["HTML"]
-        )
+        mock_info.return_value = webinoly.SiteInfo(domain="a.dev", tags=["PHP"] if params["way"] == "php" else ["HTML"])
         result = services.update_site_config(
             ctx, "a.dev", [], False, [], [], False, False, None, False, params["php"], params["html"], params["confirm"]
         )
     return {**result, "saved": mock_save.called, "switched": mock_switch.call_args}
+
 
 def test_config_same_site_type_changes_nothing(make_ctx) -> None:
     result = _config_site(make_ctx(), php=True, way="php")
     assert result["message"] == "Сайт a.dev уже php — ничего не менялось"
     assert result["switched"] is None
     assert result["saved"] is False
+
 
 def test_config_switch_needs_confirmation_in_non_interactive_mode(make_ctx) -> None:
     ctx = make_ctx(json=True)
@@ -360,6 +362,7 @@ def test_config_switch_needs_confirmation_in_non_interactive_mode(make_ctx) -> N
         services.update_site_config(ctx, "a.dev", [], False, [], [], False, False, None, False, True, False, False)
     mock_switch.assert_not_called()
 
+
 def test_config_switch_writes_new_type_to_registry(make_ctx) -> None:
     result = _config_site(make_ctx(), php=True, way="html")
     assert result["message"] == "Тип сайта a.dev сменён на php"
@@ -367,10 +370,12 @@ def test_config_switch_writes_new_type_to_registry(make_ctx) -> None:
     assert result["site"].php is True
     assert result["saved"] is True
 
+
 def test_config_switch_dry_run_does_not_touch_server(make_ctx) -> None:
     result = _config_site(make_ctx(dry_run=True), php=True, way="html")
     assert result["dry_run"] is True
     assert result["switched"] is None
+
 
 def test_config_php_and_html_together_are_rejected(make_ctx) -> None:
     site = make_site(server="vps1")

@@ -1,7 +1,7 @@
 ---
 id: HOSTME-013
 title: Switch a live site between HTML and PHP from the config command
-status: ideas
+status: in_review
 attempts: 0
 blocked: false
 blocked_reason: null
@@ -9,7 +9,8 @@ phase: null
 tests_hash: null
 publish_stage: null
 created_by: architect
-approved_by: null
+approved_by: human
+approved_words: Все согласовано.
 worker: pi
 type: feature
 owns_paths:
@@ -17,10 +18,16 @@ owns_paths:
 - src/hostme/core/services.py
 - src/hostme/providers/webinoly.py
 - tests/snapshots
+- src/hostme/commands/doctor.py
+- src/hostme/core/doctor.py
+- src/hostme/data/SKILL.md
 test_paths:
 - tests/unit/test_services.py
 - tests/unit/test_webinoly.py
 - tests/e2e
+- tests/unit/test_cli.py
+- tests/unit/test_data_dirs.py
+- tests/unit/test_doctor.py
 docs:
 - docs/usage/webinoly.md
 - docs/usage/product.md

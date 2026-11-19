@@ -252,7 +252,7 @@ def save_targets(targets: list[Target]) -> None:
     # Секрет — до записи yaml: без keychain (headless) store_secret падает с
     # подсказкой про HOSTME_DEPLOY_<TARGET>_PASSWORD, и реестр не получает target без пароля.
     # Пароль, который уже и так отдаёт env/keychain, не переписываем — иначе
-    # пароль из env (сервер под doppler) каждый раз копировался бы в keychain.
+    # пароль из env (сервер под секрет-менеджер) каждый раз копировался бы в keychain.
     for t in targets:
         if t.password and credentials.get_secret(t.name) != t.password:
             credentials.store_secret(t.name, t.password)

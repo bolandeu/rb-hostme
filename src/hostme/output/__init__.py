@@ -261,7 +261,7 @@ def vecho(ctx: typer.Context, message: str) -> None:
 
 
 def _stdin_is_tty() -> bool:
-    # Без TTY (cron, systemd, `doppler run` на сервере) спрашивать некого —
+    # Без TTY (cron, systemd, запуск с переменными окружения из секрет-менеджера на сервере) спрашивать некого —
     # typer.confirm() там либо упал бы на EOF, либо повис на открытом pipe.
     return sys.stdin is not None and sys.stdin.isatty()
 

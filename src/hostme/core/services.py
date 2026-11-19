@@ -180,7 +180,7 @@ def add_target(
 ) -> dict:
     if connection not in ("ssh", "ftp", "sftp"):
         raise InvalidArguments(f"--connection должен быть ssh/ftp/sftp, получено {connection!r}")
-    # Без --password — пароль, уже заданный в HOSTME_DEPLOY_<NAME>_PASSWORD (сервер под doppler) или в keychain.
+    # Без --password — пароль, уже заданный в HOSTME_DEPLOY_<NAME>_PASSWORD (сервер под секрет-менеджер) или в keychain.
     password = password or credentials.get_secret(name)
     if not password and not ssh_key:
         raise InvalidArguments(f"Укажи --password (или {credentials.env_var_name(name)}) либо --ssh-key")

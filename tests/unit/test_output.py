@@ -209,7 +209,7 @@ def test_require_confirmation_non_interactive_without_yes_raises(make_ctx):
 
 def test_require_confirmation_without_tty_raises_instead_of_prompting(monkeypatch, make_ctx):
     ctx = make_ctx()
-    # Сервер: cron/systemd/doppler run — stdin не терминал, спрашивать некого.
+    # Сервер: cron/systemd/запуск с переменными из секрет-менеджера — stdin не терминал, спрашивать некого.
     monkeypatch.setattr(output, "_stdin_is_tty", lambda: False)
     with patch("hostme.output.typer.confirm") as mock_confirm, pytest.raises(InvalidArguments, match="без TTY"):
         output.require_confirmation(ctx, "Снести сайт a.dev", confirm=False)

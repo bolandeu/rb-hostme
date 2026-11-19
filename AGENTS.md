@@ -8,7 +8,7 @@ Pointers for agents. Antagor shows the changing state (statuses, branches, tasks
 - Antagor keeps the tasks and epics: `.agents/antagor/`.
 - How to write to the Human and to agents (ASD-STE100): the skill `antagor-method`, section «How to write to the Human and to agents».
 - The package Standard: https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator/src/branch/main/skills/cli-builder/reference/standard.md (sections by name, for example «Install»).
-- The gate before a commit: the `rb-release check` step of `.gitea/workflows/ci.yml` — run that command.
+- The gate before a commit: `gate check`, on this machine — the command is `[publish] gate_command` in `.agents/antagor/antagor.toml` (Standard, CI). It is the only gate: no workflow runs it.
 
 Инструкции для AI-агентов (Claude Code и т.п.), работающих в этом репозитории.
 
@@ -61,7 +61,7 @@ Pointers for agents. Antagor shows the changing state (statuses, branches, tasks
 
 ## Проверка и релиз
 
-- Перед коммитом — gate: шаг `rb-release check` в `.gitea/workflows/ci.yml` (lock, ruff, ty, pytest с порогом покрытия и снапшотами `--help`, `[[tool.rb.external]]`, сборка колеса, секреты, osv-scanner, правила Standard).
+- Перед коммитом — gate: `gate check` на этой машине (команда — `[publish] gate_command` в `.agents/antagor/antagor.toml`; другого гейта нет, workflow его не гоняет) (lock, ruff, ty, pytest с порогом покрытия и снапшотами `--help`, `[[tool.rb.external]]`, сборка колеса, секреты, osv-scanner, правила Standard).
 - Версия — только из git-тега `vX.Y.Z` (uv-dynamic-versioning); `version =` в pyproject не добавлять. Дистрибутив `rb-hostme`, команда `hostme`.
 - `CHANGELOG.md` пишет `antagor publish`; руками не править.
 - Docstring команды = её `--help`: меняешь поведение — меняй docstring в том же коммите, строка `Example: hostme …` обязательна (проверяется по реальному переводу argv). Потом `uv run pytest --snapshot-update` и прочитать diff `tests/snapshots/help/`.

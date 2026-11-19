@@ -7,7 +7,7 @@ metadata:
 
 # hostme
 
-Personal CLI (repo: `~/Work/tools/hostme`, docs in that repo's `docs/usage/`)
+Personal CLI (repo: `~/Work/tools/rb-hostme`, docs in that repo's `docs/usage/`)
 that deploys a local folder to the user's own VPS through
 Webinoly (nginx+php-fpm), with SSL always on. One command, no accounts, no
 platform lock-in — the self-hosted analog of `surge.sh`.

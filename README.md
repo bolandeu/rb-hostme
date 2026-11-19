@@ -83,11 +83,11 @@ hostme <path> [domain] [--server NAME]
 `output/` (human/json, guard), `credentials/` (пароли target'ов: env
 `HOSTME_DEPLOY_<TARGET>_PASSWORD`, иначе OS keychain `hostme:<target>`; `auth status`).
 
-Проверка — один гейт: шаг `rb-release check` в `.gitea/workflows/ci.yml`
-(та же команда в CI), из корня пакета:
+Проверка — один гейт: `gate check` на этой машине, команда —
+`[publish] gate_command` в `.agents/antagor/antagor.toml`. Из корня пакета:
 
 ```
-uvx --from "git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator.git@v1.27.1#subdirectory=gate" rb-release check
+gate check
 ```
 
 (lock, ruff, ty, pytest с порогом покрытия и снапшотами `--help`, сверка

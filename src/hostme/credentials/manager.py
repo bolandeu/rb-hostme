@@ -1,42 +1,44 @@
-"""The credential store: save, read and delete a provider's secrets in the system keyring, or in environment variables
-where no keyring exists.
+"""The credential store of hostme: `rb-credentials` with this CLI's names.
+
+"Провайдер" здесь — имя Target'а (сторонний ftp/sftp/ssh хостинг), единственные секреты, которые CLI хранит:
+один пароль на target (ssh_key остаётся путём к файлу и через этот модуль не идёт).
+
+Порядок поиска (стандарт §13, headless-серверы с переменными окружения из секрет-менеджера): переменная
+`HOSTME_DEPLOY_<TARGET>_PASSWORD` (контракт ключей sysadmin), затем OS keychain `hostme:<target>`. Keychain
+необязателен: на Linux без secret service чтение даёт «нет», а не ошибку.
+
+Сам keychain, «прочитать один раз, предупредить один раз» и разбор недоступности — в общем `rb-credentials`;
+здесь остаются имена hostme и маппинг ошибок на `CredentialStoreUnavailable`.
 """
 
 from __future__ import annotations
 
-import json
-import logging
 import os
 import re
 
-import keyring
-import keyring.errors
+import keyring  # патч-цель тестов (`hostme.credentials.manager.keyring.*`)
+from rb_credentials import Store, StoreUnavailable
 
 from hostme.core.errors import CredentialStoreUnavailable
+from hostme.core.version import cli_name
 
-_PACKAGE_NAME = "hostme"
-_log = logging.getLogger(__name__)
+_NAMESPACE = cli_name()
 
-# "Провайдер" здесь — свой смысл под hostme: имя Target'а (сторонний ftp/sftp/ssh
-# хостинг), т.к. это единственные секреты, которые CLI вообще хранит (architecture.md
-# §4, "per-target credentials"). Один секрет на target — пароль; ssh_key остаётся
-# путём к локальному файлу ключа, не строкой-секретом, и через этот модуль не идёт.
-#
-# Порядок (стандарт §13, headless-серверы под запуск с переменными окружения из секрет-менеджера): сначала переменная
-# окружения HOSTME_DEPLOY_<TARGET>_PASSWORD (контракт ключей sysadmin, правило 6), потом
-# OS keychain `hostme:<target>`. Keychain необязателен: на Linux без secret service
-# чтение молча даёт «нет», а не ошибку.
+
+def _store() -> Store:
+    """A store over the keyring module named here: the tests replace that module with an in-memory one."""
+    return Store(_NAMESPACE, keyring=keyring, bare_field="password")
 
 
 def service_name(provider: str) -> str:
-    return f"{_PACKAGE_NAME}:{provider}"
+    return _store().service_name(provider)
 
 
 def env_var_name(provider: str, field: str = "password") -> str:
     # provider — часто домен/хостнейм Target'а (например "top-ved.ru"), в котором
     # "." и "-" не валидны в имени переменной окружения — заменяем на "_".
     safe_provider = re.sub(r"[^A-Za-z0-9]", "_", provider).upper()
-    return f"{_PACKAGE_NAME.upper()}_DEPLOY_{safe_provider}_{field.upper()}"
+    return f"{_NAMESPACE.upper()}_DEPLOY_{safe_provider}_{field.upper()}"
 
 
 def read_fields_from_env(provider: str, fields: list[str]) -> dict[str, str]:
@@ -48,63 +50,34 @@ def read_fields_from_env(provider: str, fields: list[str]) -> dict[str, str]:
     return result
 
 
-# Первая ошибка keychain в процессе (headless Linux, CI): дальше — только env,
-# и в лог об этом один раз на DEBUG, чтобы сервер с ключами в env не шумел.
-_keychain_problem: str | None = None
-
-
-def _stored(provider: str) -> dict[str, str]:
-    global _keychain_problem
-    try:
-        raw = keyring.get_password(service_name(provider), provider)
-    except keyring.errors.KeyringError as exc:
-        if _keychain_problem is None:
-            _keychain_problem = str(exc)
-            _log.debug("OS keychain недоступен (%s) — только переменные окружения", exc)
-        return {}
-    return json.loads(raw) if raw else {}
+def _legacy(provider: str, fields: list[str]) -> dict[str, str]:
+    return {field: env_var_name(provider, field) for field in fields}
 
 
 def locate(provider: str, field: str = "password") -> tuple[str, str, str] | None:
-    """(значение, источник "env" | "keychain", где: имя переменной или сервис keychain) — для `auth status`."""
-    name = env_var_name(provider, field)
-    if (value := os.environ.get(name)) is not None:
-        return value, "env", name
-    stored = _stored(provider)
-    if field in stored:
-        return stored[field], "keychain", service_name(provider)
-    return None
+    """(значение, источник, где) для поля — для `doctor` и `auth status`, никогда само значение."""
+    located = _store().locate(provider, [field], legacy_env=_legacy(provider, [field]), legacy_env_first=True)
+    return located.get(field)
 
 
 def get_credential(provider: str, *, env_fields: list[str] | None = None) -> dict[str, str] | None:
-    """Переменные окружения побеждают построчно то, что лежит в keychain —
-    так можно переопределить один ротированный пароль, не трогая остальное."""
     fields = env_fields or ["password"]
-    from_env = read_fields_from_env(provider, fields)
-    # Всё нужное уже в env — keychain не трогаем вовсе (на сервере его может не быть).
-    stored = {} if len(from_env) == len(fields) else _stored(provider)
-    merged = {**stored, **from_env}
-    return merged or None
+    return _store().get(provider, env_fields=fields, legacy_env=_legacy(provider, fields), legacy_env_first=True)
 
 
 def store_credential(provider: str, fields: dict[str, str]) -> None:
     try:
-        keyring.set_password(service_name(provider), provider, json.dumps(fields))
-    except keyring.errors.KeyringError as exc:
+        _store().store(provider, fields)
+    except StoreUnavailable as exc:
         raise CredentialStoreUnavailable(provider, str(exc)) from exc
 
 
 def delete_credential(provider: str) -> None:
+    # Headless host without a keychain: nothing is stored there, so nothing to delete — not an error.
     try:
-        keyring.delete_password(service_name(provider), provider)
-    except keyring.errors.PasswordDeleteError:
-        pass  # уже отсутствует — удаление несуществующего секрета не ошибка
-    except keyring.errors.KeyringError as exc:
-        # Хранилища нет (headless) — значит, и удалять там нечего.
-        _log.debug("OS keychain недоступен при удалении %s (%s)", provider, exc)
-
-
-# Обёртки для частого случая "один секрет на provider" (у hostme это пароль Target'а).
+        _store().delete(provider, ignore_unavailable=True)
+    except StoreUnavailable as exc:
+        raise CredentialStoreUnavailable(provider, str(exc)) from exc
 
 
 def get_secret(provider: str, field: str = "password") -> str | None:

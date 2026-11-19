@@ -9,6 +9,7 @@ license-files = ["LICENSE"]
 authors = [{ name = "Roman Bolandau", email = "r.bolandau@gmail.com" }]
 requires-python = ">=3.14"
 dependencies = [
+    "rb-credentials>=0.4,<1",
     "keyring>=25.0.0",
     "packaging>=24.0",
     "platformdirs>=4.4",
@@ -186,3 +187,11 @@ extend-immutable-calls = ["typer.Option", "typer.Argument"]
 [tool.ty.terminal]
 # Only errors fail the gate; recent ty (>= 0.0.84) otherwise exits 1 on warnings too.
 error-on-warning = false
+
+[[tool.uv.index]]
+name = "gitea"
+url = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple"
+explicit = true
+
+[tool.uv.sources]
+rb-credentials = { index = "gitea" }

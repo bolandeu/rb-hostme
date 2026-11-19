@@ -9,7 +9,6 @@
 Из Gitea-реестра (пакет релизится туда):
 
 ```
-uv tool install rb-hostme --index https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple
 ```
 
 Или из git-тега, на любой машине:

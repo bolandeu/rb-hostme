@@ -3,7 +3,7 @@
   "info": {
     "title": "hostme",
     "version": "<version>",
-    "summary": "Личный аналог surge.sh — CLI-деплой статических сайтов и PHP на свои VPS через Webinoly"
+    "summary": "Deploy static sites and PHP to your own VPS: a personal surge.sh alike."
   },
   "command": {
     "name": "hostme",

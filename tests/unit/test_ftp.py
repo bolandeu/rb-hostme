@@ -153,7 +153,9 @@ def test_mirror_to_refuses_account_root_as_remote_path():
 
 def test_mirror_to_raises_on_failure():
     with (
-        patch("rb_hostme.providers.ftp.subprocess.run", return_value=fake_completed(returncode=1, stderr="Login failed")),
+        patch(
+            "rb_hostme.providers.ftp.subprocess.run", return_value=fake_completed(returncode=1, stderr="Login failed")
+        ),
         pytest.raises(ftp.FtpError, match="Login failed"),
     ):
         ftp.mirror_to("/local/path", make_target())

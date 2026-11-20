@@ -7,9 +7,9 @@ import pytest
 from packaging.requirements import Requirement
 from typer.testing import CliRunner
 
-from hostme import output
-from hostme.cli import _translate_argv, app, main
-from hostme.core.errors import InvalidArguments, StateError
+from rb_hostme import output
+from rb_hostme.cli import _translate_argv, app, main
+from rb_hostme.core.errors import InvalidArguments, StateError
 
 runner = CliRunner()
 
@@ -63,7 +63,7 @@ def test_ai_flag_prints_bundled_skill() -> None:
 
 
 def test_root_callback_sets_output_state() -> None:
-    with patch("hostme.output.emit_success") as emit:
+    with patch("rb_hostme.output.emit_success") as emit:
         _invoke(["--json", "--non-interactive", "--dry-run", "--quiet", "--verbose", "server", "list"])
     ctx = emit.call_args.args[0]
     assert ctx.obj["json"] is True
@@ -74,7 +74,7 @@ def test_root_callback_sets_output_state() -> None:
 
 
 def test_guarded_command_emits_json_error_envelope_on_stdout() -> None:
-    with patch("hostme.commands.site.services.teardown", side_effect=StateError("сломалось", action="почини")):
+    with patch("rb_hostme.commands.site.services.teardown", side_effect=StateError("сломалось", action="почини")):
         result = _invoke(["--json", "a.dev", "teardown", "--confirm"])
     assert result.exit_code == 1
     data = json.loads(result.stdout)
@@ -82,7 +82,7 @@ def test_guarded_command_emits_json_error_envelope_on_stdout() -> None:
 
 
 def test_guarded_command_maps_unknown_exception_to_unexpected() -> None:
-    with patch("hostme.commands.doctor.run_doctor", side_effect=RuntimeError("boom")):
+    with patch("rb_hostme.commands.doctor.run_doctor", side_effect=RuntimeError("boom")):
         result = _invoke(["--json", "doctor"])
     assert result.exit_code == 1
     assert json.loads(result.stdout)["error"]["code"] == "UNEXPECTED"
@@ -90,8 +90,8 @@ def test_guarded_command_maps_unknown_exception_to_unexpected() -> None:
 
 def test_main_catches_hostme_error_and_exits_with_its_code(capsys) -> None:
     with (
-        patch("hostme.cli.sys.argv", ["hostme", "list"]),
-        patch("hostme.cli.app", side_effect=InvalidArguments("boom")),
+        patch("rb_hostme.cli.sys.argv", ["hostme", "list"]),
+        patch("rb_hostme.cli.app", side_effect=InvalidArguments("boom")),
         pytest.raises(SystemExit) as exc_info,
     ):
         main()
@@ -103,8 +103,8 @@ def test_main_turns_escaped_exception_into_unexpected_not_traceback(capsys) -> N
     # Поймано CI на Windows: раньше страховка в main() бросала typer.Exit вне
     # Typer-приложения — и агент получал трейсбек про typer.Exit вместо ошибки.
     with (
-        patch("hostme.cli.sys.argv", ["hostme", "--json", "list"]),
-        patch("hostme.cli.app", side_effect=UnicodeEncodeError("cp1252", "x", 0, 1, "boom")),
+        patch("rb_hostme.cli.sys.argv", ["hostme", "--json", "list"]),
+        patch("rb_hostme.cli.app", side_effect=UnicodeEncodeError("cp1252", "x", 0, 1, "boom")),
         pytest.raises(SystemExit) as exc_info,
     ):
         main()
@@ -118,7 +118,7 @@ def test_force_utf8_streams_reconfigures_non_utf8_stream() -> None:
 
     raw = io.BytesIO()
     stream = io.TextIOWrapper(raw, encoding="cp1252")
-    with patch("hostme.output.sys.stdout", stream), patch("hostme.output.sys.stderr", stream):
+    with patch("rb_hostme.output.sys.stdout", stream), patch("rb_hostme.output.sys.stderr", stream):
         output.force_utf8_streams()
     assert stream.encoding.lower() == "utf-8"
     stream.write("≡ кириллица")  # раньше здесь был бы UnicodeEncodeError

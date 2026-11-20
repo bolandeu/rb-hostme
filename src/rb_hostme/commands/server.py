@@ -4,8 +4,8 @@ from typing import Annotated
 
 import typer
 
-from hostme import config, output
-from hostme.core import services
+from rb_hostme import config, output
+from rb_hostme.core import services
 
 app = output.group("Управление серверами (свои VPS с Webinoly).")
 
@@ -95,7 +95,7 @@ def remove(
 ) -> None:
     """hostme server remove <name> [--force] — убрать сервер из локального реестра.
 
-    Сервер и сайты на нём не трогаются — только запись в ~/.config/hostme.
+    Сервер и сайты на нём не трогаются — только запись в ~/.config/rb_hostme.
     Без --force отказывается, пока за сервером числятся сайты (сначала teardown).
 
     Example: hostme server remove vps1

@@ -14,7 +14,7 @@
 Или из git-тега, на любой машине:
 
 ```
-uv tool install "rb-hostme @ git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/hostme.git@vX.Y.Z"
+uv tool install "rb-hostme @ git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/rb_hostme.git@vX.Y.Z"
 ```
 
 `vX.Y.Z` — последний тег релиза (только из тега, не из ветки). Дистрибутив

@@ -39,7 +39,7 @@ def cli(tmp_path: Path) -> Cli:
             if real_ssh.is_dir():
                 (home / ".ssh").symlink_to(real_ssh)
         return subprocess.run(
-            [sys.executable, "-m", "hostme.cli", *args],
+            [sys.executable, "-m", "rb_hostme.cli", *args],
             env={**os.environ, "HOME": str(home)},
             capture_output=True,
             text=True,

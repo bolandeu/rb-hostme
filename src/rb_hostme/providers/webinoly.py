@@ -11,10 +11,10 @@ import shlex
 from dataclasses import dataclass
 from typing import Literal
 
-from hostme.config import Server
-from hostme.core.errors import ProviderError
-from hostme.data import load_nginx_defaults
-from hostme.providers.ssh import RemoteResult, run_remote
+from rb_hostme.config import Server
+from rb_hostme.core.errors import ProviderError
+from rb_hostme.data import load_nginx_defaults
+from rb_hostme.providers.ssh import RemoteResult, run_remote
 
 SiteType = Literal["html", "php"]
 

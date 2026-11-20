@@ -1,5 +1,5 @@
 """
-E2E для src/hostme/webinoly.py на реальном сервере — юнит-тесты в
+E2E для src/rb_hostme/webinoly.py на реальном сервере — юнит-тесты в
 test_webinoly.py мокают run_remote и не ловят реальный вывод/поведение Webinoly.
 
 Запуск:
@@ -14,9 +14,9 @@ import uuid
 
 import pytest
 
-from hostme.config import Server
-from hostme.providers import webinoly
-from hostme.providers.ssh import run_remote
+from rb_hostme.config import Server
+from rb_hostme.providers import webinoly
+from rb_hostme.providers.ssh import run_remote
 
 pytestmark = pytest.mark.e2e
 

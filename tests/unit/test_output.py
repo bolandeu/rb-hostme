@@ -4,8 +4,8 @@ from unittest.mock import patch
 import pytest
 import typer
 
-from hostme import output
-from hostme.core.errors import Aborted, InvalidArguments, StateError
+from rb_hostme import output
+from rb_hostme.core.errors import Aborted, InvalidArguments, StateError
 
 
 def test_success_plain_text(capsys, make_ctx):
@@ -188,7 +188,7 @@ def test_guard_returns_value_on_success(make_ctx):
 
 def test_require_confirmation_yes_skips_prompt(make_ctx):
     ctx = make_ctx()
-    with patch("hostme.output.typer.confirm") as mock_confirm:
+    with patch("rb_hostme.output.typer.confirm") as mock_confirm:
         output.require_confirmation(ctx, "Снести сайт a.dev", confirm=True)
     mock_confirm.assert_not_called()
 
@@ -211,14 +211,14 @@ def test_require_confirmation_without_tty_raises_instead_of_prompting(monkeypatc
     ctx = make_ctx()
     # Сервер: cron/systemd/запуск с переменными из секрет-менеджера — stdin не терминал, спрашивать некого.
     monkeypatch.setattr(output, "_stdin_is_tty", lambda: False)
-    with patch("hostme.output.typer.confirm") as mock_confirm, pytest.raises(InvalidArguments, match="без TTY"):
+    with patch("rb_hostme.output.typer.confirm") as mock_confirm, pytest.raises(InvalidArguments, match="без TTY"):
         output.require_confirmation(ctx, "Снести сайт a.dev", confirm=False)
     mock_confirm.assert_not_called()
 
 
 def test_require_confirmation_interactive_confirmed_proceeds(make_ctx):
     ctx = make_ctx()
-    with patch("hostme.output.typer.confirm", return_value=True) as mock_confirm:
+    with patch("rb_hostme.output.typer.confirm", return_value=True) as mock_confirm:
         output.require_confirmation(ctx, "Снести сайт a.dev", confirm=False)
     mock_confirm.assert_called_once()
 
@@ -226,7 +226,7 @@ def test_require_confirmation_interactive_confirmed_proceeds(make_ctx):
 def test_require_confirmation_interactive_declined_raises_aborted(make_ctx):
     ctx = make_ctx()
     with (
-        patch("hostme.output.typer.confirm", return_value=False),
+        patch("rb_hostme.output.typer.confirm", return_value=False),
         pytest.raises(Aborted),
     ):
         output.require_confirmation(ctx, "Снести сайт a.dev", confirm=False)

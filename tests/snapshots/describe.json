@@ -1124,7 +1124,7 @@
           },
           {
             "name": "remove",
-            "description": "hostme server remove <name> [--force] — убрать сервер из локального реестра.\n\nСервер и сайты на нём не трогаются — только запись в ~/.config/hostme.\nБез --force отказывается, пока за сервером числятся сайты (сначала teardown).\n\nExample: hostme server remove vps1",
+            "description": "hostme server remove <name> [--force] — убрать сервер из локального реестра.\n\nСервер и сайты на нём не трогаются — только запись в ~/.config/rb_hostme.\nБез --force отказывается, пока за сервером числятся сайты (сначала teardown).\n\nExample: hostme server remove vps1",
             "options": [
               {
                 "name": "--force",
@@ -1755,7 +1755,7 @@
         "value": {
           "tool": "hostme",
           "dist": "rb-hostme",
-          "package": "hostme"
+          "package": "rb_hostme"
         }
       },
       {

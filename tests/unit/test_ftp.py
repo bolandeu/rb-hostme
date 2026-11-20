@@ -6,9 +6,9 @@ from unittest.mock import patch
 
 import pytest
 
-from hostme.config import Target
-from hostme.core.errors import CliError
-from hostme.providers import ftp
+from rb_hostme.config import Target
+from rb_hostme.core.errors import CliError
+from rb_hostme.providers import ftp
 
 # Подставной lftp на PATH: читает сценарий со stdin, пишет его в лог и делает
 # то же, что сделал бы lftp — но в локальной папке FAKE_LFTP_ROOT. FAKE_LFTP_FAIL_AT
@@ -114,7 +114,7 @@ def site_dir(tmp_path):
 
 
 def test_mirror_to_passes_credentials_via_stdin_not_argv():
-    with patch("hostme.providers.ftp.subprocess.run", return_value=fake_completed()) as mock_run:
+    with patch("rb_hostme.providers.ftp.subprocess.run", return_value=fake_completed()) as mock_run:
         ftp.mirror_to("/local/path", make_target())
     call = mock_run.call_args
     # argv — только сама команда lftp, без -u/пароля голым текстом
@@ -125,7 +125,7 @@ def test_mirror_to_passes_credentials_via_stdin_not_argv():
 
 
 def test_mirror_to_uploads_into_staging_not_into_remote_path():
-    with patch("hostme.providers.ftp.subprocess.run", return_value=fake_completed()) as mock_run:
+    with patch("rb_hostme.providers.ftp.subprocess.run", return_value=fake_completed()) as mock_run:
         ftp.mirror_to("/local/path", make_target())
     upload = mock_run.call_args_list[0].kwargs["input"]
     assert "mirror --reverse --delete" in upload
@@ -133,7 +133,7 @@ def test_mirror_to_uploads_into_staging_not_into_remote_path():
 
 
 def test_mirror_to_script_keeps_file_times():
-    with patch("hostme.providers.ftp.subprocess.run", return_value=fake_completed()) as mock_run:
+    with patch("rb_hostme.providers.ftp.subprocess.run", return_value=fake_completed()) as mock_run:
         ftp.mirror_to("/local/path", make_target())
     script = mock_run.call_args.kwargs["input"]
     assert "set ftp:use-mdtm yes" in script
@@ -153,7 +153,7 @@ def test_mirror_to_refuses_account_root_as_remote_path():
 
 def test_mirror_to_raises_on_failure():
     with (
-        patch("hostme.providers.ftp.subprocess.run", return_value=fake_completed(returncode=1, stderr="Login failed")),
+        patch("rb_hostme.providers.ftp.subprocess.run", return_value=fake_completed(returncode=1, stderr="Login failed")),
         pytest.raises(ftp.FtpError, match="Login failed"),
     ):
         ftp.mirror_to("/local/path", make_target())
@@ -161,7 +161,7 @@ def test_mirror_to_raises_on_failure():
 
 def test_mirror_to_timeout_raises():
     with (
-        patch("hostme.providers.ftp.subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="lftp", timeout=5)),
+        patch("rb_hostme.providers.ftp.subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="lftp", timeout=5)),
         pytest.raises(ftp.FtpError, match="не завершился"),
     ):
         ftp.mirror_to("/local/path", make_target(), timeout=5)
@@ -169,7 +169,7 @@ def test_mirror_to_timeout_raises():
 
 def test_mirror_to_missing_lftp_raises():
     with (
-        patch("hostme.providers.ftp.subprocess.run", side_effect=FileNotFoundError()),
+        patch("rb_hostme.providers.ftp.subprocess.run", side_effect=FileNotFoundError()),
         pytest.raises(ftp.FtpError, match="lftp"),
     ):
         ftp.mirror_to("/local/path", make_target())
@@ -233,11 +233,11 @@ def test_mirror_to_failed_swap_returns_previous_files_and_raises(fake_lftp, site
 
 def test_check_target_maps_login_failure_to_invalid_and_keeps_password_off_argv():
     failed = fake_completed(1, stderr="ls: Login failed: 530 Login incorrect.")
-    with patch("hostme.providers.ftp.subprocess.run", return_value=failed) as mock_run:
+    with patch("rb_hostme.providers.ftp.subprocess.run", return_value=failed) as mock_run:
         assert ftp.check_target(make_target(), 10)[0] == "invalid"
     assert mock_run.call_args.args[0] == ["lftp"]
     assert "cls" in mock_run.call_args.kwargs["input"]
-    with patch("hostme.providers.ftp.subprocess.run", return_value=fake_completed(0)):
+    with patch("rb_hostme.providers.ftp.subprocess.run", return_value=fake_completed(0)):
         assert ftp.check_target(make_target(), 10) == ("ok", None)
-    with patch("hostme.providers.ftp.subprocess.run", side_effect=subprocess.TimeoutExpired("lftp", 10)):
+    with patch("rb_hostme.providers.ftp.subprocess.run", side_effect=subprocess.TimeoutExpired("lftp", 10)):
         assert ftp.check_target(make_target(), 10)[0] == "unreachable"

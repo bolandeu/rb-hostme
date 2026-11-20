@@ -20,10 +20,10 @@ from rb_credentials.status import problems, scrub
 from rb_credentials.status import report as _envelope
 from rich.markup import escape
 
-from hostme import config, output
-from hostme.core.errors import CredentialsUnhealthy, InvalidArguments
-from hostme.credentials import manager
-from hostme.providers import ftp, ssh
+from rb_hostme import config, output
+from rb_hostme.core.errors import CredentialsUnhealthy, InvalidArguments
+from rb_hostme.credentials import manager
+from rb_hostme.providers import ftp, ssh
 
 CHECK_TIMEOUT = 10.0  # секунд на одну проверку (стандарт §8), без повторов
 

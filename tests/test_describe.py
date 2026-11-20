@@ -23,8 +23,8 @@ import typer
 from syrupy.extensions.single_file import SingleFileSnapshotExtension, WriteMode
 from typer.testing import CliRunner
 
-from hostme.cli import app
-from hostme.core import errors, opencli
+from rb_hostme.cli import app
+from rb_hostme.core import errors, opencli
 
 CLI = "hostme"
 SCHEMA = json.loads((Path(__file__).parent / "data" / "opencli.schema.json").read_text())

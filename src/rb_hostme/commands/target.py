@@ -4,8 +4,8 @@ from typing import Annotated
 
 import typer
 
-from hostme import config, output
-from hostme.core import services
+from rb_hostme import config, output
+from rb_hostme.core import services
 
 app = output.group("Сторонние хостинги (ftp/sftp/ssh, без Webinoly) — только заливка файлов.")
 

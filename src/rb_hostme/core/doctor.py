@@ -8,9 +8,9 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from hostme import config
-from hostme.core.errors import InvalidArguments
-from hostme.core.services import target_backup_snapshots
+from rb_hostme import config
+from rb_hostme.core.errors import InvalidArguments
+from rb_hostme.core.services import target_backup_snapshots
 
 
 def _check(name: str, status: str, detail: str) -> dict:

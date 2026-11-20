@@ -16,11 +16,11 @@ from __future__ import annotations
 import os
 import re
 
-import keyring  # патч-цель тестов (`hostme.credentials.manager.keyring.*`)
+import keyring  # патч-цель тестов (`rb_hostme.credentials.manager.keyring.*`)
 from rb_credentials import Store, StoreUnavailable
 
-from hostme.core.errors import CredentialStoreUnavailable
-from hostme.core.version import cli_name
+from rb_hostme.core.errors import CredentialStoreUnavailable
+from rb_hostme.core.version import cli_name
 
 _NAMESPACE = cli_name()
 

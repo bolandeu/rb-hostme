@@ -10,8 +10,8 @@ from typing import Annotated
 
 import typer
 
-from hostme import output
-from hostme.core import services
+from rb_hostme import output
+from rb_hostme.core import services
 
 app = output.group("Служебные (base) домены — для авто-генерации поддоменов при деплое.")
 

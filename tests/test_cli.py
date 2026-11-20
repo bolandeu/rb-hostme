@@ -10,7 +10,7 @@ import re
 
 from typer.testing import CliRunner
 
-from hostme.cli import app
+from rb_hostme.cli import app
 
 runner = CliRunner()
 

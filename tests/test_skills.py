@@ -11,9 +11,9 @@ import pytest
 import typer.core
 import typer.main
 
-from hostme.cli import app
-from hostme.core import skills
-from hostme.core.version import cli_name
+from rb_hostme.cli import app
+from rb_hostme.core import skills
+from rb_hostme.core.version import cli_name
 
 from .test_cli import invoke, invoke_json
 

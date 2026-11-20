@@ -1,5 +1,5 @@
 """
-E2E для src/hostme/ssh.py на реальном сервере — юнит-тесты мокают subprocess
+E2E для src/rb_hostme/ssh.py на реальном сервере — юнит-тесты мокают subprocess
 и не ловят реальные особенности (SSH-алиасы, форматы аргументов rsync и т.п.).
 
 Запуск: HOSTME_E2E_HOST=<ip сервера> HOSTME_E2E_USER=root uv run pytest -m e2e
@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from hostme.config import Server
-from hostme.providers import ssh
+from rb_hostme.config import Server
+from rb_hostme.providers import ssh
 
 pytestmark = pytest.mark.e2e
 

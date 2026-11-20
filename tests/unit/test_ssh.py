@@ -7,9 +7,9 @@ from unittest.mock import patch
 
 import pytest
 
-from hostme.config import Server, Target
-from hostme.core.errors import InvalidArguments
-from hostme.providers import ssh
+from rb_hostme.config import Server, Target
+from rb_hostme.core.errors import InvalidArguments
+from rb_hostme.providers import ssh
 
 
 def make_server() -> Server:
@@ -89,7 +89,7 @@ def local_site(tmp_path: Path) -> Path:
 
 
 def test_run_remote_success():
-    with patch("hostme.providers.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
+    with patch("rb_hostme.providers.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
         result = ssh.run_remote(make_server(), "echo hi")
 
     assert result.ok
@@ -100,7 +100,7 @@ def test_run_remote_success():
 
 
 def test_run_remote_nonzero_exit_returns_result_without_raising():
-    with patch("hostme.providers.ssh.subprocess.run", return_value=fake_completed(returncode=1, stderr="boom")):
+    with patch("rb_hostme.providers.ssh.subprocess.run", return_value=fake_completed(returncode=1, stderr="boom")):
         result = ssh.run_remote(make_server(), "false")
 
     assert not result.ok
@@ -111,7 +111,7 @@ def test_run_remote_nonzero_exit_returns_result_without_raising():
 def test_run_remote_connection_failure_raises():
     with (
         patch(
-            "hostme.providers.ssh.subprocess.run",
+            "rb_hostme.providers.ssh.subprocess.run",
             return_value=fake_completed(returncode=255, stderr="Permission denied"),
         ),
         pytest.raises(ssh.SshError, match="Permission denied"),
@@ -122,7 +122,7 @@ def test_run_remote_connection_failure_raises():
 def test_run_remote_timeout_raises():
     with (
         patch(
-            "hostme.providers.ssh.subprocess.run",
+            "rb_hostme.providers.ssh.subprocess.run",
             side_effect=subprocess.TimeoutExpired(cmd="ssh", timeout=10),
         ),
         pytest.raises(ssh.SshError, match="не завершилась"),
@@ -132,14 +132,14 @@ def test_run_remote_timeout_raises():
 
 def test_run_remote_missing_ssh_binary_raises():
     with (
-        patch("hostme.providers.ssh.subprocess.run", side_effect=FileNotFoundError()),
+        patch("rb_hostme.providers.ssh.subprocess.run", side_effect=FileNotFoundError()),
         pytest.raises(ssh.SshError, match="ssh"),
     ):
         ssh.run_remote(make_server(), "echo hi")
 
 
 def test_rsync_to_success():
-    with patch("hostme.providers.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
+    with patch("rb_hostme.providers.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
         result = ssh.rsync_to("/local/path", make_server(), "/remote/path")
 
     assert result.ok
@@ -151,7 +151,7 @@ def test_rsync_to_success():
 
 
 def test_rsync_to_without_delete():
-    with patch("hostme.providers.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
+    with patch("rb_hostme.providers.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
         ssh.rsync_to("/local/path", make_server(), "/remote/path", delete=False)
 
     call_args = mock_run.call_args[0][0]
@@ -161,7 +161,7 @@ def test_rsync_to_without_delete():
 def test_rsync_to_failure_raises():
     with (
         patch(
-            "hostme.providers.ssh.subprocess.run",
+            "rb_hostme.providers.ssh.subprocess.run",
             return_value=fake_completed(returncode=23, stderr="rsync error"),
         ),
         pytest.raises(ssh.SshError, match="rsync error"),
@@ -172,7 +172,7 @@ def test_rsync_to_failure_raises():
 def test_rsync_to_timeout_raises():
     with (
         patch(
-            "hostme.providers.ssh.subprocess.run",
+            "rb_hostme.providers.ssh.subprocess.run",
             side_effect=subprocess.TimeoutExpired(cmd="rsync", timeout=5),
         ),
         pytest.raises(ssh.SshError, match="не завершился"),
@@ -184,7 +184,7 @@ def test_rsync_to_timeout_raises():
 
 
 def make_target(**overrides):
-    from hostme.config import Target
+    from rb_hostme.config import Target
 
     defaults: dict = {
         "name": "ext1",
@@ -198,7 +198,7 @@ def make_target(**overrides):
 
 
 def test_rsync_to_target_with_ssh_key_uses_key_not_sshpass():
-    with patch("hostme.providers.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
+    with patch("rb_hostme.providers.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
         ssh.rsync_to_target("/local/path", make_target(ssh_key="~/.ssh/id"))
     rsync = calls_of(mock_run, "rsync")[0]
     rsh = rsync[rsync.index("-e") + 1]
@@ -208,7 +208,7 @@ def test_rsync_to_target_with_ssh_key_uses_key_not_sshpass():
 
 
 def test_rsync_to_target_with_password_uses_sshpass_env_not_argv():
-    with patch("hostme.providers.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
+    with patch("rb_hostme.providers.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
         ssh.rsync_to_target("/local/path", make_target(password="s3cr3t"))
     rsync = calls_of(mock_run, "rsync")[0]
     assert rsync[rsync.index("-e") + 1].startswith("sshpass -e ssh")
@@ -307,7 +307,7 @@ def test_rsync_to_target_keeps_relative_remote_path():
     # путь к сайту там относительный от домашней директории аккаунта
     # ("top-ved.ru/public_html"), а не абсолютный — форсировать ведущий "/"
     # ломает деплой ("/top-ved.ru/public_html" на сервере просто не существует).
-    with patch("hostme.providers.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
+    with patch("rb_hostme.providers.ssh.subprocess.run", return_value=fake_completed()) as mock_run:
         ssh.rsync_to_target("/local/path", make_target(remote_path="top-ved.ru/public_html", password="x"))
     destination = calls_of(mock_run, "rsync")[0][-1]
     assert destination.startswith("u12345@host.example:top-ved.ru/public_html.hostme-staging-")
@@ -321,25 +321,25 @@ def test_rsync_to_target_keeps_relative_remote_path():
 
 
 def test_check_server_ok_and_invalid():
-    from hostme.providers.ssh import check_server
+    from rb_hostme.providers.ssh import check_server
 
     server = Server(name="s", host="h", user="root", ssh_key="~/.ssh/id")
-    with patch("hostme.providers.ssh.subprocess.run", return_value=fake_completed(0)) as run:
+    with patch("rb_hostme.providers.ssh.subprocess.run", return_value=fake_completed(0)) as run:
         assert check_server(server, 10) == ("ok", None)
     args = run.call_args.args[0]
     assert args[0] == "ssh" and args[-1] == "true" and "ControlPath=none" in args
     denied = fake_completed(255, stderr="root@h: Permission denied (publickey).")
-    with patch("hostme.providers.ssh.subprocess.run", return_value=denied):
+    with patch("rb_hostme.providers.ssh.subprocess.run", return_value=denied):
         assert check_server(server, 10)[0] == "invalid"
-    with patch("hostme.providers.ssh.subprocess.run", side_effect=subprocess.TimeoutExpired("ssh", 10)):
+    with patch("rb_hostme.providers.ssh.subprocess.run", side_effect=subprocess.TimeoutExpired("ssh", 10)):
         assert check_server(server, 10)[0] == "unreachable"
 
 
 def test_check_target_password_uses_sshpass_env():
-    from hostme.providers.ssh import check_target
+    from rb_hostme.providers.ssh import check_target
 
     target = Target(name="t", connection="ssh", host="h", user="u", password="pw")
-    with patch("hostme.providers.ssh.subprocess.run", return_value=fake_completed(0)) as run:
+    with patch("rb_hostme.providers.ssh.subprocess.run", return_value=fake_completed(0)) as run:
         assert check_target(target, 10) == ("ok", None)
     assert run.call_args.args[0][:3] == ["sshpass", "-e", "ssh"]
     assert "pw" not in run.call_args.args[0]

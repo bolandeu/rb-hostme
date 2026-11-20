@@ -6,4 +6,4 @@ from importlib.resources import files
 
 
 def load_nginx_defaults() -> str:
-    return (files("hostme.data") / "nginx-defaults.conf").read_text(encoding="utf-8")
+    return (files("rb_hostme.data") / "nginx-defaults.conf").read_text(encoding="utf-8")

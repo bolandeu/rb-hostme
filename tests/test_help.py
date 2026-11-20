@@ -32,8 +32,8 @@ import typer.rich_utils
 from syrupy.extensions.single_file import SingleFileSnapshotExtension, WriteMode
 from typer.testing import CliRunner
 
-from hostme import output
-from hostme.cli import _GLOBAL_PREFIX_FLAGS, _translate_argv, app
+from rb_hostme import output
+from rb_hostme.cli import _GLOBAL_PREFIX_FLAGS, _translate_argv, app
 
 CLI = "hostme"
 SNAPSHOT_DIR = Path(__file__).parent / "snapshots" / "help"

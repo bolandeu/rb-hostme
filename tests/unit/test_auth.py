@@ -7,9 +7,9 @@ import keyring.errors
 import pytest
 from typer.testing import CliRunner
 
-from hostme import config
-from hostme.cli import _translate_argv, app
-from hostme.credentials import manager
+from rb_hostme import config
+from rb_hostme.cli import _translate_argv, app
+from rb_hostme.credentials import manager
 
 runner = CliRunner()
 
@@ -99,8 +99,8 @@ def test_check_maps_probe_results_and_scrubs_secret(tmp_path):
     config.save_servers([_server(tmp_path)])
     config.save_targets([_target()])
     with (
-        patch("hostme.providers.ssh.check_server", return_value=("ok", None)),
-        patch("hostme.providers.ftp.check_target", return_value=("invalid", "530 Login incorrect for s3cret")),
+        patch("rb_hostme.providers.ssh.check_server", return_value=("ok", None)),
+        patch("rb_hostme.providers.ftp.check_target", return_value=("invalid", "530 Login incorrect for s3cret")),
     ):
         code, data = _status("--check")
     assert code == 3

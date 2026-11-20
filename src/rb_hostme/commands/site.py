@@ -12,8 +12,8 @@ from typing import Annotated
 
 import typer
 
-from hostme import config, output
-from hostme.core import services
+from rb_hostme import config, output
+from rb_hostme.core import services
 
 ConfirmOption = Annotated[
     bool,

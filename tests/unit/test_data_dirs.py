@@ -2,9 +2,9 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from hostme import config
-from hostme.core import doctor, services
-from hostme.core.errors import InvalidArguments
+from rb_hostme import config
+from rb_hostme.core import doctor, services
+from rb_hostme.core.errors import InvalidArguments
 
 
 def _snapshot(target: str, ts: datetime) -> None:
@@ -151,7 +151,7 @@ def test_doctor_fails_on_bad_policy():
 def test_tests_never_touch_real_user_dirs(tmp_path_factory):
     """Страховка: conftest.isolated_dirs уводит все пути hostme во временный каталог,
     иначе тесты prune/миграции удаляли бы настоящие бэкапы и sites.yaml."""
-    from hostme.providers import ssh
+    from rb_hostme.providers import ssh
 
     tmp_root = tmp_path_factory.getbasetemp()
     paths = [

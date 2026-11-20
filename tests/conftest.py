@@ -12,9 +12,9 @@ import pytest
 import typer
 import typer.core
 
-from hostme import config, output
-from hostme.credentials import manager as credentials
-from hostme.providers import ssh
+from rb_hostme import config, output
+from rb_hostme.credentials import manager as credentials
+from rb_hostme.providers import ssh
 
 # Typer reads these once, at import, and then forces terminal output — what a CI runner sets.
 CI_ENV = {"GITHUB_ACTIONS": "true", "FORCE_COLOR": "1", "PY_COLORS": "1"}
@@ -109,7 +109,7 @@ def e2e_host() -> str:
 
 @pytest.fixture
 def real_server(e2e_host: str):
-    from hostme.config import Server
+    from rb_hostme.config import Server
 
     user = os.environ.get("HOSTME_E2E_USER", "root")
     key = os.environ.get("HOSTME_E2E_SSH_KEY", "~/.ssh/bolandau")

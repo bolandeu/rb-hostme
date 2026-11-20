@@ -2,8 +2,8 @@ import sys
 
 import pytest
 
-from hostme import config
-from hostme.core.errors import InvalidArguments
+from rb_hostme import config
+from rb_hostme.core.errors import InvalidArguments
 
 
 @pytest.fixture(autouse=True)

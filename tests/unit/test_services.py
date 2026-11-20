@@ -3,10 +3,10 @@ from unittest.mock import patch
 
 import pytest
 
-from hostme.config import BaseDomain, Server, Site, Target
-from hostme.core import services
-from hostme.core.errors import Aborted, CliError, InvalidArguments
-from hostme.providers import webinoly
+from rb_hostme.config import BaseDomain, Server, Site, Target
+from rb_hostme.core import services
+from rb_hostme.core.errors import Aborted, CliError, InvalidArguments
+from rb_hostme.providers import webinoly
 
 
 def make_target(**overrides) -> Target:
@@ -42,7 +42,7 @@ def make_site(**overrides) -> Site:
 
 def test_confirm_target_action_yes_flag_skips_prompt(make_ctx) -> None:
     ctx = make_ctx()
-    with patch("hostme.output.typer.confirm") as mock_confirm:
+    with patch("rb_hostme.output.typer.confirm") as mock_confirm:
         services.confirm_target_action(ctx, "Деплой x", make_target(), confirm=True)
     mock_confirm.assert_not_called()
 
@@ -56,7 +56,7 @@ def test_confirm_target_action_json_without_yes_raises_instead_of_bypassing(make
 
 def test_confirm_target_action_interactive_confirmed_proceeds(make_ctx) -> None:
     ctx = make_ctx()
-    with patch("hostme.output.typer.confirm", return_value=True) as mock_confirm:
+    with patch("rb_hostme.output.typer.confirm", return_value=True) as mock_confirm:
         services.confirm_target_action(ctx, "Деплой x", make_target(), confirm=False)
     mock_confirm.assert_called_once()
 
@@ -64,7 +64,7 @@ def test_confirm_target_action_interactive_confirmed_proceeds(make_ctx) -> None:
 def test_confirm_target_action_interactive_declined_raises_aborted(make_ctx) -> None:
     ctx = make_ctx()
     with (
-        patch("hostme.output.typer.confirm", return_value=False),
+        patch("rb_hostme.output.typer.confirm", return_value=False),
         pytest.raises(Aborted),
     ):
         services.confirm_target_action(ctx, "Деплой x", make_target(), confirm=False)
@@ -81,16 +81,16 @@ def test_maintenance_server_site_deploys_placeholder_as_new_release_without_touc
     site = make_site(server="vps1")
     server = make_server(name="vps1")
     with (
-        patch("hostme.core.services.config.load_sites", return_value=[site]),
-        patch("hostme.core.services.config.load_servers", return_value=[server]),
-        patch("hostme.core.services.config.find_server", return_value=server),
-        patch("hostme.core.services.config.save_sites") as mock_save_sites,
-        patch("hostme.core.services.webinoly.ensure_releases_layout") as mock_ensure,
-        patch("hostme.core.services.webinoly.release_path", return_value="/htdocs/releases/20260101000000"),
-        patch("hostme.core.services.rsync_to") as mock_rsync,
-        patch("hostme.core.services.webinoly.fix_ownership_path") as mock_chown,
-        patch("hostme.core.services.webinoly.switch_release") as mock_switch,
-        patch("hostme.core.services.webinoly.prune_releases") as mock_prune,
+        patch("rb_hostme.core.services.config.load_sites", return_value=[site]),
+        patch("rb_hostme.core.services.config.load_servers", return_value=[server]),
+        patch("rb_hostme.core.services.config.find_server", return_value=server),
+        patch("rb_hostme.core.services.config.save_sites") as mock_save_sites,
+        patch("rb_hostme.core.services.webinoly.ensure_releases_layout") as mock_ensure,
+        patch("rb_hostme.core.services.webinoly.release_path", return_value="/htdocs/releases/20260101000000"),
+        patch("rb_hostme.core.services.rsync_to") as mock_rsync,
+        patch("rb_hostme.core.services.webinoly.fix_ownership_path") as mock_chown,
+        patch("rb_hostme.core.services.webinoly.switch_release") as mock_switch,
+        patch("rb_hostme.core.services.webinoly.prune_releases") as mock_prune,
     ):
         services.set_maintenance(ctx, "a.dev", confirm=True)
 
@@ -112,10 +112,10 @@ def test_maintenance_server_site_without_yes_requires_confirmation(make_ctx) -> 
     server = make_server(name="vps1")
     ctx.obj["json"] = True
     with (
-        patch("hostme.core.services.config.load_sites", return_value=[site]),
-        patch("hostme.core.services.config.load_servers", return_value=[server]),
-        patch("hostme.core.services.config.find_server", return_value=server),
-        patch("hostme.core.services.webinoly.ensure_releases_layout") as mock_ensure,
+        patch("rb_hostme.core.services.config.load_sites", return_value=[site]),
+        patch("rb_hostme.core.services.config.load_servers", return_value=[server]),
+        patch("rb_hostme.core.services.config.find_server", return_value=server),
+        patch("rb_hostme.core.services.webinoly.ensure_releases_layout") as mock_ensure,
         pytest.raises(InvalidArguments, match="--confirm"),
     ):
         services.set_maintenance(ctx, "a.dev", confirm=False)
@@ -127,15 +127,15 @@ def test_maintenance_target_site_requires_confirmation_and_backs_up_first(make_c
     site = make_site(server="thirdparty")
     target = make_target(name="thirdparty")
     with (
-        patch("hostme.core.services.config.load_sites", return_value=[site]),
-        patch("hostme.core.services.config.load_servers", return_value=[]),
-        patch("hostme.core.services.config.find_server", return_value=None),
-        patch("hostme.core.services.config.load_targets", return_value=[target]),
-        patch("hostme.core.services.config.find_target", return_value=target),
-        patch("hostme.core.services.config.save_sites") as mock_save_sites,
-        patch("hostme.output.typer.confirm", return_value=False),
-        patch("hostme.core.services._backup_target_before_deploy") as mock_backup,
-        patch("hostme.core.services.rsync_to_target") as mock_rsync_target,
+        patch("rb_hostme.core.services.config.load_sites", return_value=[site]),
+        patch("rb_hostme.core.services.config.load_servers", return_value=[]),
+        patch("rb_hostme.core.services.config.find_server", return_value=None),
+        patch("rb_hostme.core.services.config.load_targets", return_value=[target]),
+        patch("rb_hostme.core.services.config.find_target", return_value=target),
+        patch("rb_hostme.core.services.config.save_sites") as mock_save_sites,
+        patch("rb_hostme.output.typer.confirm", return_value=False),
+        patch("rb_hostme.core.services._backup_target_before_deploy") as mock_backup,
+        patch("rb_hostme.core.services.rsync_to_target") as mock_rsync_target,
         pytest.raises(Aborted),
     ):
         services.set_maintenance(ctx, "a.dev", confirm=False)
@@ -150,15 +150,15 @@ def test_maintenance_target_site_yes_flag_proceeds_without_prompt(make_ctx) -> N
     site = make_site(server="thirdparty")
     target = make_target(name="thirdparty")
     with (
-        patch("hostme.core.services.config.load_sites", return_value=[site]),
-        patch("hostme.core.services.config.load_servers", return_value=[]),
-        patch("hostme.core.services.config.find_server", return_value=None),
-        patch("hostme.core.services.config.load_targets", return_value=[target]),
-        patch("hostme.core.services.config.find_target", return_value=target),
-        patch("hostme.core.services.config.save_sites") as mock_save_sites,
-        patch("hostme.output.typer.confirm") as mock_confirm,
-        patch("hostme.core.services._backup_target_before_deploy") as mock_backup,
-        patch("hostme.core.services.rsync_to_target") as mock_rsync_target,
+        patch("rb_hostme.core.services.config.load_sites", return_value=[site]),
+        patch("rb_hostme.core.services.config.load_servers", return_value=[]),
+        patch("rb_hostme.core.services.config.find_server", return_value=None),
+        patch("rb_hostme.core.services.config.load_targets", return_value=[target]),
+        patch("rb_hostme.core.services.config.find_target", return_value=target),
+        patch("rb_hostme.core.services.config.save_sites") as mock_save_sites,
+        patch("rb_hostme.output.typer.confirm") as mock_confirm,
+        patch("rb_hostme.core.services._backup_target_before_deploy") as mock_backup,
+        patch("rb_hostme.core.services.rsync_to_target") as mock_rsync_target,
     ):
         services.set_maintenance(ctx, "a.dev", confirm=True)
 
@@ -177,10 +177,10 @@ def test_maintenance_dry_run_does_not_touch_server(make_ctx) -> None:
     server = make_server(name="vps1")
     ctx.obj["dry_run"] = True
     with (
-        patch("hostme.core.services.config.load_sites", return_value=[site]),
-        patch("hostme.core.services.config.load_servers", return_value=[server]),
-        patch("hostme.core.services.config.find_server", return_value=server),
-        patch("hostme.core.services.webinoly.ensure_releases_layout") as mock_ensure,
+        patch("rb_hostme.core.services.config.load_sites", return_value=[site]),
+        patch("rb_hostme.core.services.config.load_servers", return_value=[server]),
+        patch("rb_hostme.core.services.config.find_server", return_value=server),
+        patch("rb_hostme.core.services.webinoly.ensure_releases_layout") as mock_ensure,
     ):
         result = services.set_maintenance(ctx, "a.dev", confirm=False)
     mock_ensure.assert_not_called()
@@ -193,10 +193,10 @@ def test_teardown_dry_run_does_not_touch_server(make_ctx) -> None:
     server = make_server(name="vps1")
     ctx.obj["dry_run"] = True
     with (
-        patch("hostme.core.services.config.load_sites", return_value=[site]),
-        patch("hostme.core.services.config.load_servers", return_value=[server]),
-        patch("hostme.core.services.config.find_server", return_value=server),
-        patch("hostme.core.services.webinoly.delete_site") as mock_delete,
+        patch("rb_hostme.core.services.config.load_sites", return_value=[site]),
+        patch("rb_hostme.core.services.config.load_servers", return_value=[server]),
+        patch("rb_hostme.core.services.config.find_server", return_value=server),
+        patch("rb_hostme.core.services.webinoly.delete_site") as mock_delete,
     ):
         result = services.teardown(ctx, "a.dev", confirm=False)
     mock_delete.assert_not_called()
@@ -214,10 +214,10 @@ def test_teardown_own_server_json_without_yes_raises_instead_of_bypassing(make_c
     server = make_server(name="vps1")
     ctx.obj["json"] = True
     with (
-        patch("hostme.core.services.config.load_sites", return_value=[site]),
-        patch("hostme.core.services.config.load_servers", return_value=[server]),
-        patch("hostme.core.services.config.find_server", return_value=server),
-        patch("hostme.core.services.webinoly.delete_site") as mock_delete,
+        patch("rb_hostme.core.services.config.load_sites", return_value=[site]),
+        patch("rb_hostme.core.services.config.load_servers", return_value=[server]),
+        patch("rb_hostme.core.services.config.find_server", return_value=server),
+        patch("rb_hostme.core.services.webinoly.delete_site") as mock_delete,
         pytest.raises(InvalidArguments, match="--confirm"),
     ):
         services.teardown(ctx, "a.dev", confirm=False)
@@ -229,11 +229,11 @@ def test_teardown_own_server_yes_flag_proceeds(make_ctx) -> None:
     site = make_site(server="vps1")
     server = make_server(name="vps1")
     with (
-        patch("hostme.core.services.config.load_sites", return_value=[site]),
-        patch("hostme.core.services.config.load_servers", return_value=[server]),
-        patch("hostme.core.services.config.find_server", return_value=server),
-        patch("hostme.core.services.config.save_sites") as mock_save_sites,
-        patch("hostme.core.services.webinoly.delete_site") as mock_delete,
+        patch("rb_hostme.core.services.config.load_sites", return_value=[site]),
+        patch("rb_hostme.core.services.config.load_servers", return_value=[server]),
+        patch("rb_hostme.core.services.config.find_server", return_value=server),
+        patch("rb_hostme.core.services.config.save_sites") as mock_save_sites,
+        patch("rb_hostme.core.services.webinoly.delete_site") as mock_delete,
     ):
         result = services.teardown(ctx, "a.dev", confirm=True)
     mock_delete.assert_called_once()
@@ -248,12 +248,12 @@ def test_rollback_own_server_without_yes_requires_confirmation(make_ctx) -> None
     server = make_server(name="vps1")
     ctx.obj["non_interactive"] = True
     with (
-        patch("hostme.core.services.config.load_sites", return_value=[site]),
-        patch("hostme.core.services.config.load_servers", return_value=[server]),
-        patch("hostme.core.services.config.find_server", return_value=server),
-        patch("hostme.core.services.webinoly.list_releases", return_value=["r0", "r1"]),
-        patch("hostme.core.services.webinoly.current_release", return_value="r1"),
-        patch("hostme.core.services.webinoly.switch_release") as mock_switch,
+        patch("rb_hostme.core.services.config.load_sites", return_value=[site]),
+        patch("rb_hostme.core.services.config.load_servers", return_value=[server]),
+        patch("rb_hostme.core.services.config.find_server", return_value=server),
+        patch("rb_hostme.core.services.webinoly.list_releases", return_value=["r0", "r1"]),
+        patch("rb_hostme.core.services.webinoly.current_release", return_value="r1"),
+        patch("rb_hostme.core.services.webinoly.switch_release") as mock_switch,
         pytest.raises(InvalidArguments, match="--confirm"),
     ):
         services.rollback(ctx, "a.dev", confirm=False)
@@ -266,7 +266,7 @@ def test_rollback_own_server_without_yes_requires_confirmation(make_ctx) -> None
 def test_remove_domain_not_registered_raises() -> None:
     server = make_server(base_domains=[BaseDomain(name="a.dev", default=True)])
     with (
-        patch("hostme.core.services.config.load_servers", return_value=[server]),
+        patch("rb_hostme.core.services.config.load_servers", return_value=[server]),
         pytest.raises(CliError, match="не зарегистрирован"),
     ):
         services.remove_domain("b.dev")
@@ -275,8 +275,8 @@ def test_remove_domain_not_registered_raises() -> None:
 def test_remove_domain_removes_from_server() -> None:
     server = make_server(base_domains=[BaseDomain(name="a.dev", default=True), BaseDomain(name="b.dev")])
     with (
-        patch("hostme.core.services.config.load_servers", return_value=[server]),
-        patch("hostme.core.services.config.save_servers") as mock_save,
+        patch("rb_hostme.core.services.config.load_servers", return_value=[server]),
+        patch("rb_hostme.core.services.config.save_servers") as mock_save,
     ):
         result = services.remove_domain("b.dev")
     assert result["domain"] == "b.dev"
@@ -287,8 +287,8 @@ def test_remove_domain_removes_from_server() -> None:
 def test_remove_domain_promotes_new_default_when_default_removed() -> None:
     server = make_server(base_domains=[BaseDomain(name="a.dev", default=True), BaseDomain(name="b.dev")])
     with (
-        patch("hostme.core.services.config.load_servers", return_value=[server]),
-        patch("hostme.core.services.config.save_servers"),
+        patch("rb_hostme.core.services.config.load_servers", return_value=[server]),
+        patch("rb_hostme.core.services.config.save_servers"),
     ):
         services.remove_domain("a.dev")
     assert server.base_domains == [BaseDomain(name="b.dev", default=True)]
@@ -300,8 +300,8 @@ def test_remove_domain_promotes_new_default_when_default_removed() -> None:
 def test_require_unique_name_rejects_existing_server() -> None:
     server = make_server(name="vps1")
     with (
-        patch("hostme.core.services.config.load_servers", return_value=[server]),
-        patch("hostme.core.services.config.load_targets", return_value=[]),
+        patch("rb_hostme.core.services.config.load_servers", return_value=[server]),
+        patch("rb_hostme.core.services.config.load_targets", return_value=[]),
         pytest.raises(CliError, match="сервером"),
     ):
         services.require_unique_name("vps1")
@@ -310,8 +310,8 @@ def test_require_unique_name_rejects_existing_server() -> None:
 def test_require_unique_name_rejects_existing_target() -> None:
     target = make_target(name="ext1")
     with (
-        patch("hostme.core.services.config.load_servers", return_value=[]),
-        patch("hostme.core.services.config.load_targets", return_value=[target]),
+        patch("rb_hostme.core.services.config.load_servers", return_value=[]),
+        patch("rb_hostme.core.services.config.load_targets", return_value=[target]),
         pytest.raises(CliError, match="target"),
     ):
         services.require_unique_name("ext1")
@@ -328,11 +328,11 @@ def _config_site(ctx, **kwargs) -> dict:
     params = {"php": False, "html": False, "confirm": True}
     params.update(kwargs)
     with (
-        patch("hostme.core.services.config.load_sites", return_value=[site]),
-        patch("hostme.core.services.config.load_servers", return_value=[server]),
-        patch("hostme.core.services.config.save_sites") as mock_save,
-        patch("hostme.core.services.webinoly.site_info") as mock_info,
-        patch("hostme.core.services.webinoly.switch_site_type") as mock_switch,
+        patch("rb_hostme.core.services.config.load_sites", return_value=[site]),
+        patch("rb_hostme.core.services.config.load_servers", return_value=[server]),
+        patch("rb_hostme.core.services.config.save_sites") as mock_save,
+        patch("rb_hostme.core.services.webinoly.site_info") as mock_info,
+        patch("rb_hostme.core.services.webinoly.switch_site_type") as mock_switch,
     ):
         mock_info.return_value = webinoly.SiteInfo(domain="a.dev", tags=["PHP"] if params["way"] == "php" else ["HTML"])
         result = services.update_site_config(
@@ -353,10 +353,12 @@ def test_config_switch_needs_confirmation_in_non_interactive_mode(make_ctx) -> N
     site = make_site(server="vps1")
     server = make_server(name="vps1")
     with (
-        patch("hostme.core.services.config.load_sites", return_value=[site]),
-        patch("hostme.core.services.config.load_servers", return_value=[server]),
-        patch("hostme.core.services.webinoly.site_info", return_value=webinoly.SiteInfo(domain="a.dev", tags=["HTML"])),
-        patch("hostme.core.services.webinoly.switch_site_type") as mock_switch,
+        patch("rb_hostme.core.services.config.load_sites", return_value=[site]),
+        patch("rb_hostme.core.services.config.load_servers", return_value=[server]),
+        patch(
+            "rb_hostme.core.services.webinoly.site_info", return_value=webinoly.SiteInfo(domain="a.dev", tags=["HTML"])
+        ),
+        patch("rb_hostme.core.services.webinoly.switch_site_type") as mock_switch,
         pytest.raises(InvalidArguments, match="--confirm"),
     ):
         services.update_site_config(ctx, "a.dev", [], False, [], [], False, False, None, False, True, False, False)
@@ -380,7 +382,7 @@ def test_config_switch_dry_run_does_not_touch_server(make_ctx) -> None:
 def test_config_php_and_html_together_are_rejected(make_ctx) -> None:
     site = make_site(server="vps1")
     with (
-        patch("hostme.core.services.config.load_sites", return_value=[site]),
+        patch("rb_hostme.core.services.config.load_sites", return_value=[site]),
         pytest.raises(InvalidArguments, match="--php и --html"),
     ):
         services.update_site_config(make_ctx(), "a.dev", [], False, [], [], False, False, None, False, True, True, True)

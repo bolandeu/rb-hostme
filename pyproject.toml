@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.scripts]
-hostme = "hostme.cli:main"
+hostme = "rb_hostme.cli:main"
 
 [project.urls]
 Repository = "https://homeserver.tailee01ab.ts.net:3000/bolandeu/hostme"
@@ -62,7 +62,7 @@ exclude = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/hostme"]
+packages = ["src/rb_hostme"]
 
 [tool.hatch.build.targets.wheel.force-include]
 # Установленный CLI читает [[tool.rb.external]] отсюда (стандарт §12).
@@ -120,7 +120,7 @@ mac = true
 [tool.cli-generator]
 # Where scripts/check_command_docstrings.py (called by the project's checks)
 # looks for commands: a glob or a list of globs, relative to the repo root.
-commands = ["src/hostme/commands/*.py"]
+commands = ["src/rb_hostme/commands/*.py"]
 # gate check (the gate): extras to install before ruff/ty/pytest.
 # gate_extras = ["browser"]
 
@@ -137,7 +137,7 @@ markers = [
 ]
 
 [tool.mutmut]
-source_paths = ["src/hostme"]
+source_paths = ["src/rb_hostme"]
 also_copy = ["scripts/", "pyproject.toml"]  # tests read them (test_scripts.py, the distribution checks)
 pytest_add_cli_args = ["--no-cov"]  # fail_under would kill every mutant
 # only_mutate = ["*/core/normalize.py"]  # one module at a time on a big tool

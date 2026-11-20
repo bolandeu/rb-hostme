@@ -15,11 +15,11 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from hostme import config, output
-from hostme.core.errors import InvalidArguments, StateError
-from hostme.credentials import manager as credentials
-from hostme.providers import ftp, http, webinoly
-from hostme.providers.ssh import rsync_from_target, rsync_to, rsync_to_target
+from rb_hostme import config, output
+from rb_hostme.core.errors import InvalidArguments, StateError
+from rb_hostme.credentials import manager as credentials
+from rb_hostme.providers import ftp, http, webinoly
+from rb_hostme.providers.ssh import rsync_from_target, rsync_to, rsync_to_target
 
 if TYPE_CHECKING:
     import typer
@@ -67,7 +67,7 @@ def update_server(ctx: typer.Context, name: str) -> dict:
     """Обновить сам Webinoly на сервере (`sudo webinoly -update`) — не пакеты
     сервера (nginx/php/mysql), только сам Webinoly. Затем перезалить nginx-дефолты
     всем сайтам сервера из реестра: так их получают и сайты, которые давно не
-    деплоились, после обновления самого hostme."""
+    деплоились, после обновления самого rb_hostme."""
     servers = config.load_servers()
     server = config.find_server(servers, name)
     if server is None:

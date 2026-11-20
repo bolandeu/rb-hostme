@@ -10,8 +10,8 @@ from __future__ import annotations
 import logging
 import subprocess
 
-from hostme.config import Target
-from hostme.core.errors import InvalidArguments, ProviderError
+from rb_hostme.config import Target
+from rb_hostme.core.errors import InvalidArguments, ProviderError
 
 DEFAULT_TIMEOUT = 300
 # Соседние с живым каталогом папки заливки: rename на стороне хостинга работает

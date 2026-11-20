@@ -1,4 +1,4 @@
-from hostme.core.errors import (
+from rb_hostme.core.errors import (
     Aborted,
     CliError,
     InvalidArguments,

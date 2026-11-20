@@ -41,9 +41,9 @@ from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import Version
 from typer.testing import CliRunner
 
-from hostme.cli import app as cli_app
-from hostme.core import opencli
-from hostme.core.version import DEV_VERSION, cli_name, installed_version
+from rb_hostme.cli import app as cli_app
+from rb_hostme.core import opencli
+from rb_hostme.core.version import DEV_VERSION, cli_name, installed_version
 
 CONTRACTS = Path(__file__).parent / "contracts"
 SCHEMA = json.loads((CONTRACTS / "schema.json").read_text())

@@ -12,7 +12,7 @@ that deploys a local folder to the user's own VPS through
 Webinoly (nginx+php-fpm), with SSL always on. One command, no accounts, no
 platform lock-in — the self-hosted analog of `surge.sh`.
 
-This doc is bundled with the package itself (`src/hostme/data/SKILL.md`), not
+This doc is bundled with the package itself (`src/rb_hostme/data/SKILL.md`), not
 maintained by hand in `~/.claude/skills/` — see "Staying in sync" below.
 
 ## Install (if `hostme --version` fails)
@@ -24,7 +24,7 @@ uv tool install rb-hostme --index https://homeserver.tailee01ab.ts.net:3000/api/
 From the git tag instead:
 
 ```bash
-uv tool install "rb-hostme @ git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/hostme.git@vX.Y.Z"
+uv tool install "rb-hostme @ git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/rb_hostme.git@vX.Y.Z"
 ```
 
 Replace `vX.Y.Z` with the latest release tag (install from a tag, never a
@@ -208,7 +208,7 @@ pre-filter.
 
 ## Staying in sync
 
-This file lives at `src/hostme/data/SKILL.md` in the repo and is bundled
+This file lives at `src/rb_hostme/data/SKILL.md` in the repo and is bundled
 into the installed package (`hostme --ai` prints it verbatim). The copy an
 AI tool actually reads (e.g. `~/.claude/skills/hostme/SKILL.md`) is a
 synced-out copy — after reinstalling a newer tag, resync it with:

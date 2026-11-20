@@ -18,8 +18,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from hostme.config import Server, Target
-from hostme.core.errors import InvalidArguments, ProviderError
+from rb_hostme.config import Server, Target
+from rb_hostme.core.errors import InvalidArguments, ProviderError
 
 DEFAULT_TIMEOUT = 30
 _log = logging.getLogger(__name__)

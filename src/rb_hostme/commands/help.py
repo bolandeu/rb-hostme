@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import typer
 
-from hostme import output
+from rb_hostme import output
 
 GRAMMAR_NOTE = """
 ВАЖНО про форму команд (не как в обычном Typer/Click-CLI, а как у surge.sh):

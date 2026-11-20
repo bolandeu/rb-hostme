@@ -12,8 +12,8 @@ from typing import Literal
 from platformdirs import user_data_dir
 from ruamel.yaml import YAML
 
-from hostme.core.errors import InvalidArguments
-from hostme.credentials import manager as credentials
+from rb_hostme.core.errors import InvalidArguments
+from rb_hostme.credentials import manager as credentials
 
 # Настройки (что пишет человек): реестр серверов/targets и settings.yaml.
 CONFIG_DIR = Path.home() / ".config" / "hostme"

@@ -190,4 +190,4 @@ error-on-warning = false
 
 
 [tool.uv.sources]
-rb-credentials = { path = "../rb-credentials" }
+rb-credentials = { path = "../rb-credentials", editable = true }

@@ -1,6 +1,5 @@
 # AGENTS.md
 
-- Decisions and why: `docs/adr/` (format: `docs/adr/README.md`).
 - The package Standard: https://github.com/bolandeu/python-package-gate/blob/main/skills/cli-builder/reference/standard.md (sections by name, for example «Install»).
 - The gate before a commit: `gate check`, on this machine (Standard, CI). It is the only gate: no workflow runs it.
 
@@ -22,11 +21,8 @@
 
 ## Проверенные на практике факты о Webinoly (не гадать, не перепроверять с нуля)
 
-Команды, форматы вывода и раскладка сайта — **`docs/usage/webinoly.md`**. Найденные баги (`open_file_cache`, права на `releases/`, `httpauth -purge`, `403` у пустого сайта) — **`docs/research/2026-09-08-webinoly-behaviour.md`**. Не дублировать их здесь: этот файл про инструкции агенту. Wildcard SSL — `docs/usage/wildcard-ssl.md`, DNS-пропагация и шесть NS Beget — `docs/research/2026-09-08-wildcard-ssl-dns.md`.
-
 Что не про Webinoly, а про сам `hostme`/процесс работы над ним:
 
-- SSH-соединения переиспользуются через `ControlMaster`/`ControlPersist` (`src/hostme/providers/ssh.py`, см. комментарий у `_CONTROL_DIR`) — причина в ADR 0007, находка в `docs/research/2026-09-09-ssh-rate-limit.md`.
 - Текущее состояние (какие серверы/домены/сайты реально зарегистрированы и задеплоены) — **не хранить статикой в этом файле, оно меняется**: смотреть `hostme server list` / `hostme domain list` / `hostme list` (агент сам восстановит картину через сам инструмент, когда понадобится).
 
 ## Тестирование (не обязательно — приоритет на скорость)
@@ -37,7 +33,6 @@
 ## Безопасность / что нельзя коммитить
 
 - `~/.config/hostme/*.yaml` (реестр серверов/сайтов, будущее состояние инструмента) — вне репозитория по дизайну ([ADR 0003](docs/adr/0003-settings-and-state-outside-the-repository.md)), туда не заглядывать при коммитах.
-- API-ключи (например, попытка авторизации в Beget API) — если появятся рабочие креды, хранить вне репозитория, не в `docs/`.
 - Реестр в `~/.config/hostme` и `user_data_dir("hostme")` — живые данные владельца, а не песочница. Тесты и прогоны их не трогают: работа с реестром из кода — только read-modify-write (`load_sites` → изменить → `save_sites`), никогда запись файла целиком собранным в тесте списком. Так уже терялись реальные записи `sites.yaml`.
 - Итоги секьюрити-ревью (права на конфиг, хранение `ssh_key`/пароля, принятые риски) — **[docs/usage/security.md](docs/usage/security.md)**, не дублировать здесь.
 
@@ -72,11 +67,8 @@
 ## Стиль работы над кодом
 
 - Технологии зафиксированы: Python + uv (`uv python pin`), Typer, `ruamel.yaml`, `rich`, SSH/rsync через `subprocess` (не через paramiko/fabric — уважать `~/.ssh/config`). Причина — [ADR 0002](docs/adr/0002-stack-python-uv-typer-and-system-ssh.md).
-- Форма CLI-команд копирует surge.sh (`hostme <path> <domain>`, `hostme <domain> teardown` и т.п.) — не изобретать свой стиль команд, сверяться с выжимкой `docs/research/2026-09-08-surge-cli.md`. Причина — [ADR 0004](docs/adr/0004-surge-command-grammar.md).
-- Перед реализацией любого шага, завязанного на поведение Webinoly, сверяться с `docs/usage/webinoly.md`; если там что-то не сходится с реальностью — перепроверять на `sites-first-beget` и обновлять и `docs/usage/webinoly.md`, и этот файл (секция выше).
 - Перед началом работы и после неё состояние смотрит Antagor (`antagor board`), а не файл в репозитории. Одна задача — одна ветка и один результат; задачи, идеи и их связь ведёт Antagor.
 - Меняешь `[project.scripts]` в `pyproject.toml` — сразу `uv tool install --editable . --force`: editable-режим не перегенерирует launcher, и `hostme` из PATH продолжит звать старый entry point (так однажды день ушёл на «сломанную» surge-грамматику).
-- Флаг Webinoly сверять с шапкой `Options:`/`Arguments:` самого скрипта на сервере (`/usr/bin/site`, `/usr/bin/httpauth`, ...), а не только с публичной докой: у `httpauth` флага `-purge` нет вовсе, а ошибки Webinoly пишет в stdout, не в stderr. Найденный баг — в `docs/research/2026-09-08-webinoly-behaviour.md`.
 
 ## Architect only
 

@@ -1,14 +1,8 @@
 # AGENTS.md
 
-Pointers for agents. Antagor shows the changing state (statuses, branches, tasks): `antagor board`.
-
-- What the project is, and the domain glossary: `CONTEXT.md`. Take terms only from there.
 - Decisions and why: `docs/adr/` (format: `docs/adr/README.md`).
-- Code rules for review: `CODING_STANDARDS.md`.
-- Antagor keeps the tasks and epics: `.agents/antagor/`.
-- How to write to the Human and to agents (ASD-STE100): the skill `antagor-method`, section «How to write to the Human and to agents».
-- The package Standard: https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator/src/branch/main/skills/cli-builder/reference/standard.md (sections by name, for example «Install»).
-- The gate before a commit: `gate check`, on this machine — the command is `[publish] gate_command` in `.agents/antagor/antagor.toml` (Standard, CI). It is the only gate: no workflow runs it.
+- The package Standard: https://github.com/bolandeu/python-package-gate/blob/main/skills/cli-builder/reference/standard.md (sections by name, for example «Install»).
+- The gate before a commit: `gate check`, on this machine (Standard, CI). It is the only gate: no workflow runs it.
 
 Инструкции для AI-агентов (Claude Code и т.п.), работающих в этом репозитории.
 
@@ -36,7 +30,6 @@ Pointers for agents. Antagor shows the changing state (statuses, branches, tasks
 - Текущее состояние (какие серверы/домены/сайты реально зарегистрированы и задеплоены) — **не хранить статикой в этом файле, оно меняется**: смотреть `hostme server list` / `hostme domain list` / `hostme list` (агент сам восстановит картину через сам инструмент, когда понадобится).
 
 ## Тестирование (не обязательно — приоритет на скорость)
-
 
 - Уже существующие тесты (`tests/unit/`, `tests/e2e/`) не удалять — они рабочие и уже ловили реальные баги (права `www-data`, формат `sudo site -list`), просто не наращивать этот объём без явного запроса. Порог покрытия — `fail_under` в `pyproject.toml`; цифру в тексте не держать, она менялась.
 - Если всё же пишешь e2e — команда запуска не изменилась: `HOSTME_E2E_HOST=... HOSTME_E2E_USER=root HOSTME_E2E_BASE_DOMAIN=antagorapp.ru uv run pytest -m e2e` (по умолчанию скипается, см. `tests/conftest.py`).

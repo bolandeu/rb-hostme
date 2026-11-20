@@ -605,14 +605,14 @@ wheels = [
 
 [[package]]
 name = "rb-credentials"
-version = "0.6.2"
+version = "0.7.1"
 source = { registry = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" }
 dependencies = [
     { name = "pydantic" },
 ]
-sdist = { url = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/files/rb-credentials/0.6.2/rb_credentials-0.6.2.tar.gz", hash = "sha256:aa8d44644877eaba4576e5912527a7141c7a33f7962585dfabc09b4d20af1fd6" }
+sdist = { url = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/files/rb-credentials/0.7.1/rb_credentials-0.7.1.tar.gz", hash = "sha256:8fc5593f2fcc1bed99e6f55e894c9f27470baa2de7a9ee36becded18debfb63d" }
 wheels = [
-    { url = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/files/rb-credentials/0.6.2/rb_credentials-0.6.2-py3-none-any.whl", hash = "sha256:fa1b07c709ae85aa021218b0086ffb5213b4f2acf09a2dd0bc57f7823bdfba55" },
+    { url = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/files/rb-credentials/0.7.1/rb_credentials-0.7.1-py3-none-any.whl", hash = "sha256:6bcfffe9f6d6f3a7cb848ef9d403d91b432a95ffd106d39f7c857b4b677227d2" },
 ]
 
 [[package]]
@@ -647,7 +647,7 @@ requires-dist = [
     { name = "keyring", specifier = ">=25.0.0" },
     { name = "packaging", specifier = ">=24.0" },
     { name = "platformdirs", specifier = ">=4.4" },
-    { name = "rb-credentials", specifier = ">=0.4,<1", index = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" },
+    { name = "rb-credentials", specifier = ">=0.7.1,<1", index = "https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple" },
     { name = "rich", specifier = ">=15.0.0" },
     { name = "ruamel-yaml", specifier = ">=0.19.1" },
     { name = "typer", specifier = ">=0.27.2,<0.28" },

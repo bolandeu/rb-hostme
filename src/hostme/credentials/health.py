@@ -13,9 +13,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import UTC, datetime
 from pathlib import Path
 
+from rb_credentials.status import entry as _record
+from rb_credentials.status import problems, scrub
+from rb_credentials.status import report as _envelope
 from rich.markup import escape
 
 from hostme import config, output
@@ -24,37 +26,12 @@ from hostme.credentials import manager
 from hostme.providers import ftp, ssh
 
 CHECK_TIMEOUT = 10.0  # секунд на одну проверку (стандарт §8), без повторов
-ALWAYS_PROBLEMS = frozenset({"invalid", "expired"})
-HEALTHY = frozenset({"ok", "unchecked"})
 
 Probe = Callable[[], tuple[str, str | None]]
 
 
-def _now_iso() -> str:
-    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-
-
-def _scrub(message: str | None, secrets: list[str]) -> str | None:
-    if message is None:
-        return None
-    for secret in secrets:
-        if secret:
-            message = message.replace(secret, "***")
-    return message
-
-
 def _entry(provider: str, fields: list[str]) -> dict:
-    return {
-        "provider": provider,
-        "required": True,
-        "fields": fields,
-        "source": "missing",
-        "source_ref": "",
-        "status": "missing",
-        "expires_at": None,
-        "quota": None,
-        "message": None,
-    }
+    return _record(provider, fields=fields, source_ref="")
 
 
 def _key_entry(provider: str, key: str) -> tuple[dict, bool]:
@@ -97,12 +74,6 @@ def _target_entry(target: config.Target) -> tuple[dict, Probe | None, list[str]]
     return entry, lambda: ftp.check_target(target, CHECK_TIMEOUT), [value]
 
 
-def _is_problem(entry: dict) -> bool:
-    if entry["status"] in ALWAYS_PROBLEMS:
-        return True
-    return entry["required"] and entry["status"] not in HEALTHY
-
-
 def status(tool: str, version: str, *, check: bool, only: str | None) -> tuple[dict, CredentialsUnhealthy | None]:
     """То, что печатает `auth status`: отчёт и проблема (exit 3), если есть."""
     candidates = [_server_entry(s) for s in config.load_servers()]
@@ -119,12 +90,12 @@ def status(tool: str, version: str, *, check: bool, only: str | None) -> tuple[d
     for entry, probe, secrets in candidates:
         if check and probe is not None:
             probe_status, message = probe()
-            entry.update(status=probe_status, message=_scrub(message, secrets))
+            entry.update(status=probe_status, message=scrub(message, secrets))
         credentials.append(entry)
 
-    payload = {"tool": tool, "version": version, "checked_at": _now_iso(), "credentials": credentials}
-    problems = {e["provider"]: e["status"] for e in credentials if _is_problem(e)}
-    return payload, CredentialsUnhealthy(problems) if problems else None
+    payload = _envelope(tool, version, credentials)
+    unhealthy = problems(payload)
+    return payload, CredentialsUnhealthy(unhealthy) if unhealthy else None
 
 
 def render(payload: dict) -> None:

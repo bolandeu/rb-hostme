@@ -24,11 +24,11 @@ uv tool install rb-hostme
 From the git tag instead:
 
 ```bash
-uv tool install "rb-hostme @ git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/rb_hostme.git@vX.Y.Z"
+uv tool install "rb-hostme @ git+https://github.com/bolandeu/rb-hostme.git@vX.Y.Z"
 ```
 
 Replace `vX.Y.Z` with the latest release tag (install from a tag, never a
-branch: [the Standard](https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator/src/branch/main/skills/cli-builder/reference/standard.md), Install).
+branch: [the Standard](https://github.com/bolandeu/cli-generator/src/branch/main/skills/cli-builder/reference/standard.md), Install).
 
 Same command on macOS and Linux (Windows: the CLI itself installs, but it
 shells out to `ssh`/`rsync`/`lftp`, which you'd need on PATH);

@@ -14,7 +14,7 @@
 Или из git-тега, на любой машине:
 
 ```
-uv tool install "rb-hostme @ git+https://homeserver.tailee01ab.ts.net:3000/bolandeu/rb_hostme.git@vX.Y.Z"
+uv tool install "rb-hostme @ git+https://github.com/bolandeu/rb-hostme.git@vX.Y.Z"
 ```
 
 `vX.Y.Z` — последний тег релиза (только из тега, не из ветки). Дистрибутив
@@ -76,7 +76,7 @@ hostme <path> [domain] [--server NAME]
 
 ## Разработка
 
-Архитектура — по [cli-builder](https://homeserver.tailee01ab.ts.net:3000/bolandeu/cli-generator):
+Архитектура — по [cli-builder](https://github.com/bolandeu/cli-generator):
 `commands/` (только разбор аргументов) → `core/` (сервисы, ошибки) →
 `providers/` (ssh/rsync/lftp/Webinoly — всё, что выходит за пределы процесса),
 `output/` (human/json, guard), `credentials/` (пароли target'ов: env

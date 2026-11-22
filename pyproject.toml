@@ -22,7 +22,7 @@ dependencies = [
 hostme = "rb_hostme.cli:main"
 
 [project.urls]
-Repository = "https://homeserver.tailee01ab.ts.net:3000/bolandeu/hostme"
+Repository = "https://github.com/bolandeu/rb-hostme"
 
 [build-system]
 requires = ["hatchling", "uv-dynamic-versioning"]

@@ -18,7 +18,7 @@ maintained by hand in `~/.claude/skills/` — see "Staying in sync" below.
 ## Install (if `hostme --version` fails)
 
 ```bash
-uv tool install rb-hostme --index https://homeserver.tailee01ab.ts.net:3000/api/packages/bolandeu/pypi/simple
+uv tool install rb-hostme
 ```
 
 From the git tag instead:
